@@ -29,7 +29,9 @@ export default function ChapterPage() {
     let active = true;
     setLoaded(false);
     void (async () => {
-      const s = await services.content.getSubtopic(subtopicId);
+      const found = await services.content.getSubtopic(subtopicId);
+      // BUG-07: Kapitel nur unter seinem eigenen Thema anzeigen, sonst „nicht gefunden“ (kein falscher „Zum Thema“-Link).
+      const s = found && found.topicId === topicId ? found : null;
       let p: SubtopicProgress | null = null;
       let attempts: AttemptRecord[] = [];
       if (s) {
@@ -47,7 +49,7 @@ export default function ChapterPage() {
     return () => {
       active = false;
     };
-  }, [subtopicId, userId]);
+  }, [topicId, subtopicId, userId]);
 
   if (!loaded) return <p className="text-slate-500">Lade Kapitel …</p>;
   if (!sub) {
@@ -65,7 +67,7 @@ export default function ChapterPage() {
 
   return (
     <article className="space-y-8 pb-12">
-      <Link to={`/app/topics/${topicId || sub.topicId}`} className="text-indigo-700 underline min-h-11 inline-flex items-center text-sm">
+      <Link to={`/app/topics/${sub.topicId}`} className="text-indigo-700 underline min-h-11 inline-flex items-center text-sm">
         ← Zum Thema
       </Link>
 

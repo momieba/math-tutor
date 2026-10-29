@@ -159,7 +159,6 @@ for (const vp of VIEWPORTS) {
 }
 
 test('BUG-09: eigenständige Links auf Login/Registrieren/Impressum/404 sind ≥ 44 px hoch', async ({ page }) => {
-  test.fail(true, 'BUG-09 bekannt: Text-Links ohne Mindesthöhe (AuthPage.tsx:61, LegalPage.tsx:10, NotFoundPage.tsx:7)');
   const fails: string[] = [];
   const links: [string, string][] = [
     ['/login', 'Noch kein Konto? Registrieren'],
@@ -321,7 +320,6 @@ test('Touch-Ziele: zentrale Bedienelemente sind ≥ 44 px hoch', async ({ page }
 });
 
 test('BUG-08: Registrierung im lokalen Modus scheitert ohne Secure Context (iPad über http://LAN-IP)', async ({ page }) => {
-  test.fail(true, 'BUG-08 bekannt: crypto.subtle/randomUUID fehlen ohne HTTPS bzw. localhost');
   // Emuliert einen unsicheren Kontext (z. B. `vite --host`, Aufruf am iPad über http://192.168.x.y:5173).
   await page.addInitScript(() => {
     Object.defineProperty(window.crypto, 'subtle', { value: undefined });

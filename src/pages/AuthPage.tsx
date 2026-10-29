@@ -47,7 +47,7 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
     <div className="min-h-screen flex items-center justify-center p-4">
       <form onSubmit={submit} className="w-full max-w-sm bg-white rounded-2xl shadow-sm p-6 space-y-4">
         <h1 className="text-2xl font-bold">{mode === 'login' ? 'Anmelden' : 'Konto erstellen'}</h1>
-        {services.mode === 'local' && <p className="text-xs text-amber-700 bg-amber-50 rounded p-2">Lokaler Modus: Daten bleiben nur in diesem Browser.</p>}
+        {services.mode === 'local' && <p className="text-sm text-amber-700 bg-amber-50 rounded p-2">Lokaler Modus: Daten bleiben nur in diesem Browser.</p>}
         {mode === 'register' && (
           <label className="block">Name<input className={input} value={name} onChange={(e) => setName(e.target.value)} autoComplete="nickname" /></label>
         )}
@@ -58,7 +58,7 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
         <button disabled={busy} className="w-full rounded-lg bg-indigo-600 text-white disabled:opacity-50">{mode === 'login' ? 'Anmelden' : 'Registrieren'}</button>
         <button type="button" onClick={() => void google()} className="w-full rounded-lg border border-slate-300">Mit Google fortfahren</button>
         <p className="text-sm text-center">
-          {mode === 'login' ? <Link to="/register" className="text-indigo-700">Noch kein Konto? Registrieren</Link> : <Link to="/login" className="text-indigo-700">Schon ein Konto? Anmelden</Link>}
+          {mode === 'login' ? <Link to="/register" className="text-indigo-700 min-h-11 inline-flex items-center">Noch kein Konto? Registrieren</Link> : <Link to="/login" className="text-indigo-700 min-h-11 inline-flex items-center">Schon ein Konto? Anmelden</Link>}
         </p>
       </form>
     </div>

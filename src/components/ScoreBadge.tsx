@@ -17,7 +17,7 @@ export function ScoreBadge({ score, compact = false }: { score: number; compact?
       aria-label={`Verständnis-Score ${score} von 100: ${band}`}
     >
       <span className="text-lg font-bold tabular-nums">{score}</span>
-      <span className="text-xs">/100</span>
+      <span className="text-sm">/100</span>
       {!compact && <span className="text-sm">{band}</span>}
     </span>
   );

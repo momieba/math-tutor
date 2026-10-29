@@ -16,7 +16,7 @@ export function AppLayout() {
           <NavLink to="/app" end className={nav}>Dashboard</NavLink>
           <NavLink to="/app/history" className={nav}>Verlauf</NavLink>
           <span className="ml-auto text-sm text-slate-500 hidden sm:inline">{session?.user.displayName}</span>
-          {services.mode === 'local' && <span className="text-xs rounded bg-amber-100 text-amber-800 px-2 py-1">Lokaler Modus</span>}
+          {services.mode === 'local' && <span className="text-sm rounded bg-amber-100 text-amber-800 px-2 py-1">Lokaler Modus</span>}
           <button onClick={() => void services.auth.signOut()} className="px-3 rounded-lg text-slate-600 hover:bg-slate-100">Abmelden</button>
         </div>
       </header>

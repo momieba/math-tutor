@@ -96,7 +96,7 @@ export function MathInput({
       />
       {preview && value.trim() && (
         <div className="mt-2 rounded-xl bg-slate-50 border border-slate-200 px-4 py-2 overflow-x-auto" aria-label="Vorschau">
-          <span className="text-xs text-slate-500 mr-2">Vorschau:</span>
+          <span className="text-sm text-slate-500 mr-2">Vorschau:</span>
           <MathText text={toPreviewLatex(value)} display />
         </div>
       )}

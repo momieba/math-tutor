@@ -93,7 +93,7 @@ export default function TopicPage() {
                     {done ? '✓' : s.order}
                   </span>
                   <div className="flex-1">
-                    {isNext && <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700">Als Nächstes empfohlen</p>}
+                    {isNext && <p className="text-sm font-semibold uppercase tracking-wide text-indigo-700">Als Nächstes empfohlen</p>}
                     <h2 className="font-semibold text-lg leading-snug">{s.title}</h2>
                     <p className="text-sm text-slate-600">{s.description}</p>
                   </div>

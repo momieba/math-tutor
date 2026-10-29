@@ -644,7 +644,6 @@ test.describe('Robustheit: unbekannte URLs und geschützte Routen', () => {
   });
 
   test('BUG-07: Kapitel unter falschem Thema wird angezeigt, „Zum Thema“ führt zum falschen Thema', async ({ page }) => {
-    test.fail(true, 'BUG-07 bekannt: ChapterPage prüft nicht, ob subtopic.topicId zum URL-Thema passt');
     await register(page);
     await page.goto('/app/topics/prozentrechnung/chapters/pyth-grundlagen');
     await expect(page.getByText('Dieses Kapitel gibt es nicht.')).toBeVisible({ timeout: 2000 });

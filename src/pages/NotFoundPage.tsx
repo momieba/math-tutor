@@ -4,7 +4,7 @@ export default function NotFoundPage() {
   return (
     <div className="p-8">
       <h1 className="text-2xl font-bold">Seite nicht gefunden</h1>
-      <Link to="/" className="text-indigo-700">
+      <Link to="/" className="text-indigo-700 min-h-11 inline-flex items-center">
         Zur Startseite
       </Link>
     </div>

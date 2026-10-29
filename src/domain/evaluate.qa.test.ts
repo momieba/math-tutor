@@ -149,66 +149,66 @@ describe('Schreibweisen, die akzeptiert werden (Ist = Soll)', () => {
 describe('Befunde (bekannte Abweichungen)', () => {
   // BUG-01 (Major): normalizeText ruft normalize('NFKC') VOR replace(/²/) auf. NFKC macht aus „²“ eine „2“,
   // dadurch wird „a² + b²“ zu „a2+b2“ und als FALSCH (rot) gewertet. evaluate.ts Z. 20–21.
-  it.fails('BUG-01: „a² + b²“ (hochgestellt, iPad-Tastatur) wird als richtig erkannt', () => {
+  it('BUG-01: „a² + b²“ (hochgestellt, iPad-Tastatur) wird als richtig erkannt', () => {
     expect(verdict('pyth-herleitung-3', 'a² + b²')).toBe('correct');
   });
-  it.fails('BUG-01: „b²+a²“ wird als richtig erkannt', () => {
+  it('BUG-01: „b²+a²“ wird als richtig erkannt', () => {
     expect(verdict('pyth-herleitung-3', 'b²+a²')).toBe('correct');
   });
 
   // BUG-02 (Major): „±“ wird verworfen ⇒ nur {7} ⇒ partial 0,5 und als Versuch gespeichert. evaluate.ts parseNumberSet Z. 41–47.
-  it.fails('BUG-02: „±7“ für x² = 49 ist richtig', () => {
+  it('BUG-02: „±7“ für x² = 49 ist richtig', () => {
     expect(verdict('quad-reinquadratisch-1', '±7')).toBe('correct');
   });
-  it.fails('BUG-02: „x = ±7“ ist richtig', () => {
+  it('BUG-02: „x = ±7“ ist richtig', () => {
     expect(verdict('quad-reinquadratisch-1', 'x = ±7')).toBe('correct');
   });
 
   // BUG-03 (Major): parseNumber entfernt alle Nicht-Ziffern und klebt alle Ziffern zusammen (Z. 28–37).
   // Korrekte Antworten mit Zwischenschritt, mehreren Gleichheitszeichen oder Hochzahl werden ROT.
-  it.fails('BUG-03: „c = √289 = 17“ ist richtig oder zumindest nicht falsch', () => {
+  it('BUG-03: „c = √289 = 17“ ist richtig oder zumindest nicht falsch', () => {
     expect(verdict('pyth-hypotenuse-4', 'c = √289 = 17')).not.toBe('incorrect');
   });
-  it.fails('BUG-03: „x1 = x2 = 5“ (doppelte Lösung) ist nicht falsch', () => {
+  it('BUG-03: „x1 = x2 = 5“ (doppelte Lösung) ist nicht falsch', () => {
     expect(verdict('quad-pq-formel-4', 'x1 = x2 = 5')).not.toBe('incorrect');
   });
-  it.fails('BUG-03: „100 cm^2“ ist richtig (wird als 1002 gelesen)', () => {
+  it('BUG-03: „100 cm^2“ ist richtig (wird als 1002 gelesen)', () => {
     expect(verdict('pyth-grundlagen-3', '100 cm^2')).toBe('correct');
   });
-  it.fails('BUG-03: „5/2“ wird nicht als 52 gelesen (Bruch ⇒ 2,5 oder unclear)', () => {
+  it('BUG-03: „5/2“ wird nicht als 52 gelesen (Bruch ⇒ 2,5 oder unclear)', () => {
     expect(parseNumber('5/2')).not.toBe(52);
   });
-  it.fails('BUG-03: „√65“ wird nicht als 65 gelesen', () => {
+  it('BUG-03: „√65“ wird nicht als 65 gelesen', () => {
     expect(parseNumber('√65')).not.toBe(65);
   });
 
   // BUG-04 (Minor, latent): deutscher Tausenderpunkt. Aktuell keine Aufgabe ≥ 1000, ab neuen Prozentaufgaben relevant.
-  it.fails('BUG-04: „1.000“ ist 1000 (oder unclear), nicht 1', () => {
+  it('BUG-04: „1.000“ ist 1000 (oder unclear), nicht 1', () => {
     expect(parseNumber('1.000')).not.toBe(1);
   });
-  it.fails('BUG-04: „1.200 €“ ist 1200 (oder unclear), nicht 1,2', () => {
+  it('BUG-04: „1.200 €“ ist 1200 (oder unclear), nicht 1,2', () => {
     expect(parseNumber('1.200 €')).not.toBe(1.2);
   });
 
   // BUG-05 (Minor): Gedankenstrich „–“ (U+2013, Autokorrektur/Kopieren) wird entfernt ⇒ Vorzeichen geht verloren ⇒ ROT.
-  it.fails('BUG-05: „7; –7“ (Halbgeviertstrich) ist richtig', () => {
+  it('BUG-05: „7; –7“ (Halbgeviertstrich) ist richtig', () => {
     expect(verdict('quad-reinquadratisch-1', '7; –7')).toBe('correct');
   });
 
   // BUG-06 (Minor): sichere Rückfrage (gelb, kein Versuch gespeichert), aber übliche Schreibweisen werden nicht verstanden.
-  it.fails('BUG-06: „x1=7, x2=-7“ (Komma als Trenner) ist richtig', () => {
+  it('BUG-06: „x1=7, x2=-7“ (Komma als Trenner) ist richtig', () => {
     expect(verdict('quad-reinquadratisch-1', 'x1=7, x2=-7')).toBe('correct');
   });
-  it.fails('BUG-06: „7, -7“ ist richtig', () => {
+  it('BUG-06: „7, -7“ ist richtig', () => {
     expect(verdict('quad-reinquadratisch-1', '7, -7')).toBe('correct');
   });
-  it.fails('BUG-06: „8,1 cm.“ (Satzpunkt am Ende) ist richtig', () => {
+  it('BUG-06: „8,1 cm.“ (Satzpunkt am Ende) ist richtig', () => {
     expect(verdict('pyth-hypotenuse-3', '8,1 cm.')).toBe('correct');
   });
-  it.fails('BUG-06: „ca. 8,1 cm“ ist richtig', () => {
+  it('BUG-06: „ca. 8,1 cm“ ist richtig', () => {
     expect(verdict('pyth-hypotenuse-3', 'ca. 8,1 cm')).toBe('correct');
   });
-  it.fails('BUG-06: „70,– €“ (Preisschreibweise) ist richtig', () => {
+  it('BUG-06: „70,– €“ (Preisschreibweise) ist richtig', () => {
     expect(verdict('prozent-prozentwert-1', '70,– €')).toBe('correct');
   });
 

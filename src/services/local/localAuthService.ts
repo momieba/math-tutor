@@ -4,6 +4,7 @@
  */
 import type { Profile, Session } from '../../types';
 import type { AuthService } from '../types';
+import { sha256Hex } from './cryptoFallback';
 import { newId, readJson, removeKey, writeJson } from './storage';
 
 interface LocalUser {
@@ -15,10 +16,9 @@ interface LocalUser {
 const USERS = 'users';
 const SESSION = 'session';
 
-async function hash(salt: string, password: string): Promise<string> {
-  const data = new TextEncoder().encode(`${salt}:${password}`);
-  const digest = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
+/** SHA-256 über „salt:passwort“. Ohne `crypto.subtle` (kein HTTPS) greift ein identischer JS-Fallback (BUG-08). */
+export function hashPassword(salt: string, password: string): Promise<string> {
+  return sha256Hex(`${salt}:${password}`);
 }
 
 export function createLocalAuthService(): AuthService {
@@ -51,12 +51,12 @@ export function createLocalAuthService(): AuthService {
       if (password.length < 8) throw new Error('Das Passwort muss mindestens 8 Zeichen lang sein.');
       const salt = newId();
       const profile: Profile = { id: newId(), email: e, displayName: displayName.trim() || e.split('@')[0], role: 'student', createdAt: new Date().toISOString() };
-      writeJson(USERS, [...users(), { profile, salt, passwordHash: await hash(salt, password) }]);
+      writeJson(USERS, [...users(), { profile, salt, passwordHash: await hashPassword(salt, password) }]);
       return login(profile.id);
     },
     async signInWithEmail(email, password) {
       const u = users().find((x) => x.profile.email === email.trim().toLowerCase());
-      if (!u || (await hash(u.salt, password)) !== u.passwordHash) throw new Error('E-Mail oder Passwort ist falsch.');
+      if (!u || (await hashPassword(u.salt, password)) !== u.passwordHash) throw new Error('E-Mail oder Passwort ist falsch.');
       return login(u.profile.id);
     },
     async signInWithGoogle() {

@@ -13,37 +13,111 @@ export interface EvaluationResult {
   mistake?: string;
 }
 
+const SUPERSCRIPT_DIGITS: Record<string, string> = {
+  '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9', '⁻': '-',
+};
+
+/**
+ * Gemeinsame Vorverarbeitung für Text- und Zahlenprüfung.
+ * Reihenfolge ist wichtig (BUG-01): Hochzahlen werden VOR `normalize('NFKC')` zu `^n`,
+ * weil NFKC aus „²“ sonst eine normale „2“ macht („a²“ → „a2“).
+ * Alle Strich-Varianten (Halbgeviert, Geviert, Ziffernstrich, Unicode-Minus) werden zu „-“ (BUG-05).
+ */
+function preprocess(raw: string): string {
+  return raw
+    .replace(/[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, (m) => '^' + Array.from(m, (c) => SUPERSCRIPT_DIGITS[c]).join(''))
+    .normalize('NFKC') // u. a. tiefgestellte Indizes: x₁ → x1
+    .replace(/[–—‒−]/g, '-');
+}
+
 /** Normalisiert Text/Term-Eingaben: klein, ohne Leerzeichen, ² → ^2, Mal-Zeichen entfernt. */
 export function normalizeText(raw: string): string {
-  return raw
+  return preprocess(raw)
     .toLowerCase()
-    .normalize('NFKC')
-    .replace(/²/g, '^2')
-    .replace(/³/g, '^3')
     .replace(/[\s*·⋅]/g, '')
     .replace(/["„“'`.]/g, '');
 }
 
-/** Parst eine Zahl mit deutschem oder englischem Dezimaltrenner. Einheiten/Prozentzeichen werden ignoriert. */
-export function parseNumber(raw: string): number | null {
-  const cleaned = raw
-    .trim()
-    .replace(/^[a-z]\w*\s*=\s*/i, '') // "x = 5", "c=17"
-    .replace(/[^\d,.\-−+]/g, '')
-    .replace('−', '-')
-    .replace(',', '.');
-  if (!/^[+-]?\d+(\.\d+)?$/.test(cleaned) && !/^[+-]?\.\d+$/.test(cleaned)) return null;
-  const n = Number(cleaned);
+/** Zeichen, die wie Einheiten ignoriert werden (Währung, Prozent, Grad, Anführungszeichen). */
+const IGNORED_SYMBOLS = /[€$%°"„“'`]/g;
+/** Füllwörter für Näherungen: „ca. 8,1“, „etwa 8,1“. */
+const APPROX_WORDS = /(^|\s)(ca|circa|etwa|ungefähr|rund)\.?(?=\s|\d|$)/gi;
+
+/** Wandelt ein bereinigtes Zahl-Token ohne Leerzeichen um (deutscher und englischer Dezimaltrenner). */
+function toNumber(token: string): number | null {
+  let t = token;
+  if (/^[+-]?[1-9]\d{0,2}(\.\d{3})+(,\d+)?$/.test(t)) {
+    t = t.replace(/\./g, '').replace(',', '.'); // deutscher Tausenderpunkt (BUG-04): 1.000 → 1000, 1.200,5 → 1200.5
+  } else {
+    if (t.includes(',') && t.includes('.')) return null; // z. B. „1,234.5“: nicht eindeutig
+    t = t.replace(',', '.');
+  }
+  if (!/^[+-]?(\d+(\.\d+)?|\.\d+)$/.test(t)) return null;
+  const n = Number(t);
   return Number.isFinite(n) ? n : null;
 }
 
-/** Parst eine Lösungsmenge: Trennung per Semikolon, „oder“, „und“ oder Zeilenumbruch. */
+/**
+ * Parst eine einzelne Zahl. Gewertet wird nur der Teil nach dem letzten „=“ bzw. „≈“ (BUG-03: „c = √289 = 17“ → 17).
+ * Einheiten samt Hochzahl (cm², m^3), Währung, Prozent und Füllwörter werden ignoriert.
+ * Nicht eindeutige Eingaben (mehrere Zahlengruppen, Wurzel, Potenz, Rechenzeichen) ergeben `null` ⇒ gelbe Rückfrage,
+ * statt Ziffern zusammenzukleben. Einfache Brüche aus ganzen Zahlen („5/2“) werden ausgewertet.
+ */
+export function parseNumber(raw: string): number | null {
+  let s = preprocess(raw).trim();
+  s = (s.split(/[=≈~]/).pop() ?? '').trim();
+  s = s.replace(/[.!]+$/, '').trim(); // Satzpunkt am Ende (BUG-06)
+  if (/√|sqrt|wurzel/i.test(s)) return null;
+  s = s
+    .replace(APPROX_WORDS, ' ')
+    .replace(/,\s*-+(?!\s*\d)/g, '') // Preisschreibweise „70,–“ (BUG-06)
+    .replace(/\p{L}+(\^-?\d+)?/gu, ' ') // Einheiten/Wörter inkl. Hochzahl: cm^2, m^3, Prozent
+    .replace(IGNORED_SYMBOLS, ' ')
+    .replace(/\s*([.,/])\s*/g, '$1') // „8 , 1“ → „8,1“
+    .replace(/([+-])\s+/g, '$1')
+    .trim();
+  if (!s || /\s/.test(s)) return null; // leer oder mehrere Zahlengruppen
+  const frac = /^([+-]?\d+)\/(\d+)$/.exec(s);
+  if (frac) {
+    const den = Number(frac[2]);
+    return den === 0 ? null : Number(frac[1]) / den;
+  }
+  return toNumber(s);
+}
+
+/** Ein Element einer Lösungsmenge; „±a“ bzw. „b ± a“ ergibt zwei Werte (BUG-02). */
+function parseSetPart(part: string): number[] | null {
+  const rhs = (part.split(/[=≈]/).pop() ?? '').trim().replace(/\+\/?-/g, '±');
+  const pm = /^(.*?)±(.+)$/.exec(rhs);
+  if (!pm) {
+    const n = parseNumber(part);
+    return n === null ? null : [n];
+  }
+  const base = pm[1].trim() === '' ? 0 : parseNumber(pm[1]);
+  const delta = parseNumber(pm[2]);
+  if (base === null || delta === null) return null;
+  return delta === 0 ? [base] : [base + delta, base - delta];
+}
+
+/**
+ * Parst eine Lösungsmenge. Trenner: Semikolon, „oder“, „und“, Zeilenumbruch sowie ein Komma,
+ * auf das ein Leerzeichen, eine Variable oder ein Vorzeichen folgt („x1=7, x2=-7“, „7, -7“) (BUG-06).
+ * Ein Komma direkt zwischen Ziffern („8,1“) bleibt Dezimalkomma.
+ */
 export function parseNumberSet(raw: string): number[] | null {
-  const t = raw.trim().replace(/^l\s*=\s*/i, '').replace(/[{}]/g, '');
+  const t = preprocess(raw).trim().replace(/^l\s*=\s*/i, '').replace(/[{}]/g, '');
   if (/^(keine|leer|∅)/i.test(t)) return [];
-  const parts = t.split(/;|\boder\b|\bund\b|\n/i).map((p) => p.trim()).filter(Boolean);
-  const nums = parts.map(parseNumber);
-  return nums.every((n): n is number => n !== null) ? nums : null;
+  const parts = t
+    .split(/;|\boder\b|\bund\b|\n|,(?=\s|[+\-±]|\p{L})/iu)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  const nums: number[] = [];
+  for (const p of parts) {
+    const values = parseSetPart(p);
+    if (values === null) return null;
+    nums.push(...values);
+  }
+  return nums;
 }
 
 function matchMistake(ex: Exercise, raw: string) {

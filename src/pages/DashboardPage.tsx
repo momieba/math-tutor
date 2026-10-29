@@ -244,7 +244,7 @@ export default function DashboardPage() {
                 <span className="text-sm text-slate-600">Verständnis:</span>
                 <ScoreBadge score={progress.score} />
               </div>
-              {progress.lastActivityAt && <p className="text-xs text-slate-500">Zuletzt geübt: {fmtDate(progress.lastActivityAt)}</p>}
+              {progress.lastActivityAt && <p className="text-sm text-slate-500">Zuletzt geübt: {fmtDate(progress.lastActivityAt)}</p>}
               <Link to={`/app/topics/${topic.id}`} className="mt-auto rounded-xl bg-indigo-600 text-white px-5 font-semibold inline-flex items-center justify-center">
                 Thema öffnen
               </Link>

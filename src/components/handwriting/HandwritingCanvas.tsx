@@ -222,7 +222,7 @@ export function HandwritingCanvas({ history, onChange, disabled = false }: Props
           }}
         />
       </div>
-      {tool === 'pan' && <p className="text-xs text-slate-500 px-1">Verschieben aktiv: Mit dem Finger wischen bewegt die Fläche. Zum Schreiben wieder „Stift“ wählen.</p>}
+      {tool === 'pan' && <p className="text-sm text-slate-500 px-1">Verschieben aktiv: Mit dem Finger wischen bewegt die Fläche. Zum Schreiben wieder „Stift“ wählen.</p>}
     </div>
   );
 }

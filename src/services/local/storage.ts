@@ -1,4 +1,6 @@
 /** Kleiner, versionierter localStorage-Wrapper. Nur für den lokalen Demo-/Entwicklungsmodus. */
+import { newUuid } from './cryptoFallback';
+
 const PREFIX = 'mathmvp:v1:';
 
 export function readJson<T>(key: string, fallback: T): T {
@@ -19,6 +21,7 @@ export function removeKey(key: string): void {
   localStorage.removeItem(PREFIX + key);
 }
 
+/** UUID v4; funktioniert auch ohne Secure Context (z. B. iPad über http://LAN-IP), siehe cryptoFallback.ts. */
 export function newId(): string {
-  return crypto.randomUUID();
+  return newUuid();
 }

@@ -148,7 +148,7 @@ export default function HistoryPage() {
                     <span className={`w-3 h-3 rounded-full flex-none ${DOT[v]}`} aria-hidden="true" />
                     <span className="font-medium flex-1">{ctx.get(a.id)?.label ?? a.exerciseId}</span>
                     {a.submission && (
-                      <span className="text-xs text-slate-500" title="Mit Handschrift">
+                      <span className="text-sm text-slate-500" title="Mit Handschrift">
                         ✏️
                       </span>
                     )}

@@ -39,6 +39,8 @@ export default function ExercisePage() {
   const [loaded, setLoaded] = useState(false);
   const [ex, setEx] = useState<Exercise | null>(null);
   const [sub, setSub] = useState<Subtopic | null>(null);
+  /** Themenname für die Brotkrumen (UX-07); `null` ⇒ neutrales „Thema“. */
+  const [topicTitle, setTopicTitle] = useState<string | null>(null);
   const [previousCount, setPreviousCount] = useState(0);
   const [pending, setPending] = useState<PendingAttempt | null>(null);
 
@@ -72,12 +74,17 @@ export default function ExercisePage() {
     void (async () => {
       const e = await services.content.getExercise(exerciseId);
       const s = e ? await services.content.getSubtopic(e.subtopicId) : null;
-      const [draft, previous] = e
-        ? await Promise.all([services.attempts.getPending(userId, e.id), services.learner.listAttempts(userId, { exerciseId: e.id }).catch(() => [])])
-        : [null, []];
+      const [draft, previous, topic] = e
+        ? await Promise.all([
+            services.attempts.getPending(userId, e.id),
+            services.learner.listAttempts(userId, { exerciseId: e.id }).catch(() => []),
+            s ? services.content.getTopic(s.topicId).catch(() => null) : null,
+          ])
+        : [null, [], null];
       if (!active) return;
       setEx(e);
       setSub(s);
+      setTopicTitle(topic?.title ?? null);
       setPreviousCount(previous.length);
       if (draft) {
         // Entwurf in das Formular übernehmen, damit nichts verloren wirkt.
@@ -200,7 +207,7 @@ export default function ExercisePage() {
     <div className="space-y-6 pb-12">
       <nav className="text-sm text-slate-600 flex flex-wrap gap-x-2" aria-label="Brotkrumen">
         <Link to={`/app/topics/${chapter.topicId}`} className="text-indigo-700 underline min-h-11 inline-flex items-center">
-          Thema
+          {topicTitle ?? 'Thema'}
         </Link>
         <span aria-hidden="true" className="self-center">
           ›
