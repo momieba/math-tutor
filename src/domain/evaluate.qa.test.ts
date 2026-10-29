@@ -4,8 +4,11 @@
  * 2) Übliche Schülerschreibweisen gegen `evaluateAnswer`.
  * 3) Regressionstests für die behobenen Befunde BUG-01 … BUG-06 (Fix in c00f8c6, Re-Test durch Tester).
  * 4) Regressionslauf über ALLE Aufgaben: jede Aufgabe akzeptiert ihre eigene Soll-Antwort.
- * 5) Offene Befunde sind als `it.fails` mit Bug-ID markiert: Sie bleiben grün, solange der Fehler besteht,
- *    und schlagen an, sobald er behoben ist (dann `.fails` entfernen = Re-Test).
+ * 5) Regressionstests BUG-10, BUG-11 und Entscheidung „1.125“ (Fix in 570400a, Re-Test durch Tester).
+ * 6) Regression „Variable an Ziffer“: Einheiten, Indizes (x1/x2) und übliche Antworten bleiben unberührt.
+ * 7) Offene Befunde (BUG-12, BUG-13) sind als `it.fails` mit Bug-ID markiert: Sie bleiben grün, solange der
+ *    Fehler besteht, und schlagen an, sobald er behoben ist (dann `.fails` entfernen = Re-Test).
+ *    Die `it.todo` „INHALT“ sind Inhaltsfragen für Req eng/Redaktion, keine Parserfehler.
  */
 import { describe, expect, it } from 'vitest';
 import { topics } from '../content';
@@ -314,36 +317,59 @@ describe('Regression neuer Parser: jede Aufgabe akzeptiert ihre eigene Soll-Antw
   });
 });
 
-// ------------------------------------------------------------------ 5) Offene Befunde aus dem Re-Test
-describe('Offene Befunde (Re-Test c00f8c6)', () => {
-  // BUG-10 (Major): parseNumber wertet nur den Teil nach dem LETZTEN „=“. Enthält die Eingabe mehrere Werte
-  // („oder“, „und“, „;“, Komma-Liste), entscheidet die Reihenfolge über Grün/Rot, statt gelb nachzufragen (Konzept §9).
-  // evaluate.ts parseNumber: `s.split(/[=≈~]/).pop()` vor der Prüfung auf mehrere Zahlengruppen.
-  it('BUG-10: „c = 15 oder c = 17“ (Soll 17) ist nicht grün, sondern unclear', () => {
+// ------------------------------------------------------------------ 5) Regressionstests BUG-10, BUG-11, Entscheidung 1.125
+describe('Regressionstests: BUG-10, BUG-11, Entscheidung 1.125 (Fix in 570400a)', () => {
+  // BUG-10 (behoben): Mehrere Werte mit „oder“, „und“, „;“, Komma-Liste ⇒ gelbe Rückfrage, nicht „letztes = gewinnt“.
+  // Restlücke bei anderen Trennern (bzw., /, sowie, nur Leerzeichen) ⇒ BUG-12 unten.
+  it('BUG-10 (Regression): „c = 15 oder c = 17“ (Soll 17) ist nicht grün, sondern unclear', () => {
     expect(verdict('pyth-hypotenuse-4', 'c = 15 oder c = 17')).toBe('unclear');
   });
-  it('BUG-10: „c = 17 oder c = 15“ (Soll 17) ist nicht rot, sondern unclear', () => {
+  it('BUG-10 (Regression): „c = 17 oder c = 15“ (Soll 17) ist nicht rot, sondern unclear', () => {
     expect(verdict('pyth-hypotenuse-4', 'c = 17 oder c = 15')).toBe('unclear');
   });
-  it('BUG-10: „c = 17, a = 8“ (Soll c = 17) ist nicht rot, sondern unclear', () => {
+  it('BUG-10 (Regression): „c = 17, a = 8“ (Soll c = 17) ist nicht rot, sondern unclear', () => {
     expect(verdict('pyth-hypotenuse-4', 'c = 17, a = 8')).toBe('unclear');
   });
-  it('BUG-10: parseNumber(„x = 5 oder x = 12“) ist null (mehrdeutig), nicht 12', () => {
+  it('BUG-10 (Regression): parseNumber(„x = 5 oder x = 12“) ist null (mehrdeutig), nicht 12', () => {
     expect(parseNumber('x = 5 oder x = 12')).toBeNull();
   });
-  it('BUG-10 Abgrenzung: Gleichungskette „c = √289 = 17“ bleibt eindeutig 17', () => {
+  it.each(['c = 15 und c = 17', 'c = 15; c = 17', 'c = 15\nc = 17', 'c = 15, c = 17', 'c = 15,c = 17', 'a = 8 cm, c = 17 cm'])(
+    'BUG-10 (Regression): %j ⇒ null',
+    (raw) => {
+      expect(parseNumber(raw)).toBeNull();
+    },
+  );
+  it('BUG-10 (Regression) Abgrenzung: Gleichungskette „c = √289 = 17“ bleibt eindeutig 17', () => {
     expect(parseNumber('c = √289 = 17')).toBe(17);
   });
+  it.each<[string, number]>([
+    ['x1 = x2 = 5', 5],
+    ['x₁ = x₂ = 5', 5],
+    [' 8 , 1 ', 8.1],
+    ['3,5', 3.5],
+    ['3, 5', 3.5], // Abweichung Entwickler1: bei EINER Zahl trennt das Komma nur vor Variable/Vorzeichen
+    ['70,– €', 70],
+  ])('BUG-10 (Regression) Abgrenzung: %j ⇒ %d', (raw, n) => {
+    expect(parseNumber(raw)).toBeCloseTo(n, 9);
+  });
+  it('BUG-10 (Regression): „3, 5“ bleibt in einer LÖSUNGSMENGE {3; 5}', () => {
+    expect(parseNumberSet('3, 5')).toEqual([3, 5]);
+  });
 
-  // BUG-11 (Minor): Eine Eingabe nur aus Trennern („;“, „und“) wird als LEERE Lösungsmenge gelesen ⇒ rot + gespeicherter Versuch.
-  // Erwartet: unclear (keine Zahl erkannt). „L = {}“ / „keine Lösung“ bleiben gültige Antworten.
-  it('BUG-11: „;“ bei x² = 49 ⇒ unclear statt incorrect', () => {
+  // BUG-11 (behoben): Eine Eingabe nur aus Trennern ⇒ unclear statt leere Menge (rot + gespeicherter Versuch).
+  it('BUG-11 (Regression): „;“ bei x² = 49 ⇒ unclear statt incorrect', () => {
     expect(verdict('quad-reinquadratisch-1', ';')).toBe('unclear');
   });
-  it('BUG-11: „und“ bei x² = 49 ⇒ unclear statt incorrect', () => {
+  it('BUG-11 (Regression): „und“ bei x² = 49 ⇒ unclear statt incorrect', () => {
     expect(verdict('quad-reinquadratisch-1', 'und')).toBe('unclear');
   });
-  it('BUG-11 Abgrenzung: „keine Lösung“ und „L = {}“ sind bewusst die leere Menge', () => {
+  it.each([',', 'L =', 'L = { ; }', 'oder'])('BUG-11 (Regression): parseNumberSet(%j) ⇒ null', (raw) => {
+    expect(parseNumberSet(raw)).toBeNull();
+  });
+  it.each(['{}', 'L = ∅', '∅'])('BUG-11 (Regression) Abgrenzung: %j ist bewusst die leere Menge', (raw) => {
+    expect(parseNumberSet(raw)).toEqual([]);
+  });
+  it('BUG-11 (Regression) Abgrenzung: „keine Lösung“ und „L = {}“ sind bewusst die leere Menge', () => {
     expect(parseNumberSet('keine Lösung')).toEqual([]);
     expect(parseNumberSet('L = {}')).toEqual([]);
   });
@@ -370,5 +396,77 @@ describe('Offene Befunde (Re-Test c00f8c6)', () => {
   });
   it('ENTSCHEIDUNG 1.125: Aufgabe mit genau einer Zahl ⇒ unclear (gelb), nicht rot', () => {
     expect(verdict('pyth-hypotenuse-4', '1.125')).toBe('unclear');
+  });
+  it.each(['+1.125', '1.000 €', 'c = 1.125'])('ENTSCHEIDUNG 1.125 (Tester): Aufgabe mit einer Zahl, %j ⇒ unclear', (raw) => {
+    expect(verdict('pyth-hypotenuse-4', raw)).toBe('unclear');
+  });
+  it('ENTSCHEIDUNG 1.125 (Tester): Punkt + Komma ist eindeutig deutsch – „1.125,0“ ⇒ 1125', () => {
+    expect(parseNumber('1.125,0')).toBe(1125);
+  });
+  it('ENTSCHEIDUNG 1.125 (Tester): in Lösungsmengen ⇒ null („1.125; 2“)', () => {
+    expect(parseNumberSet('1.125; 2')).toBeNull();
+  });
+});
+
+// ------------------------------------------------------------------ 6) Variable an Ziffer (570400a): keine Kollateralschäden
+describe('Regression „Variable an Ziffer“: Einheiten und übliche Antworten bleiben unberührt', () => {
+  it.each<[string, number]>([
+    ['8,1cm', 8.1], ['8,1 cm', 8.1], ['6 m', 6], ['6m', 6], ['85%', 85], ['85 %', 85], ['70€', 70], ['70 €', 70],
+    ['5 kg', 5], ['5kg', 5], ['2 l', 2], ['2l', 2], ['12 cm²', 12], ['12cm²', 12], ['100 cm^2', 100], ['8,1 m²', 8.1],
+    ['15 Prozent', 15], ['p = 85 %', 85], ['x = 5', 5], ['x=5', 5], ['c=17', 17], ['c = 17 cm', 17],
+    ['x₁=7', 7], ['x1 = 7', 7], ['x1=7', 7], ['h = 6 m', 6], ['a=7,5cm', 7.5], ['U = 56 cm', 56], ['G = 70 €', 70],
+    ['W = 42€', 42], ['≈8,1cm', 8.1], ['5 h', 5], ['5 s', 5], ['5 g', 5],
+  ])('Einzelzahl %j ⇒ %d', (raw, n) => {
+    expect(parseNumber(raw)).toBeCloseTo(n, 9);
+  });
+
+  it.each(['x1 = 7; x2 = -7', 'x₁=7; x₂=-7', 'x1=7, x2=-7', 'x_1 = 7; x_2 = -7', 'x1 = 7 oder x2 = -7', 'L = {7; -7}', '7, -7'])(
+    'Lösungsmenge %j ⇒ {7; -7} (x1/x2 sind Indizes, keine „Variable an Ziffer“)',
+    (raw) => {
+      expect(parseNumberSet(raw)).toEqual([7, -7]);
+      expect(verdict('quad-reinquadratisch-1', raw)).toBe('correct');
+    },
+  );
+
+  it.each(['2x', 'x5', '5x^2', '5x²', '-3a', '17c', '17C', '3n', '2·x'])('Term %j ⇒ null (gelb)', (raw) => {
+    expect(parseNumber(raw)).toBeNull();
+  });
+  it('Term „17c“ bei pyth-hypotenuse-4 ⇒ unclear statt correct', () => {
+    expect(verdict('pyth-hypotenuse-4', '17c')).toBe('unclear');
+  });
+  // Bekannte, akzeptierte Grenze (Entwickler1): Variable mit Leerzeichen gilt als Einheit.
+  it.each<[string, number]>([['17 c', 17], ['2 x', 2]])('Grenze dokumentiert: %j ⇒ %d', (raw, n) => {
+    expect(parseNumber(raw)).toBe(n);
+  });
+});
+
+// ------------------------------------------------------------------ 7) Offene Befunde aus dem Re-Test 570400a
+describe('Offene Befunde (Re-Test 570400a)', () => {
+  // BUG-12 (Major, Restlücke von BUG-10): Die Trennerliste kennt nur „oder“, „und“, „;“, „\n“ und Komma.
+  // Bei „bzw.“, „/“, „sowie“, „|“, „&“ oder nur Leerzeichen zwischen zwei Aussagen gewinnt wieder das LETZTE „=“:
+  // Die Reihenfolge entscheidet über Grün/Rot (Konzept §9). evaluate.ts parseNumber/parseSetPart: `split(/[=≈~]/).pop()`.
+  it.fails.each(['c = 15 bzw. c = 17', 'c = 15 / c = 17', 'c = 15 sowie c = 17', 'c = 15 c = 17', 'c=15|c=17', 'c = 15 & c = 17'])(
+    'BUG-12: %j (Soll 17) ⇒ unclear statt correct',
+    (raw) => {
+      expect(verdict('pyth-hypotenuse-4', raw)).toBe('unclear');
+    },
+  );
+  it.fails('BUG-12: „c = 17 bzw. c = 15“ (Soll 17) ⇒ unclear statt incorrect', () => {
+    expect(verdict('pyth-hypotenuse-4', 'c = 17 bzw. c = 15')).toBe('unclear');
+  });
+  it.fails.each(['x1=7 x2=-7', 'x1 = 7 bzw. x2 = -7'])(
+    'BUG-12 (Lösungsmenge): %j bei x² = 49 ⇒ correct oder unclear, nicht „teilweise“ mit gespeichertem Versuch',
+    (raw) => {
+      expect(['correct', 'unclear']).toContain(verdict('quad-reinquadratisch-1', raw));
+    },
+  );
+
+  // BUG-13 (Minor): Der Punkt aus der Abkürzung „bzw.“ klebt zwei Zahlen zu einer Dezimalzahl: „15 bzw. 17“ ⇒ 15,17 ⇒ rot.
+  // Gleiche Fehlerklasse wie BUG-03 (Ziffern zusammenkleben). Erwartet: null (gelb).
+  it.fails('BUG-13: parseNumber(„15 bzw. 17“) ⇒ null statt 15.17', () => {
+    expect(parseNumber('15 bzw. 17')).toBeNull();
+  });
+  it.fails('BUG-13: „15 bzw. 17“ bei pyth-hypotenuse-4 ⇒ unclear statt incorrect', () => {
+    expect(verdict('pyth-hypotenuse-4', '15 bzw. 17')).toBe('unclear');
   });
 });
