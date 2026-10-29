@@ -319,16 +319,16 @@ describe('Offene Befunde (Re-Test c00f8c6)', () => {
   // BUG-10 (Major): parseNumber wertet nur den Teil nach dem LETZTEN „=“. Enthält die Eingabe mehrere Werte
   // („oder“, „und“, „;“, Komma-Liste), entscheidet die Reihenfolge über Grün/Rot, statt gelb nachzufragen (Konzept §9).
   // evaluate.ts parseNumber: `s.split(/[=≈~]/).pop()` vor der Prüfung auf mehrere Zahlengruppen.
-  it.fails('BUG-10: „c = 15 oder c = 17“ (Soll 17) ist nicht grün, sondern unclear', () => {
+  it('BUG-10: „c = 15 oder c = 17“ (Soll 17) ist nicht grün, sondern unclear', () => {
     expect(verdict('pyth-hypotenuse-4', 'c = 15 oder c = 17')).toBe('unclear');
   });
-  it.fails('BUG-10: „c = 17 oder c = 15“ (Soll 17) ist nicht rot, sondern unclear', () => {
+  it('BUG-10: „c = 17 oder c = 15“ (Soll 17) ist nicht rot, sondern unclear', () => {
     expect(verdict('pyth-hypotenuse-4', 'c = 17 oder c = 15')).toBe('unclear');
   });
-  it.fails('BUG-10: „c = 17, a = 8“ (Soll c = 17) ist nicht rot, sondern unclear', () => {
+  it('BUG-10: „c = 17, a = 8“ (Soll c = 17) ist nicht rot, sondern unclear', () => {
     expect(verdict('pyth-hypotenuse-4', 'c = 17, a = 8')).toBe('unclear');
   });
-  it.fails('BUG-10: parseNumber(„x = 5 oder x = 12“) ist null (mehrdeutig), nicht 12', () => {
+  it('BUG-10: parseNumber(„x = 5 oder x = 12“) ist null (mehrdeutig), nicht 12', () => {
     expect(parseNumber('x = 5 oder x = 12')).toBeNull();
   });
   it('BUG-10 Abgrenzung: Gleichungskette „c = √289 = 17“ bleibt eindeutig 17', () => {
@@ -337,10 +337,10 @@ describe('Offene Befunde (Re-Test c00f8c6)', () => {
 
   // BUG-11 (Minor): Eine Eingabe nur aus Trennern („;“, „und“) wird als LEERE Lösungsmenge gelesen ⇒ rot + gespeicherter Versuch.
   // Erwartet: unclear (keine Zahl erkannt). „L = {}“ / „keine Lösung“ bleiben gültige Antworten.
-  it.fails('BUG-11: „;“ bei x² = 49 ⇒ unclear statt incorrect', () => {
+  it('BUG-11: „;“ bei x² = 49 ⇒ unclear statt incorrect', () => {
     expect(verdict('quad-reinquadratisch-1', ';')).toBe('unclear');
   });
-  it.fails('BUG-11: „und“ bei x² = 49 ⇒ unclear statt incorrect', () => {
+  it('BUG-11: „und“ bei x² = 49 ⇒ unclear statt incorrect', () => {
     expect(verdict('quad-reinquadratisch-1', 'und')).toBe('unclear');
   });
   it('BUG-11 Abgrenzung: „keine Lösung“ und „L = {}“ sind bewusst die leere Menge', () => {
@@ -348,7 +348,27 @@ describe('Offene Befunde (Re-Test c00f8c6)', () => {
     expect(parseNumberSet('L = {}')).toEqual([]);
   });
 
-  // ENTSCHEIDUNG offen (Rückfrage Entwickler1): „1.125“ wird heute als 1125 gelesen. Empfehlung Tester: gelbe Rückfrage,
-  // wenn genau EIN Punkt mit genau drei Ziffern folgt (1.125, 12.500, 1.000) – siehe Testbericht.
-  it.todo('ENTSCHEIDUNG: „1.125“ ⇒ 1125 (heute) oder unclear (Empfehlung)');
+  // ENTSCHEIDUNG (vorläufig, Koordination nach Empfehlung Tester; Auftraggeber kann ändern):
+  // Genau EIN Punkt mit genau drei Ziffern und ohne Komma (1.125, 12.500, 1.000) ⇒ gelbe Rückfrage.
+  // Umsetzung: evaluate.ts `SINGLE_THOUSANDS_DOT_IS_AMBIGUOUS`.
+  it.each(['1.125', '12.500', '1.000', '1.000 €', '1.125 cm', '-1.125', 'c = 1.125'])(
+    'ENTSCHEIDUNG 1.125: parseNumber(%j) ist null (mehrdeutig)',
+    (raw) => {
+      expect(parseNumber(raw)).toBeNull();
+    },
+  );
+  it.each<[string, number]>([
+    ['1.000.000', 1000000],
+    ['1.200,50', 1200.5],
+    ['1.200,50 €', 1200.5],
+    ['0.125', 0.125],
+    ['8.1', 8.1],
+    ['12.50', 12.5],
+    ['1,125', 1.125],
+  ])('ENTSCHEIDUNG 1.125: eindeutige Form %j ⇒ %d', (raw, n) => {
+    expect(parseNumber(raw)).toBeCloseTo(n, 9);
+  });
+  it('ENTSCHEIDUNG 1.125: Aufgabe mit genau einer Zahl ⇒ unclear (gelb), nicht rot', () => {
+    expect(verdict('pyth-hypotenuse-4', '1.125')).toBe('unclear');
+  });
 });

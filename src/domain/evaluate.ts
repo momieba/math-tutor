@@ -43,9 +43,37 @@ const IGNORED_SYMBOLS = /[€$%°"„“'`]/g;
 /** Füllwörter für Näherungen: „ca. 8,1“, „etwa 8,1“. */
 const APPROX_WORDS = /(^|\s)(ca|circa|etwa|ungefähr|rund)\.?(?=\s|\d|$)/gi;
 
+/**
+ * Listentrenner (gemeinsame Basis für Einzelzahl und Lösungsmenge): Semikolon, „oder“, „und“, Zeilenumbruch.
+ * Beim Komma unterscheiden sich die beiden Fälle bewusst:
+ * - Lösungsmenge: Komma vor Leerzeichen, Vorzeichen oder Buchstabe trennt („3, 5“ → {3; 5}) (BUG-06).
+ * - Einzelzahl: Komma nur vor Variable bzw. Vorzeichen mit Zahl („c = 17, a = 8“, „7, -7“) (BUG-10).
+ *   „ 8 , 1 “ bleibt Dezimalkomma, „70,–“ bleibt Preisschreibweise.
+ */
+const WORD_SEPARATORS = String.raw`;|\boder\b|\bund\b|\n`;
+const SET_SEPARATOR = new RegExp(`${WORD_SEPARATORS}|,(?=\\s|[+\\-±]|\\p{L})`, 'iu');
+const SINGLE_VALUE_SEPARATOR = new RegExp(`${WORD_SEPARATORS}|,\\s*(?=[+\\-±]\\s*\\d|\\p{L})`, 'iu');
+
+/**
+ * Entscheidung „1.125“ (vorläufig: Koordination nach Empfehlung QA; der Auftraggeber kann das ändern):
+ * Genau EIN Punkt mit genau drei Ziffern und ohne Komma ist mehrdeutig. Schulrechner zeigen einen Dezimalpunkt
+ * („1.125“ = 1,125), im Deutschen ist es ein Tausenderpunkt (1125). Statt zu raten ⇒ `null` (gelbe Rückfrage).
+ * Eindeutig bleiben: mehrere Punktgruppen („1.000.000“), Punkt plus Komma („1.200,50“), führende 0 („0.125“).
+ * Auf `false` setzen, um wieder deutsch zu lesen (1.125 → 1125).
+ */
+const SINGLE_THOUSANDS_DOT_IS_AMBIGUOUS = true;
+const SINGLE_THOUSANDS_DOT = /^[+-]?[1-9]\d{0,2}\.\d{3}$/;
+
+/**
+ * Eine einzelne Variable direkt an einer Ziffer („2x“, „x5“, „5x^2“) ist ein Term, keine Einheit ⇒ `null`.
+ * Mehrbuchstabige Einheiten (cm, kg, Prozent) und Einbuchstaben-Einheiten (m, g, l, s, h) sind nicht betroffen.
+ */
+const VARIABLE_AT_DIGIT = /\d[abcnpqxyz](?!\p{L})|(?<!\p{L})[abcnpqxyz]\d/iu;
+
 /** Wandelt ein bereinigtes Zahl-Token ohne Leerzeichen um (deutscher und englischer Dezimaltrenner). */
 function toNumber(token: string): number | null {
   let t = token;
+  if (SINGLE_THOUSANDS_DOT_IS_AMBIGUOUS && SINGLE_THOUSANDS_DOT.test(t)) return null;
   if (/^[+-]?[1-9]\d{0,2}(\.\d{3})+(,\d+)?$/.test(t)) {
     t = t.replace(/\./g, '').replace(',', '.'); // deutscher Tausenderpunkt (BUG-04): 1.000 → 1000, 1.200,5 → 1200.5
   } else {
@@ -58,18 +86,21 @@ function toNumber(token: string): number | null {
 }
 
 /**
- * Parst eine einzelne Zahl. Gewertet wird nur der Teil nach dem letzten „=“ bzw. „≈“ (BUG-03: „c = √289 = 17“ → 17).
+ * Parst eine einzelne Zahl. Gewertet wird nur der Teil nach dem letzten „=“ bzw. „≈“ (BUG-03: „c = √289 = 17“ → 17),
+ * und das nur, wenn die Eingabe keinen Listentrenner enthält (BUG-10: „c = 15 oder c = 17“ ist mehrdeutig ⇒ `null`).
  * Einheiten samt Hochzahl (cm², m^3), Währung, Prozent und Füllwörter werden ignoriert.
- * Nicht eindeutige Eingaben (mehrere Zahlengruppen, Wurzel, Potenz, Rechenzeichen) ergeben `null` ⇒ gelbe Rückfrage,
- * statt Ziffern zusammenzukleben. Einfache Brüche aus ganzen Zahlen („5/2“) werden ausgewertet.
+ * Nicht eindeutige Eingaben (mehrere Werte oder Zahlengruppen, Wurzel, Potenz, Rechenzeichen, Variable an Ziffer,
+ * „1.125“) ergeben `null` ⇒ gelbe Rückfrage, statt zu raten. Einfache Brüche aus ganzen Zahlen („5/2“) werden ausgewertet.
  */
 export function parseNumber(raw: string): number | null {
   let s = preprocess(raw).trim();
+  if (SINGLE_VALUE_SEPARATOR.test(s)) return null;
   s = (s.split(/[=≈~]/).pop() ?? '').trim();
   s = s.replace(/[.!]+$/, '').trim(); // Satzpunkt am Ende (BUG-06)
   if (/√|sqrt|wurzel/i.test(s)) return null;
+  s = s.replace(APPROX_WORDS, ' ');
+  if (VARIABLE_AT_DIGIT.test(s)) return null;
   s = s
-    .replace(APPROX_WORDS, ' ')
     .replace(/,\s*-+(?!\s*\d)/g, '') // Preisschreibweise „70,–“ (BUG-06)
     .replace(/\p{L}+(\^-?\d+)?/gu, ' ') // Einheiten/Wörter inkl. Hochzahl: cm^2, m^3, Prozent
     .replace(IGNORED_SYMBOLS, ' ')
@@ -103,14 +134,19 @@ function parseSetPart(part: string): number[] | null {
  * Parst eine Lösungsmenge. Trenner: Semikolon, „oder“, „und“, Zeilenumbruch sowie ein Komma,
  * auf das ein Leerzeichen, eine Variable oder ein Vorzeichen folgt („x1=7, x2=-7“, „7, -7“) (BUG-06).
  * Ein Komma direkt zwischen Ziffern („8,1“) bleibt Dezimalkomma.
+ * Nur bewusst leere Mengen („keine Lösung“, „L = {}“, „{}“, „∅“) ergeben `[]`. Eine Eingabe nur aus Trennern
+ * („;“, „und“, „,“) ergibt `null` ⇒ gelbe Rückfrage statt Rot (BUG-11).
  */
 export function parseNumberSet(raw: string): number[] | null {
-  const t = preprocess(raw).trim().replace(/^l\s*=\s*/i, '').replace(/[{}]/g, '');
+  const withoutL = preprocess(raw).trim().replace(/^l\s*=\s*/i, '');
+  if (/^\{\s*\}$/.test(withoutL)) return [];
+  const t = withoutL.replace(/[{}]/g, '').trim();
   if (/^(keine|leer|∅)/i.test(t)) return [];
   const parts = t
-    .split(/;|\boder\b|\bund\b|\n|,(?=\s|[+\-±]|\p{L})/iu)
+    .split(SET_SEPARATOR)
     .map((p) => p.trim())
     .filter(Boolean);
+  if (parts.length === 0) return null;
   const nums: number[] = [];
   for (const p of parts) {
     const values = parseSetPart(p);
