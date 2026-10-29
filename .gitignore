@@ -9,3 +9,9 @@ coverage
 *.tsbuildinfo
 .DS_Store
 supabase/.temp
+
+# Playwright
+test-results/
+playwright-report/
+# Screenshots werden bei jedem E2E-Lauf neu erzeugt (enthalten Zeitstempel)
+e2e/screenshots/
