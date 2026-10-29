@@ -102,3 +102,27 @@ export function evaluateAnswer(ex: Exercise, raw: string): EvaluationResult {
     mistake: mistake?.description,
   };
 }
+
+export const UNCHECKED_WORK_MESSAGE =
+  'Dein Rechenweg ist gespeichert, wird im MVP aber noch nicht automatisch geprüft. Vergleiche ihn selbst mit der Musterlösung.';
+
+/**
+ * Handschrift-Aufgaben (Phase 1): Geprüft wird nur das eingetippte Endergebnis.
+ * Der Rechenweg auf der Schreibfläche ist nicht maschinell gelesen ⇒ immer eine gelbe Markierung, nie ein grünes „Weg korrekt“.
+ * Ohne Endergebnis gibt es keine Bewertung (`unclear`), statt eine unsichere Korrektur anzuzeigen (Konzept §8/§9).
+ * Phase 2: KI-Auswertung (Edge Function `grade-submission`) ersetzt die gelbe Markierung durch Schritt-Markierungen.
+ */
+export function evaluateHandwriting(ex: Exercise, finalAnswer: string, hasDrawing: boolean): EvaluationResult {
+  if (!finalAnswer.trim()) {
+    const msg = hasDrawing
+      ? 'Handschrift wird noch nicht automatisch gelesen. Bitte trage dein Endergebnis in das Feld unter der Schreibfläche ein.'
+      : 'Keine Antwort erkannt.';
+    return { verdict: 'unclear', points: 0, feedback: msg, marks: [{ color: 'yellow', message: msg }] };
+  }
+  const base = evaluateAnswer(ex, finalAnswer);
+  if (base.verdict === 'unclear') return base;
+  const workMark: CorrectionMark = hasDrawing
+    ? { color: 'yellow', message: UNCHECKED_WORK_MESSAGE }
+    : { color: 'yellow', message: 'Du hast keinen Rechenweg aufgeschrieben – geprüft wurde nur das Endergebnis.' };
+  return { ...base, marks: [...base.marks, workMark] };
+}

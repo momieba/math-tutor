@@ -17,13 +17,16 @@ Tablet-first Single-Page-App (React/Vite/TS). Lerninhalte sind eine **geprüfte,
 src/
   types/        content.ts (Wissensbasis), learner.ts (Nutzerdaten), index.ts
   content/      Seed-Wissensbasis: pythagoras.ts (8 Kapitel), prozent.ts, quadratisch.ts, helpers.ts, content.test.ts
-  domain/       REINE Logik ohne I/O: evaluate.ts (Antwortprüfung), score.ts (Verständnis-Score), topicMatcher.ts
+  domain/       REINE Logik ohne I/O: evaluate.ts (Antwortprüfung inkl. evaluateHandwriting), score.ts (Verständnis-Score), topicMatcher.ts,
+                progressView.ts (Aufgabenstatus, nächstes Kapitel, Empfehlung, Labels)
   services/     types.ts (Interfaces), config.ts (Modus-Wahl), index.ts (Composition Root)
-    shared/     staticContentRepository, progressService, topicMatcherService (für beide Modi)
+    shared/     staticContentRepository, progressService, topicMatcherService, attemptSubmissionService, draftStore (für beide Modi)
     local/      localAuthService, localLearnerRepository, storage (localStorage, Präfix mathmvp:v1:)
     supabase/   client, supabaseAuthService, supabaseLearnerRepository
   context/      AuthContext (Session)
-  components/   AppLayout, ProtectedRoute, MathText, Placeholder(Todo)
+  components/   AppLayout, ProtectedRoute, MathText, PageFallback, ProgressBar, StatusBadge, ScoreBadge,
+                AnswerInputs (Choice/Numeric/MathInput), FeedbackPanel, SolutionView, Placeholder(Todo, derzeit ungenutzt)
+    handwriting/ canvasModel.ts (REINE Strich-/Undo-Logik), renderStrokes.ts (Canvas-Rendering, PNG-Export), HandwritingCanvas.tsx
   pages/        Landing, Auth(login/register), Dashboard, Topic, Chapter, Exercise, History, Legal, NotFound
 supabase/
   migrations/0001_init.sql   Schema, Grants, RLS, Storage-Bucket
@@ -65,6 +68,7 @@ Aufgabe abgeben: `evaluateAnswer(ex, raw)` → `learner.saveAttempt({…, correc
 - `LearnerRepository` (immer auf `userId` beschränkt): `listActiveTopics`, `addActiveTopic`, `removeActiveTopic`, `saveAttempt`, `listAttempts(filter)`, `getAttempt`, `getSubmissionImageUrl`.
 - `ProgressService`: `getSubtopicProgress`, `getTopicProgress`.
 - `TopicMatcherService`: `match(query) → MatchResult` (`match` | `ambiguous` | `none`).
+- `AttemptSubmissionService` (`services.attempts`): `submit(input) → SubmitResult`, `getPending`, `discardPending`. Ruft `learner.saveAttempt`; schlägt das fehl, wird die Eingabe über `DraftRepository` als Entwurf im Browser gesichert (`mathmvp:v1:draft:<userId>:<exerciseId>`, bei vollem Speicher ohne Bild). Der Entwurf wird **erst im Fehlerfall** geschrieben, damit er im lokalen Modus nicht den Speicherplatz der eigentlichen Abgabe belegt. Die Aufgabenseite stellt Entwürfe beim Öffnen wieder her und bietet „erneut senden“/„verwerfen“.
 - **Modus-Wahl** (`config.ts`): Supabase wird genutzt, wenn `VITE_SUPABASE_URL` mit `http` beginnt und `VITE_SUPABASE_ANON_KEY` länger als 20 Zeichen ist. Mit `VITE_DATA_MODE=local` wird der lokale Modus erzwungen.
 - **Entscheidung:** Der Content wird in beiden Modi statisch ausgeliefert, weil er klein, geprüft und offline-fähig ist. Die DB-Tabellen dienen für FKs, Tests und später Eltern/Lehrer. Ein Wechsel auf einen DB-gestützten `ContentRepository` ist eine reine Implementierungsänderung.
 
@@ -115,6 +119,8 @@ Transparenz: `SubtopicProgress.caps` + `CAP_EXPLANATION` erklären dem Schüler 
 - **Annahme:** Lehrplan „DE/Gymnasium Kl. 7–9“ orientiert sich an den KMK-Standards. Länderspezifische Varianten folgen über `curricula`. Die Inhalte brauchen noch eine fachliche Prüfung (`reviewStatus`).
 - **Bekanntes MVP-Risiko:** `exercises.answer`/`solutions` sind für angemeldete Nutzer lesbar, und die Bewertung läuft im Client. Ein Schüler könnte also Lösungen auslesen oder Versuche fälschen, schadet damit aber nur dem eigenen Score. Ab Phase 2 wird die Bewertung serverseitig gemacht.
 - In `localStorage` passen nur ca. 5 MB, Canvas-Bilder sollten deshalb verkleinert gespeichert werden (JPEG/WebP, ≤ 1200 px).
-- Das JS-Bundle ist ca. 616 kB groß (Warnung). Später per Code-Splitting über Routen-`lazy()` verkleinern.
+- Code-Splitting je Route (`React.lazy`): Hauptbundle ca. 350 kB (vorher 616 kB), KaTeX liegt in einem eigenen Chunk. Größter Rest im Hauptbundle: `@supabase/supabase-js` (wird auch im lokalen Modus geladen; später per dynamischem Import nur im Supabase-Modus).
+- **Handschrift (Phase 1):** Bewertet wird nur das eingetippte Endergebnis (`evaluateHandwriting`). Der Rechenweg wird als PNG (≤ 1000 px) + Strichdaten gespeichert, aber nicht gelesen ⇒ immer gelbe Markierung „nicht automatisch geprüft“. Ohne Endergebnis bzw. bei unlesbarer Zahl: `unclear` ⇒ **kein Versuch gespeichert**, sondern Rückfrage (Konzept §8/§9).
+- **Unklare Eingaben** (`verdict = 'unclear'`) werden generell nicht als Versuch gespeichert, damit sie den Score nicht senken.
 - DSGVO/Einwilligung Minderjähriger, Speicherfristen und KI-Auftragsverarbeitung müssen vor dem Produktivbetrieb rechtlich geprüft werden.
 - Die Score-Grenzen (§13) sind Produktentscheidungen und noch pädagogisch zu validieren.

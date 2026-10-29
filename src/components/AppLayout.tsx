@@ -1,6 +1,8 @@
+import { Suspense } from 'react';
 import { Link, NavLink, Outlet } from 'react-router';
 import { useAuth } from '../context/AuthContext';
 import { services } from '../services';
+import { PageFallback } from './PageFallback';
 
 export function AppLayout() {
   const { session } = useAuth();
@@ -19,7 +21,9 @@ export function AppLayout() {
         </div>
       </header>
       <main className="mx-auto max-w-5xl px-4 py-6">
-        <Outlet />
+        <Suspense fallback={<PageFallback />}>
+          <Outlet />
+        </Suspense>
       </main>
     </div>
   );

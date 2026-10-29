@@ -1,16 +1,20 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Route, Routes } from 'react-router';
 import { AppLayout } from './components/AppLayout';
+import { PageFallback } from './components/PageFallback';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { AuthProvider } from './context/AuthContext';
-import AuthPage from './pages/AuthPage';
-import ChapterPage from './pages/ChapterPage';
-import DashboardPage from './pages/DashboardPage';
-import ExercisePage from './pages/ExercisePage';
-import HistoryPage from './pages/HistoryPage';
 import LandingPage from './pages/LandingPage';
-import LegalPage from './pages/LegalPage';
-import NotFoundPage from './pages/NotFoundPage';
-import TopicPage from './pages/TopicPage';
+
+// Code-Splitting je Route: Landingpage sofort, alles andere (inkl. KaTeX/Canvas) erst bei Bedarf.
+const AuthPage = lazy(() => import('./pages/AuthPage'));
+const ChapterPage = lazy(() => import('./pages/ChapterPage'));
+const DashboardPage = lazy(() => import('./pages/DashboardPage'));
+const ExercisePage = lazy(() => import('./pages/ExercisePage'));
+const HistoryPage = lazy(() => import('./pages/HistoryPage'));
+const LegalPage = lazy(() => import('./pages/LegalPage'));
+const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
+const TopicPage = lazy(() => import('./pages/TopicPage'));
 
 /**
  * Routen
@@ -21,6 +25,7 @@ export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
+        <Suspense fallback={<PageFallback />}>
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<AuthPage mode="login" />} />
@@ -37,6 +42,7 @@ export default function App() {
           </Route>
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
+        </Suspense>
       </BrowserRouter>
     </AuthProvider>
   );

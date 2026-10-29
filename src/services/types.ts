@@ -67,6 +67,31 @@ export interface ProgressService {
   getTopicProgress(userId: string, topicId: string): Promise<TopicProgress>;
 }
 
+/** Nicht gespeicherte Abgabe (z. B. Netzwerkfehler, Speicher voll). Immer lokal im Browser, unabhängig vom Modus. */
+export interface PendingAttempt {
+  input: NewAttemptInput;
+  savedAt: string;
+  lastError?: string;
+  /** true, wenn der Entwurf wegen Speicherplatz ohne Bild/Striche gesichert werden musste. */
+  imageDropped?: boolean;
+}
+
+export interface DraftRepository {
+  get(userId: string, exerciseId: string): Promise<PendingAttempt | null>;
+  /** Liefert, ob (und wie vollständig) gesichert werden konnte. Wirft nie. */
+  save(draft: PendingAttempt): Promise<{ saved: boolean; imageDropped: boolean }>;
+  remove(userId: string, exerciseId: string): Promise<void>;
+}
+
+export type SubmitResult = { ok: true; record: AttemptRecord } | { ok: false; error: string; draftSaved: boolean; imageDropped: boolean };
+
+/** Abgabe mit Ausfallsicherung: Schlägt das Speichern fehl, bleibt die Eingabe als Entwurf erhalten. */
+export interface AttemptSubmissionService {
+  submit(input: NewAttemptInput): Promise<SubmitResult>;
+  getPending(userId: string, exerciseId: string): Promise<PendingAttempt | null>;
+  discardPending(userId: string, exerciseId: string): Promise<void>;
+}
+
 export interface TopicMatcherService {
   match(query: string): Promise<MatchResult>;
 }
@@ -78,4 +103,5 @@ export interface Services {
   learner: LearnerRepository;
   progress: ProgressService;
   topicMatcher: TopicMatcherService;
+  attempts: AttemptSubmissionService;
 }

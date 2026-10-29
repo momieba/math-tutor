@@ -5,6 +5,8 @@
 import { dataMode } from './config';
 import { createLocalAuthService } from './local/localAuthService';
 import { createLocalLearnerRepository } from './local/localLearnerRepository';
+import { createAttemptSubmissionService } from './shared/attemptSubmissionService';
+import { createDraftStore } from './shared/draftStore';
 import { createProgressService } from './shared/progressService';
 import { createStaticContentRepository } from './shared/staticContentRepository';
 import { createTopicMatcherService } from './shared/topicMatcherService';
@@ -23,6 +25,7 @@ function createServices(): Services {
     learner,
     progress: createProgressService(content, learner),
     topicMatcher: createTopicMatcherService(),
+    attempts: createAttemptSubmissionService(learner, createDraftStore()),
   };
 }
 
