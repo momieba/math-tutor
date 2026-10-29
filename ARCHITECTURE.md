@@ -2,6 +2,7 @@
 
 ## 1. Überblick
 Tablet-first Single-Page-App (React/Vite/TS). Lerninhalte sind eine **geprüfte, versionierte Wissensbasis** in `src/content` und werden nie von der KI erzeugt. Nutzerdaten liegen in Supabase/Postgres und sind per RLS geschützt. Ohne Supabase-Konfiguration läuft die App automatisch im **lokalen Modus** (localStorage + Mock-Auth), dann komplett ohne Cloud.
+**Zielbild (beschlossen, noch nicht umgesetzt):** Nach dem lokalen MVP liegen *alle* relationalen Daten – Inhalte und Nutzerdaten – in Supabase, das SPA wird auf Vercel gehostet. Die TS-Dateien in `src/content` sind eine Übergangslösung. Plan und offene Fragen: **§12**.
 
 ## 2. Stack
 | Bereich | Wahl | Begründung |
@@ -70,7 +71,7 @@ Aufgabe abgeben: `evaluateAnswer(ex, raw)` → `learner.saveAttempt({…, correc
 - `TopicMatcherService`: `match(query) → MatchResult` (`match` | `ambiguous` | `none`).
 - `AttemptSubmissionService` (`services.attempts`): `submit(input) → SubmitResult`, `getPending`, `discardPending`. Ruft `learner.saveAttempt`; schlägt das fehl, wird die Eingabe über `DraftRepository` als Entwurf im Browser gesichert (`mathmvp:v1:draft:<userId>:<exerciseId>`, bei vollem Speicher ohne Bild). Der Entwurf wird **erst im Fehlerfall** geschrieben, damit er im lokalen Modus nicht den Speicherplatz der eigentlichen Abgabe belegt. Die Aufgabenseite stellt Entwürfe beim Öffnen wieder her und bietet „erneut senden“/„verwerfen“.
 - **Modus-Wahl** (`config.ts`): Supabase wird genutzt, wenn `VITE_SUPABASE_URL` mit `http` beginnt und `VITE_SUPABASE_ANON_KEY` länger als 20 Zeichen ist. Mit `VITE_DATA_MODE=local` wird der lokale Modus erzwungen.
-- **Entscheidung:** Der Content wird in beiden Modi statisch ausgeliefert, weil er klein, geprüft und offline-fähig ist. Die DB-Tabellen dienen für FKs, Tests und später Eltern/Lehrer. Ein Wechsel auf einen DB-gestützten `ContentRepository` ist eine reine Implementierungsänderung.
+- **Entscheidung:** Der Content wird in beiden Modi statisch ausgeliefert, weil er klein, geprüft und offline-fähig ist. Die DB-Tabellen dienen für FKs, Tests und später Eltern/Lehrer. Ein Wechsel auf einen DB-gestützten `ContentRepository` ist eine reine Implementierungsänderung. **Übergangslösung**, wird in §12 (Schritte 3–4) abgelöst.
 
 ## 7. Datenmodell (`0001_init.sql`)
 **A) Inhalte** (Text-Slug-IDs, für `authenticated` nur `SELECT`, schreiben darf nur `service_role`):
@@ -124,3 +125,97 @@ Transparenz: `SubtopicProgress.caps` + `CAP_EXPLANATION` erklären dem Schüler 
 - **Unklare Eingaben** (`verdict = 'unclear'`) werden generell nicht als Versuch gespeichert, damit sie den Score nicht senken.
 - DSGVO/Einwilligung Minderjähriger, Speicherfristen und KI-Auftragsverarbeitung müssen vor dem Produktivbetrieb rechtlich geprüft werden.
 - Die Score-Grenzen (§13) sind Produktentscheidungen und noch pädagogisch zu validieren.
+
+## 12. Zielarchitektur & Migrationspfad (Supabase + Vercel)
+**Status:** Entwurf, vom Auftraggeber vorgegeben (alles Relationale in Supabase, Hosting auf Vercel). Umsetzung erst, **wenn das lokale MVP fertig ist**. Bis dahin bleiben die TS-Dateien in `src/content`.
+
+**Warum gibt es heute `src/content/*.ts`?** Sie sind (1) die Seed-Quelle für `supabase/seed.sql` und (2) der Datenbestand des lokalen Modus, mit dem die App ohne Cloud-Konto läuft und getestet wird (Vitest, E2E). Außerdem prüft der Compiler die Inhalte gegen die Typen. Eine *zweite* Wahrheit neben der DB soll das langfristig nicht sein.
+
+### 12.1 Zielbild
+```mermaid
+flowchart LR
+  B[Browser / iPad<br/>Vite-SPA] -->|statische Dateien| V[Vercel CDN<br/>nur Hosting]
+  B -->|supabase-js + JWT, RLS| PG[(Supabase Postgres EU<br/>Inhalte + Nutzerdaten)]
+  B -->|signierte URLs| ST[(Supabase Storage<br/>Handschrift, Fotos, Bilder)]
+  B -->|Auth| AU[Supabase Auth<br/>E-Mail, Google]
+  B -->|fetch + JWT| EF[Supabase Edge Functions<br/>submit-attempt, grade-submission,<br/>match-topic, stripe-*]
+  EF --> PG
+  EF --> KI[KI-Anbieter]
+  S[Stripe] -->|Webhook| EF
+```
+| Komponente | Aufgabe |
+|---|---|
+| **Vercel** | Hostet nur das statische SPA (`dist/`), eine Umgebung pro Branch (Preview) und `main` (Production). Keine Geschäftslogik, keine Kinderdaten. |
+| **Supabase Postgres** | Einzige Wahrheit für Lehrplan, Themen, Kapitel, Blöcke, Aufgaben, Lösungen sowie alle Nutzerdaten und Relationen (Eltern, Lehrer, Abos). |
+| **Supabase Auth / Storage** | Konten (E-Mail, Google) bzw. private Bilder unter `submissions/<uid>/…`. |
+| **Supabase Edge Functions** | Alle serverseitige Logik: Bewertung, KI-Korrektur, KI-Topic-Matching, Stripe Checkout/Portal/Webhook, Eltern-Verknüpfung. |
+
+**Entscheidung: Serverlogik in Supabase Edge Functions, nicht in Vercel Functions.**
+- Laufen in derselben EU-Region wie die DB; Kinderdaten verlassen die EU-Infrastruktur nicht (Vercel Functions laufen standardmäßig in den USA, `iad1`).
+- JWT-Prüfung und `auth.uid()` sind eingebaut; der `service_role`-Key bleibt bei Supabase und muss nicht in Vercel hinterlegt werden.
+- Vercel bleibt reines statisches Hosting und ist damit jederzeit austauschbar (z. B. Cloudflare Pages).
+- Nachteil: Deno-Laufzeit und CPU-Zeitlimit pro Aufruf. Für KI-Aufrufe unkritisch, weil dort hauptsächlich auf I/O gewartet wird. Stripe hat ein Deno-taugliches SDK.
+
+### 12.2 Datengetriebenes Inhaltsmodell (Entwurf, Migration `0002_content_blocks.sql`)
+Beantwortet die Frage nach einer **Default-Seite + Beschreibung pro Thema/Kapitel in der DB**. Bereits in `0001` vorhanden: `topics.description/keywords/position`, `subtopics.description/objective/position`. Neu:
+
+| Tabelle / Feld | Inhalt |
+|---|---|
+| `subtopics.kind` | Kapiteltyp `lesson` (Erklären + Üben, Default) · `practice` (nur Übung) · `test` (Test, ohne Hinweise/Lösung) · `review` (Wiederholung, darf Aufgaben anderer Kapitel desselben Themas nutzen) |
+| `subtopic_blocks` | `id`, `subtopic_id` (FK), `position` (unique je Kapitel), `block_type`, `content jsonb`, `CHECK (validate_block(block_type, content))` |
+| `page_templates` | `chapter_kind`, `blocks jsonb` = Standard-Reihenfolge, z. B. für `lesson`: intro → rules → video → example → exercise_set → summary |
+
+**Blocktypen und `content`-Schema** (Texte: Markdown mit `$…$` für KaTeX):
+| `block_type` | `content` |
+|---|---|
+| `intro` | `{ text }` |
+| `rules` | `{ items: [{ term, explanation, math? }] }` |
+| `video` | `{ title, provider: 'own'│'youtube'│'external'│'placeholder', url: string│null, durationSec?, captionsUrl? }`; `url = null` ⇒ Platzhalter „Video folgt“ |
+| `example` | `{ problem, steps: [{ text, math? }], result }` |
+| `exercise_set` | `{ title?, exerciseIds: string[] }` **oder** `{ title?, filter: { types?: ExerciseType[], difficulty?: (1│2│3)[], limit? } }`. Aufgaben bleiben in `exercises` (relational, FK von `attempts`); ein Trigger prüft, dass die IDs existieren. |
+| `summary` | `{ items: string[] }` |
+| `text` | `{ markdown }` |
+| `image` | `{ storagePath │ url, alt (Pflicht), caption? }` |
+
+- **Validierung** in Postgres über eine `immutable`-Funktion `validate_block()` (reines PL/pgSQL mit `jsonb_typeof`-Prüfungen). Bewusst nicht `pg_jsonschema`, damit `npm run db:check` (PGlite) weiter funktioniert. Im Client prüft dieselben Regeln ein Typ-Guard pro Block.
+- **Rendering:** Die generische `ChapterPage` hat einen festen Rahmen (Titel, Lernziel, Score, Status, Deckel-Erklärung; diese Werte sind nutzerbezogen und daher keine Blöcke). Darunter werden die Blöcke über eine **Block-Registry** `components/blocks/<type>Block.tsx` gerendert. Unbekannte Typen ⇒ neutraler Fallback, kein Absturz.
+- **Default-Seite:** Hat ein Kapitel keine eigenen Blöcke, wird das `page_templates`-Template seines `kind` mit den vorhandenen Daten gefüllt. `0002` überführt die bestehenden Spalten (`intro`, `rules`, `example`, `summary`, `learning_materials`) per `INSERT … SELECT` in Blöcke; `0003` entfernt die Alt-Spalten erst, wenn nichts mehr darauf zugreift.
+- **Neues Thema ohne Code-Änderung:** Zeilen in `topics` → `subtopics` → `subtopic_blocks` + `exercises/solutions/hints` anlegen, `review_status = 'approved'` setzen. Fertig.
+- **RLS:** wie heute; `authenticated` darf nur lesen, schreiben nur `service_role` bzw. später eine Rolle `editor`.
+
+### 12.3 Migrationsschritte
+| # | Schritt | Fertig, wenn |
+|---|---|---|
+| 1 | **Lokales MVP fertig** (DoD §25, E2E grün) | Tester-Abnahme |
+| 2 | **Supabase-Projekte** `staging` + `prod` in der EU-Region (Frankfurt) anlegen, `0001` anwenden, `seed.sql` aus den TS-Dateien einspielen, Auth (E-Mail, Google) konfigurieren | App läuft im Supabase-Modus gegen `staging`; `db:check` und E2E grün |
+| 3 | **`0002_content_blocks`** + Typen (`ContentBlock` als Discriminated Union) + generische `ChapterPage` mit Block-Registry; neuer `supabaseContentRepository` liest Inhalte aus der DB (Cache pro Sitzung) | E2E unverändert grün, lokaler Modus nutzt denselben Code-Pfad |
+| 4 | **DB wird die Wahrheit für Inhalte.** Pflege per Redaktionsweg (siehe Frage F5); `src/content/*.ts` entfällt. Für lokalen Modus und Tests erzeugt `npm run content:export` einen JSON-Snapshot aus der DB, der per dynamischem Import geladen wird (nicht im Hauptbundle) | keine statischen Inhalts-Imports mehr in `src/` |
+| 5 | **Bewertung serverseitig:** `answer`, `solutions`, `common_mistakes` wandern in eine Tabelle `exercise_keys` ohne Leserecht für Clients. Edge Function `submit-attempt` bewertet und schreibt `attempts`/`corrections`; `get-hint` und `get-solution` liefern Hinweise bzw. Lösung aus und protokollieren `hintsUsed`/`solutionViewed` serverseitig. Client-`INSERT` auf `attempts` wird entzogen | Score ist nicht mehr manipulierbar, Lösungen nicht vor der Abgabe abrufbar |
+| 6 | **Vercel-Deployment:** Preview-Deployments ↔ `staging`, Production ↔ `prod`, Env-Variablen je Umgebung, Supabase-Redirect-URLs für Vercel-Domains, GitHub Actions (tsc, Vitest, `db:check`, E2E) vor dem Merge | Produktions-URL live, Preview pro Pull Request |
+
+Die Schritte 2 und 6 sind unabhängig vom Inhaltsumbau und können vorgezogen werden (z. B. eine Demo auf Vercel im lokalen Modus).
+
+**Lokaler Modus:** bleibt erhalten, als **Entwicklungs-, Test- und Demo-Modus** (schnelle E2E-Tests ohne Cloud, Offline-Demos). Ab Schritt 6 wird er in Produktions-Builds nur noch mit explizitem `VITE_DATA_MODE=local` aktiv; fehlt die Supabase-Konfiguration in Production, zeigt die App einen Konfigurationsfehler statt still Kinderdaten im Browser zu speichern.
+
+### 12.4 Einwände & offene Fragen an den Auftraggeber
+Grundsätzlich **kein Einwand**: Supabase + Vercel passt zu Konzept §20 und hält den Betriebsaufwand klein. Folgende Punkte sollten aber bewusst entschieden werden:
+
+| Punkt | Einschätzung |
+|---|---|
+| **DSGVO / Kinderdaten** | Supabase-Region EU; AVV (DPA) mit Supabase, Vercel und dem KI-Anbieter nötig. Vercel ist ein US-Anbieter, verarbeitet bei reinem Hosting aber nur Zugriffsdaten (IP-Logs) – ein Grund, Serverlogik nicht auf Vercel zu legen und Vercel Analytics nicht ungeprüft einzuschalten. Einwilligung unter 16 Jahren (Art. 8 DSGVO) betrifft schon die Registrierung. |
+| **Kosten / Free-Tiers** (Stand vor Umsetzung prüfen) | Supabase Free pausiert Projekte nach ca. 1 Woche Inaktivität, hat keine automatischen Backups und begrenzten Storage (ca. 1 GB ≈ einige Tausend Handschrift-Bilder). **Vercel Hobby ist nur für nicht-kommerzielle Nutzung erlaubt**; ein Abo-Produkt braucht Vercel Pro oder z. B. Cloudflare Pages. Für den Livebetrieb realistisch: Supabase Pro + Vercel Pro (je ca. 20–25 USD/Monat). |
+| **Vendor-Lock-in** | Mittel: Schema, RLS und SQL sind Standard-Postgres (Migrationen im Git). Supabase-spezifisch sind Auth, Storage und Edge Functions; gekapselt in `services/supabase` und `supabase/functions`. Vercel ist austauschbar. |
+| **Lösungen im Client lesbar** | Bis Schritt 5 kann ein angemeldeter Schüler Musterlösungen über die API auslesen und seinen eigenen Score fälschen. Für eine geschlossene Beta vertretbar, für den Livebetrieb nicht. |
+| **Videos** | Eigene Videos im Supabase Storage verursachen viel Traffic; YouTube-Einbettung ist datenschutzkritisch (nur `youtube-nocookie` + Einwilligung). |
+
+**Fragen (bitte jeweils kurz beantworten):**
+- **F1** Supabase-Region **EU (Frankfurt)**? *Ja / Nein* – Empfehlung: Ja.
+- **F2** Serverlogik in **Supabase Edge Functions** (Empfehlung) oder in **Vercel Functions**?
+- **F3** Zwei Supabase-Projekte (**staging + prod**) statt einem? *Ja / Nein* – Empfehlung: Ja.
+- **F4** Ab Go-Live **bezahlte Tarife** (Supabase Pro + Vercel Pro, alternativ Cloudflare Pages statt Vercel)? *Ja / Nein / Alternative*
+- **F5** Wie werden Inhalte gepflegt? *(a)* Redaktions-UI in der App · *(b)* Supabase Table Editor · *(c)* JSON-Dateien im Git mit Review, Import per Skript in die DB. Empfehlung: zuerst *(c)* (Vier-Augen-Prüfung, Versionierung), *(a)* später.
+- **F6** Wer gibt Inhalte fachlich frei (`review_status = 'approved'`)? *Person/Rolle benennen.*
+- **F7** Ist die clientseitige Bewertung bis Schritt 5 für eine **geschlossene Beta** akzeptabel? *Ja / Nein*
+- **F8** Lokalen Modus als Dev/Test/Demo **behalten** und in Production sperren? *Ja / Nein* – Empfehlung: Ja.
+- **F9** Video-Hosting: *eigenes (Storage/Bunny/Vimeo)* oder *YouTube-nocookie mit Einwilligung*?
+- **F10** KI-Anbieter: Anforderungen „Verarbeitung in der EU / keine Speicherung / kein Training“ verbindlich? *Ja / Nein*

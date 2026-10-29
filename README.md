@@ -24,3 +24,23 @@ Ohne `.env` läuft die App automatisch im **lokalen Modus**: Konten und Lernstan
 2. Unter Auth → Providers E-Mail und Google aktivieren, Redirect-URL `http://localhost:5173/app` eintragen.
 3. `.env.example` nach `.env` kopieren und `VITE_SUPABASE_URL` sowie `VITE_SUPABASE_ANON_KEY` eintragen. **Nur den Anon-Key verwenden, niemals den service_role-Key.**
 4. `npm run dev`. Mit `VITE_DATA_MODE=local` lässt sich der lokale Modus erzwingen.
+
+## Deployment auf Vercel
+Die Einstellungen stehen in `vercel.json` und werden beim Import des GitHub-Repos automatisch übernommen:
+
+| Einstellung | Wert |
+|---|---|
+| Framework | Vite |
+| Install / Build | `npm ci` / `npm run build` (Typecheck + Vite-Build) |
+| Output | `dist` |
+| SPA-Routing | Rewrite aller Pfade auf `index.html` (Deep-Links wie `/app/history` funktionieren) |
+
+**Env-Variablen** (Vercel → Settings → Environment Variables, getrennt für *Preview* und *Production*):
+- `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` – nur den **Anon-Key**, nie den service_role-Key. Die Werte werden beim Build ins Bundle eingebettet; nach einer Änderung neu deployen.
+- Optional `VITE_DATA_MODE=local`, um den lokalen Modus zu erzwingen.
+
+**Ohne diese Variablen läuft das Deployment im lokalen Modus** (Daten nur im Browser). Für Demos ist das brauchbar, für echte Nutzer nicht.
+
+Im Supabase-Modus zusätzlich unter Supabase → Auth → URL Configuration die Vercel-Domains als Redirect-URLs eintragen (Production-Domain und `https://*.vercel.app/**` für Previews).
+
+Hinweis: Vercel *Hobby* ist nur für nicht-kommerzielle Nutzung erlaubt. Zielarchitektur und offene Fragen: [ARCHITECTURE.md §12](./ARCHITECTURE.md#12-zielarchitektur--migrationspfad-supabase--vercel).
