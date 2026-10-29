@@ -12,11 +12,10 @@ const MIN_TARGET = 44;
 const MIN_FONT_HARD = 12;
 /** Empfehlung für die Zielgruppe (Kinder/Jugendliche, Tablet): ≥ 14 px. Unterschreitungen werden als UX-01 annotiert. */
 const MIN_FONT_RECOMMENDED = 14;
-/**
- * BUG-09 (Minor): eigenständige Text-Links ohne Mindesthöhe (~20 px). Sie stehen allein in ihrer Zeile,
- * die WCAG-Ausnahme für Links im Fließtext greift daher nicht. Wird separat per test.fail geprüft.
+/*
+ * BUG-09 (behoben in c00f8c6): eigenständige Text-Links waren nur ~20 px hoch. Seitdem gibt es KEINE Ausnahmeliste
+ * mehr – jedes gemessene Touch-Ziel < 44 px lässt den Test fehlschlagen. Gezielter Regressionstest siehe unten.
  */
-const KNOWN_SMALL_BUG09 = [/Noch kein Konto\? Registrieren/, /Schon ein Konto\? Anmelden/, /← Startseite/, /Zur Startseite/];
 
 const VIEWPORTS = [
   { name: 'quer', width: 1194, height: 834 },
@@ -153,12 +152,11 @@ for (const vp of VIEWPORTS) {
 
     expect(overflow, 'horizontales Scrollen').toEqual([]);
     expect(minFont, `kleinste Schrift ≥ ${MIN_FONT_HARD}px`).toBeGreaterThanOrEqual(MIN_FONT_HARD);
-    const unknownSmall = small.filter((t) => !KNOWN_SMALL_BUG09.some((re) => re.test(t.el)));
-    expect(unknownSmall, `neue Touch-Ziele < ${MIN_TARGET}px (außer bekanntem BUG-09)`).toEqual([]);
+    expect(small, `Touch-Ziele < ${MIN_TARGET}px`).toEqual([]);
   });
 }
 
-test('BUG-09: eigenständige Links auf Login/Registrieren/Impressum/404 sind ≥ 44 px hoch', async ({ page }) => {
+test('BUG-09 (Regression): eigenständige Links auf Login/Registrieren/Impressum/404 sind ≥ 44 px hoch', async ({ page }) => {
   const fails: string[] = [];
   const links: [string, string][] = [
     ['/login', 'Noch kein Konto? Registrieren'],
@@ -319,21 +317,75 @@ test('Touch-Ziele: zentrale Bedienelemente sind ≥ 44 px hoch', async ({ page }
   expect(fails).toEqual([]);
 });
 
-test('BUG-08: Registrierung im lokalen Modus scheitert ohne Secure Context (iPad über http://LAN-IP)', async ({ page }) => {
-  // Emuliert einen unsicheren Kontext (z. B. `vite --host`, Aufruf am iPad über http://192.168.x.y:5173).
+/** Emuliert einen unsicheren Kontext (z. B. `vite --host`, Aufruf am iPad über http://192.168.x.y:5173). */
+async function emulateInsecureContext(page: Page) {
   await page.addInitScript(() => {
     Object.defineProperty(window.crypto, 'subtle', { value: undefined });
     Object.defineProperty(window.crypto, 'randomUUID', { value: undefined });
   });
+}
+
+const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+async function localUsers(page: Page): Promise<{ profile: { id: string; email: string }; salt: string; passwordHash: string }[]> {
+  return page.evaluate(() => JSON.parse(localStorage.getItem('mathmvp:v1:users') ?? '[]'));
+}
+
+async function loginAs(page: Page, email: string, password: string) {
+  await page.goto('/login');
+  await page.getByLabel('E-Mail').fill(email);
+  await page.getByLabel('Passwort').fill(password);
+  await page.getByRole('button', { name: 'Anmelden' }).click();
+}
+
+test('BUG-08 (Regression): Registrieren, Abmelden, Anmelden ohne crypto.randomUUID/crypto.subtle (iPad über http://LAN-IP)', async ({ page }) => {
+  await emulateInsecureContext(page);
   await page.goto('/register');
+  // Gegenprobe: Die Emulation greift wirklich (sonst wäre der Test wertlos).
+  expect(await page.evaluate(() => [typeof crypto.subtle, typeof crypto.randomUUID])).toEqual(['undefined', 'undefined']);
+
+  await page.getByLabel('Name').fill('Lan');
   await page.getByLabel('E-Mail').fill('lan@example.test');
   await page.getByLabel('Passwort').fill('Geheim123!');
   await page.getByRole('button', { name: 'Registrieren' }).click();
-  const alert = page.getByRole('alert');
-  if (await alert.isVisible({ timeout: 2000 }).catch(() => false)) {
-    const msg = (await alert.textContent()) ?? '';
-    test.info().annotations.push({ type: 'BUG-08 sichtbare Meldung', description: msg });
-    console.log(`BUG-08 Meldung: ${msg}`);
-  }
   await expect(page).toHaveURL(/\/app$/, { timeout: 3000 });
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Hallo Lan!' })).toBeVisible();
+
+  const [u] = await localUsers(page);
+  expect(u.profile.id).toMatch(UUID_V4);
+  expect(u.salt).toMatch(UUID_V4);
+  expect(u.passwordHash).toMatch(/^[0-9a-f]{64}$/);
+
+  await page.getByRole('button', { name: 'Abmelden' }).click();
+  await expect(page).toHaveURL(/\/login$/);
+
+  await loginAs(page, 'lan@example.test', 'falschesPasswort');
+  await expect(page.getByRole('alert')).toHaveText('E-Mail oder Passwort ist falsch.');
+
+  await loginAs(page, 'lan@example.test', 'Geheim123!');
+  await expect(page).toHaveURL(/\/app$/);
+  await expect(page.getByRole('heading', { name: 'Hallo Lan!' })).toBeVisible();
+});
+
+test('BUG-08 (Regression): Konto mit WebCrypto angelegt (localhost) → Anmeldung später ohne WebCrypto (LAN-IP) klappt', async ({ page }) => {
+  // 1) Normal registrieren (sicherer Kontext, echtes crypto.subtle)
+  await page.goto('/register');
+  expect(await page.evaluate(() => typeof crypto.subtle)).toBe('object');
+  await page.getByLabel('Name').fill('Mira');
+  await page.getByLabel('E-Mail').fill('mira@example.test');
+  await page.getByLabel('Passwort').fill('Geheim123!');
+  await page.getByRole('button', { name: 'Registrieren' }).click();
+  await expect(page).toHaveURL(/\/app$/);
+  const hashBefore = (await localUsers(page))[0].passwordHash;
+  await page.getByRole('button', { name: 'Abmelden' }).click();
+  await expect(page).toHaveURL(/\/login$/);
+
+  // 2) Ab jetzt ohne WebCrypto (gleicher localStorage, gleicher Origin)
+  await emulateInsecureContext(page);
+  await loginAs(page, 'mira@example.test', 'Geheim123!');
+  expect(await page.evaluate(() => typeof crypto.subtle)).toBe('undefined');
+  await expect(page).toHaveURL(/\/app$/);
+  await expect(page.getByRole('heading', { name: 'Hallo Mira!' })).toBeVisible();
+  expect((await localUsers(page))[0].passwordHash).toBe(hashBefore);
 });

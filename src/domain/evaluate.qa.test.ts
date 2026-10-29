@@ -2,13 +2,15 @@
  * QA – fachliche Stichprobe und Schreibweisen (Tester).
  * 1) Erwartete Lösungen werden UNABHÄNGIG nachgerechnet (Math.*) und mit `exercise.answer` verglichen.
  * 2) Übliche Schülerschreibweisen gegen `evaluateAnswer`.
- * Bekannte Abweichungen sind als `it.fails` mit Bug-ID markiert: Sie bleiben grün, solange der Fehler besteht,
- * und schlagen an, sobald er behoben ist (dann `.fails` entfernen = Re-Test).
+ * 3) Regressionstests für die behobenen Befunde BUG-01 … BUG-06 (Fix in c00f8c6, Re-Test durch Tester).
+ * 4) Regressionslauf über ALLE Aufgaben: jede Aufgabe akzeptiert ihre eigene Soll-Antwort.
+ * 5) Offene Befunde sind als `it.fails` mit Bug-ID markiert: Sie bleiben grün, solange der Fehler besteht,
+ *    und schlagen an, sobald er behoben ist (dann `.fails` entfernen = Re-Test).
  */
 import { describe, expect, it } from 'vitest';
 import { topics } from '../content';
 import type { Exercise } from '../types';
-import { evaluateAnswer, parseNumber } from './evaluate';
+import { evaluateAnswer, evaluateHandwriting, parseNumber, parseNumberSet } from './evaluate';
 
 const all = topics.flatMap((t) => t.subtopics.flatMap((s) => s.exercises));
 const ex = (id: string): Exercise => {
@@ -145,75 +147,208 @@ describe('Schreibweisen, die akzeptiert werden (Ist = Soll)', () => {
   });
 });
 
-// ------------------------------------------------------------------ 3) Befunde
-describe('Befunde (bekannte Abweichungen)', () => {
-  // BUG-01 (Major): normalizeText ruft normalize('NFKC') VOR replace(/²/) auf. NFKC macht aus „²“ eine „2“,
-  // dadurch wird „a² + b²“ zu „a2+b2“ und als FALSCH (rot) gewertet. evaluate.ts Z. 20–21.
-  it('BUG-01: „a² + b²“ (hochgestellt, iPad-Tastatur) wird als richtig erkannt', () => {
+// ------------------------------------------------------------------ 3) Regressionstests behobener Befunde
+describe('Regressionstests: behobene Befunde BUG-01 … BUG-06', () => {
+  // BUG-01 (behoben): Ursache war normalize('NFKC') VOR der Umwandlung von „²“ ⇒ „a² + b²“ wurde zu „a2+b2“ (rot).
+  it('BUG-01 (Regression): „a² + b²“ (hochgestellt, iPad-Tastatur) wird als richtig erkannt', () => {
     expect(verdict('pyth-herleitung-3', 'a² + b²')).toBe('correct');
   });
-  it('BUG-01: „b²+a²“ wird als richtig erkannt', () => {
+  it('BUG-01 (Regression): „b²+a²“ wird als richtig erkannt', () => {
     expect(verdict('pyth-herleitung-3', 'b²+a²')).toBe('correct');
   });
 
-  // BUG-02 (Major): „±“ wird verworfen ⇒ nur {7} ⇒ partial 0,5 und als Versuch gespeichert. evaluate.ts parseNumberSet Z. 41–47.
-  it('BUG-02: „±7“ für x² = 49 ist richtig', () => {
+  // BUG-02 (behoben): Ursache war, dass „±“ verworfen wurde ⇒ nur {7} ⇒ partial 0,5 und gespeicherter Versuch.
+  it('BUG-02 (Regression): „±7“ für x² = 49 ist richtig', () => {
     expect(verdict('quad-reinquadratisch-1', '±7')).toBe('correct');
   });
-  it('BUG-02: „x = ±7“ ist richtig', () => {
+  it('BUG-02 (Regression): „x = ±7“ ist richtig', () => {
     expect(verdict('quad-reinquadratisch-1', 'x = ±7')).toBe('correct');
   });
 
-  // BUG-03 (Major): parseNumber entfernt alle Nicht-Ziffern und klebt alle Ziffern zusammen (Z. 28–37).
-  // Korrekte Antworten mit Zwischenschritt, mehreren Gleichheitszeichen oder Hochzahl werden ROT.
-  it('BUG-03: „c = √289 = 17“ ist richtig oder zumindest nicht falsch', () => {
+  // BUG-03 (behoben): Ursache war, dass parseNumber alle Ziffern einer Eingabe zu einer Zahl zusammenklebte.
+  it('BUG-03 (Regression): „c = √289 = 17“ ist richtig oder zumindest nicht falsch', () => {
     expect(verdict('pyth-hypotenuse-4', 'c = √289 = 17')).not.toBe('incorrect');
   });
-  it('BUG-03: „x1 = x2 = 5“ (doppelte Lösung) ist nicht falsch', () => {
+  it('BUG-03 (Regression): „x1 = x2 = 5“ (doppelte Lösung) ist nicht falsch', () => {
     expect(verdict('quad-pq-formel-4', 'x1 = x2 = 5')).not.toBe('incorrect');
   });
-  it('BUG-03: „100 cm^2“ ist richtig (wird als 1002 gelesen)', () => {
+  it('BUG-03 (Regression): „100 cm^2“ ist richtig (früher als 1002 gelesen)', () => {
     expect(verdict('pyth-grundlagen-3', '100 cm^2')).toBe('correct');
   });
-  it('BUG-03: „5/2“ wird nicht als 52 gelesen (Bruch ⇒ 2,5 oder unclear)', () => {
+  it('BUG-03 (Regression): „5/2“ wird nicht als 52 gelesen (Bruch ⇒ 2,5 oder unclear)', () => {
     expect(parseNumber('5/2')).not.toBe(52);
   });
-  it('BUG-03: „√65“ wird nicht als 65 gelesen', () => {
+  it('BUG-03 (Regression): „√65“ wird nicht als 65 gelesen', () => {
     expect(parseNumber('√65')).not.toBe(65);
   });
 
-  // BUG-04 (Minor, latent): deutscher Tausenderpunkt. Aktuell keine Aufgabe ≥ 1000, ab neuen Prozentaufgaben relevant.
-  it('BUG-04: „1.000“ ist 1000 (oder unclear), nicht 1', () => {
+  // BUG-04 (behoben): deutscher Tausenderpunkt wurde als Dezimalpunkt gelesen.
+  it('BUG-04 (Regression): „1.000“ ist 1000 (oder unclear), nicht 1', () => {
     expect(parseNumber('1.000')).not.toBe(1);
   });
-  it('BUG-04: „1.200 €“ ist 1200 (oder unclear), nicht 1,2', () => {
+  it('BUG-04 (Regression): „1.200 €“ ist 1200 (oder unclear), nicht 1,2', () => {
     expect(parseNumber('1.200 €')).not.toBe(1.2);
   });
 
-  // BUG-05 (Minor): Gedankenstrich „–“ (U+2013, Autokorrektur/Kopieren) wird entfernt ⇒ Vorzeichen geht verloren ⇒ ROT.
-  it('BUG-05: „7; –7“ (Halbgeviertstrich) ist richtig', () => {
+  // BUG-05 (behoben): Gedankenstrich „–“ (U+2013) wurde entfernt ⇒ Vorzeichen ging verloren.
+  it('BUG-05 (Regression): „7; –7“ (Halbgeviertstrich) ist richtig', () => {
     expect(verdict('quad-reinquadratisch-1', '7; –7')).toBe('correct');
   });
 
-  // BUG-06 (Minor): sichere Rückfrage (gelb, kein Versuch gespeichert), aber übliche Schreibweisen werden nicht verstanden.
-  it('BUG-06: „x1=7, x2=-7“ (Komma als Trenner) ist richtig', () => {
+  // BUG-06 (behoben): übliche Schreibweisen führten zu einer unnötigen gelben Rückfrage.
+  it('BUG-06 (Regression): „x1=7, x2=-7“ (Komma als Trenner) ist richtig', () => {
     expect(verdict('quad-reinquadratisch-1', 'x1=7, x2=-7')).toBe('correct');
   });
-  it('BUG-06: „7, -7“ ist richtig', () => {
+  it('BUG-06 (Regression): „7, -7“ ist richtig', () => {
     expect(verdict('quad-reinquadratisch-1', '7, -7')).toBe('correct');
   });
-  it('BUG-06: „8,1 cm.“ (Satzpunkt am Ende) ist richtig', () => {
+  it('BUG-06 (Regression): „8,1 cm.“ (Satzpunkt am Ende) ist richtig', () => {
     expect(verdict('pyth-hypotenuse-3', '8,1 cm.')).toBe('correct');
   });
-  it('BUG-06: „ca. 8,1 cm“ ist richtig', () => {
+  it('BUG-06 (Regression): „ca. 8,1 cm“ ist richtig', () => {
     expect(verdict('pyth-hypotenuse-3', 'ca. 8,1 cm')).toBe('correct');
   });
-  it('BUG-06: „70,– €“ (Preisschreibweise) ist richtig', () => {
+  it('BUG-06 (Regression): „70,– €“ (Preisschreibweise) ist richtig', () => {
     expect(verdict('prozent-prozentwert-1', '70,– €')).toBe('correct');
+  });
+
+  // BUG-03 (Regression, Re-Test-Auftrag): Nicht eindeutige Eingaben ⇒ gelbe Rückfrage statt Rot/Grün.
+  // Dass dabei KEIN Versuch gespeichert wird, prüft e2e/dod.spec.ts („BUG-03 (Regression): …“).
+  it.each([
+    ['pyth-hypotenuse-3', '√65'],
+    ['pyth-hypotenuse-3', 'sqrt(65)'],
+    ['pyth-hypotenuse-3', '5 oder 12'], // Aufgabe mit genau einer Zahl
+    ['pyth-hypotenuse-4', '10^2'],
+    ['pyth-hypotenuse-4', '10²'],
+    ['pyth-hypotenuse-4', '2*5'],
+  ])('BUG-03 (Regression): %s %j ⇒ unclear (gelb)', (id, raw) => {
+    const r = evaluateAnswer(ex(id), raw);
+    expect(r.verdict).toBe('unclear');
+    expect(r.points).toBe(0);
+    expect(r.marks.map((m) => m.color)).toEqual(['yellow']);
+  });
+  it('BUG-03 (Regression): Handschrift-Endergebnis „√65“ ⇒ unclear, keine zusätzliche Rechenweg-Markierung', () => {
+    const hw = all.find((e) => e.type === 'handwriting' && e.answer.kind === 'numeric')!;
+    const r = evaluateHandwriting(hw, '√65', true);
+    expect(r.verdict).toBe('unclear');
+    expect(r.marks).toHaveLength(1);
   });
 
   // Inhaltliche Beobachtungen (keine Bugs im Code, Entscheidung Redaktion/Req eng): heute als FALSCH gewertet.
   it.todo('INHALT: „Grundwert G“, „Seite c“, „Ja, es ist rechtwinklig“ – Antwortlisten (accepted) erweitern oder Freitext-Toleranz');
   it.todo('INHALT: pyth-gemischt-4 „x = 5 oder x = −12“ ⇒ 0 Punkte/rot; Teilpunkt + Hinweis „x > 0 beachten“ wäre didaktisch fairer');
   it.todo('INHALT: quad-pq-formel-4 „5; 5“ (doppelte Lösung zweimal genannt) ⇒ 0 Punkte/rot');
+});
+
+// ------------------------------------------------------------------ 4) Regressionslauf über alle Aufgaben
+const de = (n: number) => String(n).replace('.', ',');
+
+/** Alle Eingaben, die für eine Aufgabe aus ihrer eigenen Soll-Antwort folgen (Schülersicht). */
+function ownAnswers(e: Exercise): string[] {
+  const a = e.answer;
+  switch (a.kind) {
+    case 'choice':
+      return [a.correct];
+    case 'numeric': {
+      const out = [String(a.value), de(a.value)];
+      if (a.unit) out.push(`${de(a.value)} ${a.unit}`, `${de(a.value)}${a.unit}`);
+      return out;
+    }
+    case 'numeric-set': {
+      if (a.values.length === 0) return ['keine Lösung', 'L = {}'];
+      const out = [a.values.map(de).join('; '), a.values.map(String).join('; '), `L = {${a.values.map(de).join('; ')}}`];
+      out.push(a.values.map((v) => `x = ${de(v)}`).join(' oder '));
+      out.push([...a.values].reverse().map(de).join('; ')); // Reihenfolge egal
+      return out;
+    }
+    case 'text':
+      return [...a.accepted, ...a.accepted.map((s) => s.toUpperCase()), ...a.accepted.map((s) => ` ${s} `)];
+  }
+}
+
+describe('Regression neuer Parser: jede Aufgabe akzeptiert ihre eigene Soll-Antwort', () => {
+  it('Inhaltsbasis hat 55 Aufgaben (sonst Testumfang prüfen)', () => {
+    expect(all).toHaveLength(55);
+  });
+
+  const cases = all.flatMap((e) => ownAnswers(e).map((raw) => [e.id, e.answer.kind, raw] as const));
+  it.each(cases)('%s (%s): %j ⇒ correct', (id, _kind, raw) => {
+    const r = evaluateAnswer(ex(id), raw);
+    expect(r.verdict).toBe('correct');
+    expect(r.points).toBe(1);
+  });
+
+  it('Handschrift-Aufgaben: eigenes Endergebnis ⇒ correct + gelbe Rechenweg-Markierung (nie nur grün)', () => {
+    const hw = all.filter((e) => e.type === 'handwriting');
+    expect(hw.length).toBeGreaterThan(0);
+    for (const e of hw) {
+      const r = evaluateHandwriting(e, ownAnswers(e)[0], true);
+      expect(r.verdict, e.id).toBe('correct');
+      expect(r.marks.some((m) => m.color === 'yellow'), e.id).toBe(true);
+    }
+  });
+
+  it('Typische Fehler (commonMistakes.answers) werden nie als richtig gewertet', () => {
+    const wrongCorrect: string[] = [];
+    for (const e of all)
+      for (const m of e.commonMistakes)
+        for (const raw of m.answers ?? []) if (evaluateAnswer(e, raw).verdict === 'correct') wrongCorrect.push(`${e.id}: ${raw}`);
+    expect(wrongCorrect).toEqual([]);
+  });
+
+  it.each([
+    ['8,1', 8.1],
+    ['8.1', 8.1],
+    [' 8 , 1 ', 8.1],
+    ['0,5', 0.5],
+    ['0.5', 0.5],
+    ['0.125', 0.125],
+    ['0,125', 0.125],
+    ['12,50 €', 12.5],
+    ['12.50 €', 12.5],
+    ['-8,1', -8.1],
+    ['−8,1', -8.1],
+    ['1.200,50 €', 1200.5], // eindeutig (Tausenderpunkt + Dezimalkomma); „1.000“ allein ⇒ siehe ENTSCHEIDUNG unten
+  ])('Dezimal-/Tausenderfall %j ⇒ %d', (raw, n) => {
+    expect(parseNumber(raw)).toBeCloseTo(n, 9);
+  });
+});
+
+// ------------------------------------------------------------------ 5) Offene Befunde aus dem Re-Test
+describe('Offene Befunde (Re-Test c00f8c6)', () => {
+  // BUG-10 (Major): parseNumber wertet nur den Teil nach dem LETZTEN „=“. Enthält die Eingabe mehrere Werte
+  // („oder“, „und“, „;“, Komma-Liste), entscheidet die Reihenfolge über Grün/Rot, statt gelb nachzufragen (Konzept §9).
+  // evaluate.ts parseNumber: `s.split(/[=≈~]/).pop()` vor der Prüfung auf mehrere Zahlengruppen.
+  it.fails('BUG-10: „c = 15 oder c = 17“ (Soll 17) ist nicht grün, sondern unclear', () => {
+    expect(verdict('pyth-hypotenuse-4', 'c = 15 oder c = 17')).toBe('unclear');
+  });
+  it.fails('BUG-10: „c = 17 oder c = 15“ (Soll 17) ist nicht rot, sondern unclear', () => {
+    expect(verdict('pyth-hypotenuse-4', 'c = 17 oder c = 15')).toBe('unclear');
+  });
+  it.fails('BUG-10: „c = 17, a = 8“ (Soll c = 17) ist nicht rot, sondern unclear', () => {
+    expect(verdict('pyth-hypotenuse-4', 'c = 17, a = 8')).toBe('unclear');
+  });
+  it.fails('BUG-10: parseNumber(„x = 5 oder x = 12“) ist null (mehrdeutig), nicht 12', () => {
+    expect(parseNumber('x = 5 oder x = 12')).toBeNull();
+  });
+  it('BUG-10 Abgrenzung: Gleichungskette „c = √289 = 17“ bleibt eindeutig 17', () => {
+    expect(parseNumber('c = √289 = 17')).toBe(17);
+  });
+
+  // BUG-11 (Minor): Eine Eingabe nur aus Trennern („;“, „und“) wird als LEERE Lösungsmenge gelesen ⇒ rot + gespeicherter Versuch.
+  // Erwartet: unclear (keine Zahl erkannt). „L = {}“ / „keine Lösung“ bleiben gültige Antworten.
+  it.fails('BUG-11: „;“ bei x² = 49 ⇒ unclear statt incorrect', () => {
+    expect(verdict('quad-reinquadratisch-1', ';')).toBe('unclear');
+  });
+  it.fails('BUG-11: „und“ bei x² = 49 ⇒ unclear statt incorrect', () => {
+    expect(verdict('quad-reinquadratisch-1', 'und')).toBe('unclear');
+  });
+  it('BUG-11 Abgrenzung: „keine Lösung“ und „L = {}“ sind bewusst die leere Menge', () => {
+    expect(parseNumberSet('keine Lösung')).toEqual([]);
+    expect(parseNumberSet('L = {}')).toEqual([]);
+  });
+
+  // ENTSCHEIDUNG offen (Rückfrage Entwickler1): „1.125“ wird heute als 1125 gelesen. Empfehlung Tester: gelbe Rückfrage,
+  // wenn genau EIN Punkt mit genau drei Ziffern folgt (1.125, 12.500, 1.000) – siehe Testbericht.
+  it.todo('ENTSCHEIDUNG: „1.125“ ⇒ 1125 (heute) oder unclear (Empfehlung)');
 });

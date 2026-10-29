@@ -1,7 +1,8 @@
 /**
  * E2E-Abnahme der Definition of Done (Konzept §25, Punkte 1–10) im lokalen Modus (ohne .env).
  * Gerät: iPad Pro 11 quer, Touch. Jeder Test hat einen eigenen Browser-Kontext (leerer localStorage).
- * Bekannte Fehler sind als `test.fail()` mit Bug-ID markiert: Sie laufen „grün“, solange der Fehler besteht,
+ * Behobene Befunde laufen als Regressionstests („BUG-xx (Regression): …“).
+ * Neue offene Befunde würden als `test.fail()` mit Bug-ID markiert: Sie laufen „grün“, solange der Fehler besteht,
  * und schlagen an, sobald er behoben ist (dann Markierung entfernen = Re-Test).
  */
 import {
@@ -257,6 +258,39 @@ test.describe('DoD 6 – Aufgaben bearbeiten und einreichen', () => {
     await expect(feedbackPanel(page)).toContainText('Nicht eindeutig');
     await expect(feedbackPanel(page)).toHaveClass(/amber/);
     expect((await learnerData(page)).attempts).toHaveLength(0);
+  });
+
+  test('BUG-03 (Regression): „√65“, „5 oder 12“, „10^2“ → gelbe Rückfrage, kein Versuch gespeichert', async ({ page }) => {
+    await register(page);
+    for (const [id, raw] of [
+      ['pyth-hypotenuse-3', '√65'],
+      ['pyth-hypotenuse-3', '5 oder 12'],
+      ['pyth-hypotenuse-4', '10^2'],
+    ] as const) {
+      await openExercise(page, id);
+      await answerInput(page).fill(raw);
+      await submitButton(page).click();
+      await expect(feedbackPanel(page), `${id} ${raw}`).toContainText('Nicht eindeutig');
+      await expect(feedbackPanel(page), `${id} ${raw}`).toHaveClass(/amber/);
+      // keine Musterlösung, weil nicht bewertet; Eingabe bleibt zum Korrigieren stehen
+      await expect(page.getByRole('heading', { name: 'Musterlösung' })).toHaveCount(0);
+      await expect(answerInput(page)).toHaveValue(raw);
+      expect((await learnerData(page)).attempts, `${id} ${raw}`).toHaveLength(0);
+    }
+  });
+
+  test('UX-07 (Regression): Brotkrumen der Aufgabe zeigen den Themennamen und führen zum Thema', async ({ page }) => {
+    await register(page);
+    for (const [id, title, topicId] of [
+      ['pyth-hypotenuse-3', 'Satz des Pythagoras', 'pythagoras'],
+      ['quad-reinquadratisch-1', 'Quadratische Gleichungen', 'quadratische-gleichungen'],
+    ] as const) {
+      await openExercise(page, id);
+      const crumbs = page.getByRole('navigation', { name: 'Brotkrumen' });
+      const topicLink = crumbs.getByRole('link').first();
+      await expect(topicLink, id).toHaveText(title);
+      await expect(topicLink, id).toHaveAttribute('href', `/app/topics/${topicId}`);
+    }
   });
 
   test('Gleichung: „7; -7“ mit KaTeX-Vorschau, „x=7 oder x=-7“ ebenfalls richtig', async ({ page }) => {
@@ -643,9 +677,25 @@ test.describe('Robustheit: unbekannte URLs und geschützte Routen', () => {
     await expect(page.getByRole('heading', { name: 'Seite nicht gefunden' })).toBeVisible();
   });
 
-  test('BUG-07: Kapitel unter falschem Thema wird angezeigt, „Zum Thema“ führt zum falschen Thema', async ({ page }) => {
+  test('BUG-07 (Regression): Kapitel unter fremdem Thema → „nicht gefunden“; korrekte URL funktioniert weiter', async ({ page }) => {
     await register(page);
     await page.goto('/app/topics/prozentrechnung/chapters/pyth-grundlagen');
     await expect(page.getByText('Dieses Kapitel gibt es nicht.')).toBeVisible({ timeout: 2000 });
+    await expect(page.getByRole('link', { name: '← Zum Thema' })).toHaveCount(0);
+
+    // Gegenprobe: dasselbe Kapitel unter seinem eigenen Thema
+    await page.goto('/app/topics/pythagoras/chapters/pyth-grundlagen');
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await expect(page.getByText('Dieses Kapitel gibt es nicht.')).toHaveCount(0);
+    await expect(page.getByText('Lernziel:')).toBeVisible();
+    const back = page.getByRole('link', { name: '← Zum Thema' });
+    await expect(back).toHaveAttribute('href', '/app/topics/pythagoras');
+
+    // Client-seitige Navigation Thema → Kapitel (Effekt hängt jetzt auch von topicId ab)
+    await back.click();
+    await expect(page).toHaveURL(/\/app\/topics\/pythagoras$/);
+    await page.getByRole('link', { name: /Grundlagen/ }).first().click();
+    await expect(page).toHaveURL(/\/app\/topics\/pythagoras\/chapters\/pyth-grundlagen$/);
+    await expect(page.getByText('Lernziel:')).toBeVisible();
   });
 });
