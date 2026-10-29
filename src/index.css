@@ -1,0 +1,5 @@
+@import "tailwindcss";
+
+/* Tablet-first: große Touch-Ziele, gut lesbare Basisschrift */
+html { font-size: 17px; -webkit-tap-highlight-color: transparent; }
+button, a, input, select { min-height: 44px; }

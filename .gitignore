@@ -1,0 +1,11 @@
+node_modules
+dist
+*.local
+.env
+.env.*
+!.env.example
+.vite
+coverage
+*.tsbuildinfo
+.DS_Store
+supabase/.temp
