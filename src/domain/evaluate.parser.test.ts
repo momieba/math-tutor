@@ -1,4 +1,4 @@
-/** Entwickler-Tests für den Antwort-Parser (BUG-01 … BUG-06, BUG-10 … BUG-13, Entscheidung 1.125). Ergänzen evaluate.qa.test.ts (Tester). */
+/** Entwickler-Tests für den Antwort-Parser (BUG-01 … BUG-06, BUG-10 … BUG-14, Entscheidung 1.125). Ergänzen evaluate.qa.test.ts (Tester). */
 import { describe, expect, it } from 'vitest';
 import { normalizeText, parseNumber, parseNumberSet } from './evaluate';
 
@@ -194,5 +194,52 @@ describe('BUG-12/13: mehrere Aussagen am Aufbau erkennen', () => {
   it.each(['x = 7 / x = -7', 'x=7|x=-7', 'x = 7 & x = -7'])(
     'parseNumberSet(%j) → null (Aussagen ohne bekannten Trenner ⇒ Rückfrage statt „letztes = gewinnt“)',
     (raw) => expect(parseNumberSet(raw)).toBeNull(),
+  );
+});
+
+describe('BUG-14: Beschriftung mit Doppelpunkt vor der Antwort', () => {
+  it.each<[string, number]>([
+    ['Ergebnis: 17 cm', 17],
+    ['Ergebnis:17cm', 17],
+    ['Antwort: 17', 17],
+    ['Lösung: 17', 17],
+    ['LÖSUNG : 17', 17],
+    ['c: 17', 17],
+    ['c : 17 cm', 17],
+    ['Ergebnis: 85 %', 85],
+    ['Ergebnis: c = 17 cm', 17],
+    ['Antwort: c = √289 = 17', 17],
+    ['  Ergebnis:   8,1 cm.', 8.1],
+    ['Ergebnis: ca. 8,1 cm', 8.1],
+    ['Lösung: 1.200,50 €', 1200.5],
+    ['34 : 40 = 0,85 = 85 %', 85],
+    ['Ergebnis: 34 : 40 = 0,85', 0.85],
+  ])('parseNumber(%j) → %d', (raw, expected) => expect(parseNumber(raw)).toBeCloseTo(expected, 9));
+
+  it.each([
+    '34 : 40', // echte Division ohne Ergebnis
+    '34:40',
+    'Ergebnis: 34 : 40',
+    'Ergebnis:', // nur Beschriftung
+    'Ergebnis: 1.125', // Entscheidung 1.125 gilt auch nach Beschriftung
+    'Ergebnis: 2x', // Variable an Ziffer
+    'Ergebnis: √65',
+    'Ergebnis: c = 15 oder c = 17', // BUG-10
+    'Ergebnis: c = 15 bzw. c = 17', // BUG-12
+    'Ergebnis: 15 bzw. 17', // BUG-13
+  ])('parseNumber(%j) → null', (raw) => expect(parseNumber(raw)).toBeNull());
+
+  it.each<[string, number[]]>([
+    ['Lösung: 7; -7', [7, -7]],
+    ['Lösung: x1 = 7; x2 = -7', [7, -7]],
+    ['Antwort: x = ±7', [7, -7]],
+    ['L: {7; -7}', [7, -7]],
+    ['Lösung: L = {7; -7}', [7, -7]],
+    ['Lösung: keine Lösung', []],
+    ['Lösung: {}', []],
+  ])('parseNumberSet(%j) → %j', (raw, expected) => expect(parseNumberSet(raw)).toEqual(expected));
+
+  it.each(['Lösung:', 'Lösung: ;', 'Lösung: x = 7 / x = -7'])('parseNumberSet(%j) → null', (raw) =>
+    expect(parseNumberSet(raw)).toBeNull(),
   );
 });

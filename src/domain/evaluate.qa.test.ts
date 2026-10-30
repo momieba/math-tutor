@@ -9,7 +9,8 @@
  * 7) Regressionstests BUG-12, BUG-13 (Fix in 5137177, Re-Test durch Tester).
  * 8) Regression Strukturregel (hasMultipleStatements/STATEMENT_START): Ketten, Einheiten, Indizes, 1.125 bleiben
  *    unberührt; bewusste Grenzen (Einheitenwechsel, „→“) sind als gelbe Rückfrage dokumentiert.
- * 9) Offene Befunde (BUG-14) sind als `it.fails` mit Bug-ID markiert: Sie bleiben grün, solange der Fehler
+ * 9) Regressionstests BUG-14 (Beschriftung mit Doppelpunkt, „Fix BUG-14“). Derzeit keine offenen Befunde.
+ *    Neue offene Befunde werden als `it.fails` mit Bug-ID markiert: Sie bleiben grün, solange der Fehler
  *    besteht, und schlagen an, sobald er behoben ist (dann `.fails` entfernen = Re-Test).
  *    Die `it.todo` „INHALT“ sind Inhaltsfragen für Req eng/Redaktion, keine Parserfehler.
  */
@@ -552,20 +553,20 @@ describe('Regression Strukturregel (5137177): Ketten, Einheiten, Indizes bleiben
   );
 });
 
-// ------------------------------------------------------------------ 9) Offene Befunde aus dem Re-Test 5137177
-describe('Offene Befunde (Re-Test 5137177)', () => {
-  // BUG-14 (Minor, Domain, besteht seit c00f8c6 – keine Regression von 5137177):
+// ------------------------------------------------------------------ 9) Regressionstests BUG-14
+describe('Regressionstests: BUG-14 (Fix BUG-14)', () => {
+  // BUG-14 (Minor, Domain, bestand seit c00f8c6; behoben durch Entfernen einer führenden Beschriftung mit „:“):
   // Ein vorangestelltes Etikett mit Doppelpunkt („Ergebnis: 17 cm“, „Antwort: 17“, „Lösung: 17“, „c: 17“) ergibt null,
   // weil „:“ als Rechenzeichen (Division) gilt. Sicher (gelb, kein Versuch), aber für Schüler unnötig hakelig.
   // Betrifft jede Zahlenaufgabe (23 Soll-Antworten im Lauf über alle Aufgaben). „Ergebnis 17 cm“ ohne „:“ geht.
-  it.fails.each<[string, string]>([
+  it.each<[string, string]>([
     ['pyth-hypotenuse-4', 'Ergebnis: 17 cm'],
     ['pyth-hypotenuse-4', 'Antwort: 17'],
     ['prozent-satz-grundwert-1', 'Ergebnis: 85 %'],
-  ])('BUG-14: %s %j ⇒ correct statt unclear', (id, raw) => {
+  ])('BUG-14 (Regression): %s %j ⇒ correct statt unclear', (id, raw) => {
     expect(verdict(id, raw)).toBe('correct');
   });
-  it('BUG-14 Gegenprobe: „34 : 40“ (echte Division ohne Ergebnis) bleibt nicht eindeutig', () => {
+  it('BUG-14 (Regression) Gegenprobe: „34 : 40“ (echte Division ohne Ergebnis) bleibt nicht eindeutig', () => {
     expect(parseNumber('34 : 40')).toBeNull();
   });
 });

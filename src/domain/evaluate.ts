@@ -97,6 +97,17 @@ const SINGLE_THOUSANDS_DOT = /^[+-]?[1-9]\d{0,2}\.\d{3}$/;
  */
 const VARIABLE_AT_DIGIT = /\d[abcnpqxyz](?!\p{L})|(?<!\p{L})[abcnpqxyz]\d/iu;
 
+/**
+ * Vorangestellte Beschriftung mit Doppelpunkt („Ergebnis: 17 cm“, „Antwort: 17“, „Lösung: 17“, „c: 17“, „L: 7; -7“)
+ * wird entfernt (BUG-14). Sie muss mit einem Buchstaben beginnen, darum bleibt „34 : 40“ eine Division (⇒ `null`).
+ * Bewusste Grenze: „x : 2“ wird wie „x: 2“ als Beschriftung gelesen (als Endergebnis-Eingabe unüblich).
+ */
+const LEADING_LABEL = /^\s*\p{L}[\p{L}\d_]*\s*:\s*/u;
+
+function stripLeadingLabel(s: string): string {
+  return s.replace(LEADING_LABEL, '');
+}
+
 /** Wandelt ein bereinigtes Zahl-Token ohne Leerzeichen um (deutscher und englischer Dezimaltrenner). */
 function toNumber(token: string): number | null {
   let t = token;
@@ -121,7 +132,7 @@ function toNumber(token: string): number | null {
  * „1.125“) ergeben `null` ⇒ gelbe Rückfrage, statt zu raten. Einfache Brüche aus ganzen Zahlen („5/2“) werden ausgewertet.
  */
 export function parseNumber(raw: string): number | null {
-  let s = preprocess(raw).trim();
+  let s = stripLeadingLabel(preprocess(raw)).trim(); // BUG-14
   if (SINGLE_VALUE_SEPARATOR.test(s) || hasMultipleStatements(s)) return null; // BUG-10/12/13
   s = (s.split(/[=≈~]/).pop() ?? '').trim();
   s = s.replace(/[.!]+$/, '').trim(); // Satzpunkt am Ende (BUG-06)
@@ -168,7 +179,7 @@ function parseSetPart(part: string): number[] | null {
  * („;“, „und“, „,“) ergibt `null` ⇒ gelbe Rückfrage statt Rot (BUG-11).
  */
 export function parseNumberSet(raw: string): number[] | null {
-  const withoutL = preprocess(raw).trim().replace(/^l\s*=\s*/i, '');
+  const withoutL = stripLeadingLabel(preprocess(raw)).trim().replace(/^l\s*=\s*/i, ''); // BUG-14: „Lösung: 7; -7“
   if (/^\{\s*\}$/.test(withoutL)) return [];
   const t = withoutL.replace(/[{}]/g, '').trim();
   if (/^(keine|leer|∅)/i.test(t)) return [];
