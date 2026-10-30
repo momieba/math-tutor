@@ -1,4 +1,4 @@
-/** Entwickler-Tests für den Antwort-Parser (BUG-01 … BUG-06, BUG-10, BUG-11, Entscheidung 1.125). Ergänzen evaluate.qa.test.ts (Tester). */
+/** Entwickler-Tests für den Antwort-Parser (BUG-01 … BUG-06, BUG-10 … BUG-13, Entscheidung 1.125). Ergänzen evaluate.qa.test.ts (Tester). */
 import { describe, expect, it } from 'vitest';
 import { normalizeText, parseNumber, parseNumberSet } from './evaluate';
 
@@ -134,4 +134,65 @@ describe('parseNumberSet', () => {
     // Entscheidung 1.125 gilt auch in Mengen
     '1.125; 2',
   ])('%j → null', (raw) => expect(parseNumberSet(raw)).toBeNull());
+});
+
+describe('BUG-12/13: mehrere Aussagen am Aufbau erkennen', () => {
+  it.each([
+    // Einzelzahl: zwei Aussagen ⇒ null, egal welche Reihenfolge oder welcher Trenner
+    'c = 15 bzw. c = 17',
+    'c = 17 bzw. c = 15',
+    'c = 15 / c = 17',
+    'c = 15 sowie c = 17',
+    'c = 15 c = 17',
+    'c=15 c=17',
+    'c=15|c=17',
+    'c = 15 & c = 17',
+    'c = 15 → c = 17',
+    'x = 3 x2 = 5',
+    'A = 100 cm^2 = 1 dm^2', // Einheitenumrechnung in der Kette: bewusst Rückfrage
+    'c = 17 cm = 0,17 m',
+    // BUG-13: „bzw.“ klebt keine Zahlen mehr zusammen
+    '15 bzw. 17',
+    '15 bzw 17',
+    // Potenz am Ende der Kette bleibt Rückfrage
+    'c² = 289 = 17^2',
+  ])('parseNumber(%j) → null', (raw) => expect(parseNumber(raw)).toBeNull());
+
+  it.each<[string, number]>([
+    // Gleichungsketten bleiben eindeutig
+    ['c = √289 = 17', 17],
+    ['c = √(64+225) = 17', 17],
+    ['c = sqrt(289) = 17', 17],
+    ['x1 = x2 = 5', 5],
+    ['x₁ = x₂ = 5', 5],
+    ['x_1 = x_2 = 5', 5],
+    ['c = 30/2 = 15', 15],
+    ['c ≈ 8,06 ≈ 8,1', 8.1],
+    ['c = 17', 17],
+    ['c=17 cm', 17],
+    ['p = 85 %', 85],
+    ['8,1 cm', 8.1],
+  ])('parseNumber(%j) → %d', (raw, n) => expect(parseNumber(raw)).toBeCloseTo(n, 9));
+
+  it.each<[string, number[]]>([
+    // Lösungsmengen: neue Aussage „<Variable>(Index) =“ nach einem Wert trennt
+    ['x1=7 x2=-7', [7, -7]],
+    ['x1 = 7 x2 = -7', [7, -7]],
+    ['x₁=7 x₂=-7', [7, -7]],
+    ['x_1 = 7 x_2 = -7', [7, -7]],
+    ['x = 7 x = -7', [7, -7]],
+    ['x1 = 7 bzw. x2 = -7', [7, -7]],
+    ['7 bzw. -7', [7, -7]],
+    ['x = 7 sowie x = -7', [7, -7]], // Füllwort vor neuer Aussage wird wie eine Einheit entfernt
+    // Ketten werden nicht zerteilt
+    ['x1 = x2 = 5', [5]],
+    ['x1 = 7; x2 = -7', [7, -7]],
+    ['x_1 = 7; x_2 = -7', [7, -7]],
+    ['x = ±7', [7, -7]],
+  ])('parseNumberSet(%j) → %j', (raw, expected) => expect(parseNumberSet(raw)).toEqual(expected));
+
+  it.each(['x = 7 / x = -7', 'x=7|x=-7', 'x = 7 & x = -7'])(
+    'parseNumberSet(%j) → null (Aussagen ohne bekannten Trenner ⇒ Rückfrage statt „letztes = gewinnt“)',
+    (raw) => expect(parseNumberSet(raw)).toBeNull(),
+  );
 });

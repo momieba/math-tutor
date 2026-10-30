@@ -50,9 +50,36 @@ const APPROX_WORDS = /(^|\s)(ca|circa|etwa|ungefähr|rund)\.?(?=\s|\d|$)/gi;
  * - Einzelzahl: Komma nur vor Variable bzw. Vorzeichen mit Zahl („c = 17, a = 8“, „7, -7“) (BUG-10).
  *   „ 8 , 1 “ bleibt Dezimalkomma, „70,–“ bleibt Preisschreibweise.
  */
-const WORD_SEPARATORS = String.raw`;|\boder\b|\bund\b|\n`;
+const WORD_SEPARATORS = String.raw`;|\boder\b|\bund\b|\bbzw\b\.?|\n`; // „bzw.“ inkl. Punkt (BUG-13: „15 bzw. 17“ ≠ 15,17)
 const SET_SEPARATOR = new RegExp(`${WORD_SEPARATORS}|,(?=\\s|[+\\-±]|\\p{L})`, 'iu');
 const SINGLE_VALUE_SEPARATOR = new RegExp(`${WORD_SEPARATORS}|,\\s*(?=[+\\-±]\\s*\\d|\\p{L})`, 'iu');
+
+/** Bezeichner am Ende eines Abschnitts vor dem nächsten „=“: „c“, „x2“, „x_1“, „cm“, „cm^2“. */
+const TRAILING_IDENTIFIER = /^(.*?)(\p{L}[\p{L}\d_]*(?:\^-?\d+)?)\s*$/su;
+
+/**
+ * Erkennt mehrere Aussagen am AUFBAU statt über eine Trennerliste (BUG-12).
+ * Bei „a = b = c“ ist jeder innere Abschnitt (b) rechte Seite der einen und linke Seite der nächsten Gleichung.
+ * Enthält ein innerer Abschnitt eine Zahl, auf die noch ein Bezeichner bzw. „|“/„&“ folgt
+ * („15 bzw. c“, „15 c“, „15 / c“, „15|c“, „15 sowie c“), stehen dort zwei Aussagen ⇒ mehrdeutig.
+ * Eindeutig bleiben Gleichungsketten: „c = √289 = 17“, „c = √(64+225) = 17“, „x1 = x2 = 5“ (Index gehört zum Bezeichner).
+ * Bewusste Grenze: „c = 17 cm = 0,17 m“ gilt ebenfalls als mehrdeutig (gelbe Rückfrage statt Raten).
+ */
+function hasMultipleStatements(s: string): boolean {
+  const segments = s.split(/[=≈~]/);
+  return segments.slice(1, -1).some((seg) => {
+    if (/\d[^|&]*[|&]/.test(seg)) return true;
+    const m = TRAILING_IDENTIFIER.exec(seg);
+    return m !== null && /\d/.test(m[1]);
+  });
+}
+
+/**
+ * In Lösungsmengen beginnt vor jedem „<Variable>(Index)? =“ ein neues Element, sofern davor ein Wert steht
+ * („x1=7 x2=-7“ → „x1=7“ und „x2=-7“). Direkt nach „=“ wird nicht geteilt, damit „x1 = x2 = 5“ eine Kette bleibt.
+ * Der Bezeichner ist ein einzelner Buchstabe (nicht Ende eines Wortes wie „cm“) mit optionalem Index.
+ */
+const STATEMENT_START = /(?<=[^=≈~\s])\s*(?=(?<!\p{L})\p{L}(?:_?\d+)?\s*[=≈~])/u;
 
 /**
  * Entscheidung „1.125“ (vorläufig: Koordination nach Empfehlung QA; der Auftraggeber kann das ändern):
@@ -87,14 +114,15 @@ function toNumber(token: string): number | null {
 
 /**
  * Parst eine einzelne Zahl. Gewertet wird nur der Teil nach dem letzten „=“ bzw. „≈“ (BUG-03: „c = √289 = 17“ → 17),
- * und das nur, wenn die Eingabe keinen Listentrenner enthält (BUG-10: „c = 15 oder c = 17“ ist mehrdeutig ⇒ `null`).
+ * und das nur, wenn die Eingabe keinen Listentrenner enthält (BUG-10: „c = 15 oder c = 17“ ist mehrdeutig ⇒ `null`)
+ * und vom Aufbau her nur EINE Aussage ist (BUG-12: „c = 15 bzw. c = 17“, „c = 15 c = 17“, „c=15|c=17“ ⇒ `null`).
  * Einheiten samt Hochzahl (cm², m^3), Währung, Prozent und Füllwörter werden ignoriert.
  * Nicht eindeutige Eingaben (mehrere Werte oder Zahlengruppen, Wurzel, Potenz, Rechenzeichen, Variable an Ziffer,
  * „1.125“) ergeben `null` ⇒ gelbe Rückfrage, statt zu raten. Einfache Brüche aus ganzen Zahlen („5/2“) werden ausgewertet.
  */
 export function parseNumber(raw: string): number | null {
   let s = preprocess(raw).trim();
-  if (SINGLE_VALUE_SEPARATOR.test(s)) return null;
+  if (SINGLE_VALUE_SEPARATOR.test(s) || hasMultipleStatements(s)) return null; // BUG-10/12/13
   s = (s.split(/[=≈~]/).pop() ?? '').trim();
   s = s.replace(/[.!]+$/, '').trim(); // Satzpunkt am Ende (BUG-06)
   if (/√|sqrt|wurzel/i.test(s)) return null;
@@ -118,7 +146,8 @@ export function parseNumber(raw: string): number | null {
 
 /** Ein Element einer Lösungsmenge; „±a“ bzw. „b ± a“ ergibt zwei Werte (BUG-02). */
 function parseSetPart(part: string): number[] | null {
-  const rhs = (part.split(/[=≈]/).pop() ?? '').trim().replace(/\+\/?-/g, '±');
+  if (hasMultipleStatements(part)) return null; // BUG-12: kein „letztes = gewinnt“
+  const rhs = (part.split(/[=≈~]/).pop() ?? '').trim().replace(/\+\/?-/g, '±');
   const pm = /^(.*?)±(.+)$/.exec(rhs);
   if (!pm) {
     const n = parseNumber(part);
@@ -131,7 +160,8 @@ function parseSetPart(part: string): number[] | null {
 }
 
 /**
- * Parst eine Lösungsmenge. Trenner: Semikolon, „oder“, „und“, Zeilenumbruch sowie ein Komma,
+ * Parst eine Lösungsmenge. Trenner: Semikolon, „oder“, „und“, „bzw.“, Zeilenumbruch, ein neues „<Variable>(Index) =“
+ * nach einem Wert (BUG-12: „x1=7 x2=-7“) sowie ein Komma,
  * auf das ein Leerzeichen, eine Variable oder ein Vorzeichen folgt („x1=7, x2=-7“, „7, -7“) (BUG-06).
  * Ein Komma direkt zwischen Ziffern („8,1“) bleibt Dezimalkomma.
  * Nur bewusst leere Mengen („keine Lösung“, „L = {}“, „{}“, „∅“) ergeben `[]`. Eine Eingabe nur aus Trennern
@@ -144,6 +174,7 @@ export function parseNumberSet(raw: string): number[] | null {
   if (/^(keine|leer|∅)/i.test(t)) return [];
   const parts = t
     .split(SET_SEPARATOR)
+    .flatMap((p) => p.split(STATEMENT_START)) // „x1=7 x2=-7“ → „x1=7“, „x2=-7“ (BUG-12)
     .map((p) => p.trim())
     .filter(Boolean);
   if (parts.length === 0) return null;

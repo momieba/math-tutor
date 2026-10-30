@@ -445,16 +445,16 @@ describe('Offene Befunde (Re-Test 570400a)', () => {
   // BUG-12 (Major, Restlücke von BUG-10): Die Trennerliste kennt nur „oder“, „und“, „;“, „\n“ und Komma.
   // Bei „bzw.“, „/“, „sowie“, „|“, „&“ oder nur Leerzeichen zwischen zwei Aussagen gewinnt wieder das LETZTE „=“:
   // Die Reihenfolge entscheidet über Grün/Rot (Konzept §9). evaluate.ts parseNumber/parseSetPart: `split(/[=≈~]/).pop()`.
-  it.fails.each(['c = 15 bzw. c = 17', 'c = 15 / c = 17', 'c = 15 sowie c = 17', 'c = 15 c = 17', 'c=15|c=17', 'c = 15 & c = 17'])(
+  it.each(['c = 15 bzw. c = 17', 'c = 15 / c = 17', 'c = 15 sowie c = 17', 'c = 15 c = 17', 'c=15|c=17', 'c = 15 & c = 17'])(
     'BUG-12: %j (Soll 17) ⇒ unclear statt correct',
     (raw) => {
       expect(verdict('pyth-hypotenuse-4', raw)).toBe('unclear');
     },
   );
-  it.fails('BUG-12: „c = 17 bzw. c = 15“ (Soll 17) ⇒ unclear statt incorrect', () => {
+  it('BUG-12: „c = 17 bzw. c = 15“ (Soll 17) ⇒ unclear statt incorrect', () => {
     expect(verdict('pyth-hypotenuse-4', 'c = 17 bzw. c = 15')).toBe('unclear');
   });
-  it.fails.each(['x1=7 x2=-7', 'x1 = 7 bzw. x2 = -7'])(
+  it.each(['x1=7 x2=-7', 'x1 = 7 bzw. x2 = -7'])(
     'BUG-12 (Lösungsmenge): %j bei x² = 49 ⇒ correct oder unclear, nicht „teilweise“ mit gespeichertem Versuch',
     (raw) => {
       expect(['correct', 'unclear']).toContain(verdict('quad-reinquadratisch-1', raw));
@@ -463,10 +463,10 @@ describe('Offene Befunde (Re-Test 570400a)', () => {
 
   // BUG-13 (Minor): Der Punkt aus der Abkürzung „bzw.“ klebt zwei Zahlen zu einer Dezimalzahl: „15 bzw. 17“ ⇒ 15,17 ⇒ rot.
   // Gleiche Fehlerklasse wie BUG-03 (Ziffern zusammenkleben). Erwartet: null (gelb).
-  it.fails('BUG-13: parseNumber(„15 bzw. 17“) ⇒ null statt 15.17', () => {
+  it('BUG-13: parseNumber(„15 bzw. 17“) ⇒ null statt 15.17', () => {
     expect(parseNumber('15 bzw. 17')).toBeNull();
   });
-  it.fails('BUG-13: „15 bzw. 17“ bei pyth-hypotenuse-4 ⇒ unclear statt incorrect', () => {
+  it('BUG-13: „15 bzw. 17“ bei pyth-hypotenuse-4 ⇒ unclear statt incorrect', () => {
     expect(verdict('pyth-hypotenuse-4', '15 bzw. 17')).toBe('unclear');
   });
 });

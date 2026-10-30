@@ -294,6 +294,21 @@ test.describe('DoD 6 – Aufgaben bearbeiten und einreichen', () => {
     }
   });
 
+  test('BUG-12 (Regression): „c = 15 bzw. c = 17“ → gelbe Rückfrage, kein Versuch gespeichert', async ({ page }) => {
+    await register(page);
+    // Soll 17: Mehrere Aussagen werden am Aufbau erkannt, nicht nur über „oder“/„und“; auch BUG-13 („15 bzw. 17“)
+    for (const raw of ['c = 15 bzw. c = 17', 'c = 17 bzw. c = 15', 'c = 15 c = 17', '15 bzw. 17']) {
+      await openExercise(page, 'pyth-hypotenuse-4');
+      await answerInput(page).fill(raw);
+      await submitButton(page).click();
+      await expect(feedbackPanel(page), raw).toContainText('Nicht eindeutig');
+      await expect(feedbackPanel(page), raw).toHaveClass(/amber/);
+      await expect(page.getByRole('heading', { name: 'Musterlösung' })).toHaveCount(0);
+      await expect(answerInput(page)).toHaveValue(raw);
+      expect((await learnerData(page)).attempts, raw).toHaveLength(0);
+    }
+  });
+
   test('UX-07 (Regression): Brotkrumen der Aufgabe zeigen den Themennamen und führen zum Thema', async ({ page }) => {
     await register(page);
     for (const [id, title, topicId] of [
