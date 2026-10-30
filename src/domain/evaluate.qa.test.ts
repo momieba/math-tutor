@@ -6,8 +6,11 @@
  * 4) Regressionslauf über ALLE Aufgaben: jede Aufgabe akzeptiert ihre eigene Soll-Antwort.
  * 5) Regressionstests BUG-10, BUG-11 und Entscheidung „1.125“ (Fix in 570400a, Re-Test durch Tester).
  * 6) Regression „Variable an Ziffer“: Einheiten, Indizes (x1/x2) und übliche Antworten bleiben unberührt.
- * 7) Offene Befunde (BUG-12, BUG-13) sind als `it.fails` mit Bug-ID markiert: Sie bleiben grün, solange der
- *    Fehler besteht, und schlagen an, sobald er behoben ist (dann `.fails` entfernen = Re-Test).
+ * 7) Regressionstests BUG-12, BUG-13 (Fix in 5137177, Re-Test durch Tester).
+ * 8) Regression Strukturregel (hasMultipleStatements/STATEMENT_START): Ketten, Einheiten, Indizes, 1.125 bleiben
+ *    unberührt; bewusste Grenzen (Einheitenwechsel, „→“) sind als gelbe Rückfrage dokumentiert.
+ * 9) Offene Befunde (BUG-14) sind als `it.fails` mit Bug-ID markiert: Sie bleiben grün, solange der Fehler
+ *    besteht, und schlagen an, sobald er behoben ist (dann `.fails` entfernen = Re-Test).
  *    Die `it.todo` „INHALT“ sind Inhaltsfragen für Req eng/Redaktion, keine Parserfehler.
  */
 import { describe, expect, it } from 'vitest';
@@ -440,33 +443,129 @@ describe('Regression „Variable an Ziffer“: Einheiten und übliche Antworten 
   });
 });
 
-// ------------------------------------------------------------------ 7) Offene Befunde aus dem Re-Test 570400a
-describe('Offene Befunde (Re-Test 570400a)', () => {
-  // BUG-12 (Major, Restlücke von BUG-10): Die Trennerliste kennt nur „oder“, „und“, „;“, „\n“ und Komma.
-  // Bei „bzw.“, „/“, „sowie“, „|“, „&“ oder nur Leerzeichen zwischen zwei Aussagen gewinnt wieder das LETZTE „=“:
-  // Die Reihenfolge entscheidet über Grün/Rot (Konzept §9). evaluate.ts parseNumber/parseSetPart: `split(/[=≈~]/).pop()`.
+// ------------------------------------------------------------------ 7) Regressionstests BUG-12, BUG-13
+describe('Regressionstests: BUG-12, BUG-13 (Fix in 5137177)', () => {
+  // BUG-12 (Major, Restlücke von BUG-10): Früher kannte die Trennerliste nur „oder“, „und“, „;“, „\n“ und Komma.
+  // Bei „bzw.“, „/“, „sowie“, „|“, „&“ oder nur Leerzeichen gewann das LETZTE „=“ ⇒ die Reihenfolge entschied über Grün/Rot.
+  // Fix: hasMultipleStatements() erkennt mehrere Aussagen am Aufbau; STATEMENT_START teilt Lösungsmengen.
   it.each(['c = 15 bzw. c = 17', 'c = 15 / c = 17', 'c = 15 sowie c = 17', 'c = 15 c = 17', 'c=15|c=17', 'c = 15 & c = 17'])(
-    'BUG-12: %j (Soll 17) ⇒ unclear statt correct',
+    'BUG-12 (Regression): %j (Soll 17) ⇒ unclear statt correct',
     (raw) => {
       expect(verdict('pyth-hypotenuse-4', raw)).toBe('unclear');
     },
   );
-  it('BUG-12: „c = 17 bzw. c = 15“ (Soll 17) ⇒ unclear statt incorrect', () => {
+  it('BUG-12 (Regression): „c = 17 bzw. c = 15“ (Soll 17) ⇒ unclear statt incorrect', () => {
     expect(verdict('pyth-hypotenuse-4', 'c = 17 bzw. c = 15')).toBe('unclear');
   });
   it.each(['x1=7 x2=-7', 'x1 = 7 bzw. x2 = -7'])(
-    'BUG-12 (Lösungsmenge): %j bei x² = 49 ⇒ correct oder unclear, nicht „teilweise“ mit gespeichertem Versuch',
+    'BUG-12 (Regression, Lösungsmenge): %j bei x² = 49 ⇒ correct oder unclear, nicht „teilweise“ mit gespeichertem Versuch',
     (raw) => {
       expect(['correct', 'unclear']).toContain(verdict('quad-reinquadratisch-1', raw));
     },
   );
 
-  // BUG-13 (Minor): Der Punkt aus der Abkürzung „bzw.“ klebt zwei Zahlen zu einer Dezimalzahl: „15 bzw. 17“ ⇒ 15,17 ⇒ rot.
-  // Gleiche Fehlerklasse wie BUG-03 (Ziffern zusammenkleben). Erwartet: null (gelb).
-  it('BUG-13: parseNumber(„15 bzw. 17“) ⇒ null statt 15.17', () => {
+  // BUG-13 (Minor): Der Punkt aus „bzw.“ klebte zwei Zahlen zu einer Dezimalzahl: „15 bzw. 17“ ⇒ 15,17 ⇒ rot.
+  it('BUG-13 (Regression): parseNumber(„15 bzw. 17“) ⇒ null statt 15.17', () => {
     expect(parseNumber('15 bzw. 17')).toBeNull();
   });
-  it('BUG-13: „15 bzw. 17“ bei pyth-hypotenuse-4 ⇒ unclear statt incorrect', () => {
+  it('BUG-13 (Regression): „15 bzw. 17“ bei pyth-hypotenuse-4 ⇒ unclear statt incorrect', () => {
     expect(verdict('pyth-hypotenuse-4', '15 bzw. 17')).toBe('unclear');
+  });
+});
+
+// ------------------------------------------------------------------ 8) Strukturregel: keine Kollateralschäden
+describe('Regression Strukturregel (5137177): Ketten, Einheiten, Indizes bleiben eindeutig', () => {
+  it.each<[string, number]>([
+    ['c = √289 = 17', 17],
+    ['c = √(64+225) = 17', 17],
+    ['c = √(a²+b²) = √289 = 17', 17],
+    ['c = 30/2 = 15', 15],
+    ['c² = 8² + 15² = 289', 289],
+    ['c ≈ 8,06 ≈ 8,1', 8.1],
+    ['x1 = x2 = 5', 5],
+    ['x₁ = x₂ = 5', 5],
+    ['x_1 = x_2 = 5', 5],
+    ['8,1 cm', 8.1],
+    ['12 cm²', 12],
+    ['p = 85 %', 85],
+    ['c=17', 17],
+    ['G = 42 € / 0,35 = 120 €', 120],
+    ['W = 0,35 · 120 = 42 €', 42],
+    ['34 : 40 = 0,85', 0.85],
+  ])('parseNumber(%j) ⇒ %d', (raw, value) => {
+    expect(parseNumber(raw)).toBeCloseTo(value, 9);
+  });
+
+  it('Musterlösungs-Kette „34 : 40 = 0,85 = 85 %“ wird bei prozent-satz-grundwert-1 als richtig gewertet', () => {
+    expect(verdict('prozent-satz-grundwert-1', '34 : 40 = 0,85 = 85 %')).toBe('correct');
+  });
+
+  it.each<[string, number[]]>([
+    ['x_1 = 7; x_2 = -7', [-7, 7]],
+    ['x1 = 7; x2 = -7', [-7, 7]],
+    ['x₁=7; x₂=-7', [-7, 7]],
+    ['x1=7 x2=-7', [-7, 7]],
+    ['x1 = 7 bzw. x2 = -7', [-7, 7]],
+    ['x1 = 3,5 x2 = -3,5', [-3.5, 3.5]],
+    ['x1 = 7 cm x2 = -7 cm', [-7, 7]],
+    ['L = {7; -7}', [-7, 7]],
+    ['x = ±7', [-7, 7]],
+    ['x1 = x2 = 5', [5]],
+  ])('parseNumberSet(%j) ⇒ %j', (raw, values) => {
+    expect(sorted(parseNumberSet(raw) ?? [NaN])).toEqual(values);
+  });
+
+  it('Entscheidung Entwickler1 (dokumentiert): „x1=7 x2=-7“ bei x² = 49 ⇒ correct', () => {
+    expect(verdict('quad-reinquadratisch-1', 'x1=7 x2=-7')).toBe('correct');
+  });
+  it('quad-pq-formel-4: „x1 = x2 = 5“ und „x₁ = x₂ = 5“ ⇒ correct', () => {
+    expect(verdict('quad-pq-formel-4', 'x1 = x2 = 5')).toBe('correct');
+    expect(verdict('quad-pq-formel-4', 'x₁ = x₂ = 5')).toBe('correct');
+  });
+
+  it.each(['x = 7 / x = -7', 'x=7|x=-7', 'x = 7 & x = -7'])(
+    'Lösungsmenge ohne lesbaren Trenner %j ⇒ null (gelb)',
+    (raw) => {
+      expect(parseNumberSet(raw)).toBeNull();
+    },
+  );
+
+  // 1.125-Regeln und „Variable an Ziffer“ dürfen von der Strukturregel nicht berührt werden (Stichprobe; Volltests in 5) und 6)).
+  it.each(['1.125', '1.000 €', 'c = 1.125', '2x', 'x5'])('weiterhin gelb: %j', (raw) => {
+    expect(parseNumber(raw)).toBeNull();
+  });
+  it.each<[string, number]>([['1.000.000', 1_000_000], ['1.200,50', 1200.5], ['0.125', 0.125], ['8.1', 8.1]])(
+    'weiterhin eindeutig: %j ⇒ %d',
+    (raw, value) => {
+      expect(parseNumber(raw)).toBeCloseTo(value, 9);
+    },
+  );
+
+  // BEWUSSTE GRENZE (kein Bug, Entscheidung Entwickler1 in 5137177; ggf. Req eng):
+  // Ketten mit Einheitenwechsel, Herleitungspfeil oder Summen mit Einheit ergeben eine sichere gelbe Rückfrage statt Raten.
+  it.each(['c = 17 cm = 0,17 m', 'c² = 289 → c = 17', 'c² = 289 ⇒ c = 17', 'c = 15 cm + 2 cm = 17 cm', 'c = √a²+b² = 17', 'x = |−7| = 7'])(
+    'Grenze (Hinweis): %j ⇒ gelb',
+    (raw) => {
+      expect(parseNumber(raw)).toBeNull();
+      expect(verdict('pyth-hypotenuse-4', raw)).not.toBe('correct');
+    },
+  );
+});
+
+// ------------------------------------------------------------------ 9) Offene Befunde aus dem Re-Test 5137177
+describe('Offene Befunde (Re-Test 5137177)', () => {
+  // BUG-14 (Minor, Domain, besteht seit c00f8c6 – keine Regression von 5137177):
+  // Ein vorangestelltes Etikett mit Doppelpunkt („Ergebnis: 17 cm“, „Antwort: 17“, „Lösung: 17“, „c: 17“) ergibt null,
+  // weil „:“ als Rechenzeichen (Division) gilt. Sicher (gelb, kein Versuch), aber für Schüler unnötig hakelig.
+  // Betrifft jede Zahlenaufgabe (23 Soll-Antworten im Lauf über alle Aufgaben). „Ergebnis 17 cm“ ohne „:“ geht.
+  it.fails.each<[string, string]>([
+    ['pyth-hypotenuse-4', 'Ergebnis: 17 cm'],
+    ['pyth-hypotenuse-4', 'Antwort: 17'],
+    ['prozent-satz-grundwert-1', 'Ergebnis: 85 %'],
+  ])('BUG-14: %s %j ⇒ correct statt unclear', (id, raw) => {
+    expect(verdict(id, raw)).toBe('correct');
+  });
+  it('BUG-14 Gegenprobe: „34 : 40“ (echte Division ohne Ergebnis) bleibt nicht eindeutig', () => {
+    expect(parseNumber('34 : 40')).toBeNull();
   });
 });
