@@ -125,6 +125,8 @@ Transparenz: `SubtopicProgress.caps` + `CAP_EXPLANATION` erklären dem Schüler 
 - **Unklare Eingaben** (`verdict = 'unclear'`) werden generell nicht als Versuch gespeichert, damit sie den Score nicht senken.
 - DSGVO/Einwilligung Minderjähriger, Speicherfristen und KI-Auftragsverarbeitung müssen vor dem Produktivbetrieb rechtlich geprüft werden.
 - Die Score-Grenzen (§13) sind Produktentscheidungen und noch pädagogisch zu validieren.
+- **Stand:** Lokales MVP freigegeben (DoD 1–10, Commit `4bd95eb`), BUG-01 … BUG-14 behoben und als Regressionstests abgesichert. Bewertungsregel: Mehrdeutiges ⇒ gelbe Rückfrage ohne gespeicherten Versuch (`evaluate.ts`, wird in Schritt 5 unverändert serverseitig genutzt).
+- **Offene Entscheidungen (Req eng / Auftraggeber):** (1) `1.125` als Rückfrage bestätigen (`SINGLE_THOUSANDS_DOT_IS_AMBIGUOUS`); (2) Herleitungspfeile `→`/`⇒` und Ketten mit Einheitenwechsel werten statt Rückfrage?; (3) „keine Ahnung“ als Rückfrage statt Rot?; (4) Themen-Score nur über begonnene Kapitel mitteln (UX-06)?; (5) 3 Inhaltsfragen (erweiterte Antwortlisten, Teilpunkte bei `x > 0`); (6) F1–F10 aus §12.4.
 
 ## 12. Zielarchitektur & Migrationspfad (Supabase + Vercel)
 **Status:** Entwurf, vom Auftraggeber vorgegeben (alles Relationale in Supabase, Hosting auf Vercel). Umsetzung erst, **wenn das lokale MVP fertig ist**. Bis dahin bleiben die TS-Dateien in `src/content`.

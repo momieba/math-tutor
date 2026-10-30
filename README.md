@@ -18,6 +18,10 @@ Ohne `.env` läuft die App automatisch im **lokalen Modus**: Konten und Lernstan
 | `npm run typecheck` | nur TypeScript |
 | `npm run seed:sql` | `supabase/seed.sql` aus `src/content` erzeugen (nach jeder Inhaltsänderung) |
 | `npm run db:check` | Migration + Seed + RLS-Regeln lokal gegen PGlite prüfen |
+| `npm run test:e2e` | Playwright-E2E (iPad-Profil, Touch) für DoD 1–10 und UX/A11y; einmalig `npx playwright install chromium` |
+
+## Stand
+**Lokales MVP freigegeben** (Phase 1, DoD §25 Punkte 1–10, Tester-Abnahme). Teststand bei `4bd95eb`: 724 Unit-Tests (+3 Todos zu Inhaltsfragen), 44 E2E-Tests, `db:check` grün, keine offenen Bugs. Nicht getestet: Safari/WebKit, echtes iPad mit Apple Pencil, Supabase-Modus gegen eine echte Instanz. Offene Entscheidungen: [ARCHITECTURE.md §11](./ARCHITECTURE.md#11-annahmen-und-offene-punkte).
 
 ## Supabase-Modus (optional)
 1. Supabase-Projekt anlegen und `supabase/migrations/0001_init.sql` ausführen, danach `supabase/seed.sql` (SQL-Editor oder `supabase db push`).
