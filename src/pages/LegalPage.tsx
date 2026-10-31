@@ -1,6 +1,6 @@
 import { Link, useParams } from 'react-router';
 
-const TITLES: Record<string, string> = { datenschutz: 'Datenschutzerklärung', impressum: 'Impressum', agb: 'Nutzungsbedingungen' };
+const TITLES: Record<string, string> = { datenschutz: 'Datenschutzerklärung', impressum: 'Impressum', agb: 'Nutzungsbedingungen', kontakt: 'Kontakt' };
 
 /** Platzhalter – Texte müssen vor Produktivbetrieb rechtlich geprüft werden. */
 export default function LegalPage() {

@@ -7,6 +7,3 @@ export const PRODUCT_NAME = 'MatheMentor';
 
 /** Kurzbeschreibung für Seitentitel und Teaser. */
 export const PRODUCT_TAGLINE = 'Mathe verstehen statt auswendig lernen';
-
-/** Platzhalter-Kontaktadresse, bis eine echte Adresse feststeht. */
-export const CONTACT_EMAIL = 'kontakt@example.com';
