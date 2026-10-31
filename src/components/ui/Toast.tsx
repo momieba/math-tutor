@@ -41,7 +41,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {children}
       <div aria-live="polite" role="status" className="pointer-events-none fixed inset-x-0 bottom-6 z-50 flex flex-col items-center gap-2 px-4">
         {items.map((t) => (
-          <div key={t.id} className="pointer-events-auto flex items-center gap-2 rounded-full bg-slate-900 px-5 py-3 text-white shadow-lg animate-slide-up">
+          <div key={t.id} className="flex items-center gap-2 rounded-full bg-slate-900 px-5 py-3 text-white shadow-lg animate-slide-up">
             {t.tone === 'success' ? <CircleCheck aria-hidden="true" size={20} className="text-emerald-200" /> : <Info aria-hidden="true" size={20} />}
             <span>{t.message}</span>
           </div>

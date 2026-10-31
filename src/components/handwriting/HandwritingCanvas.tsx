@@ -1,3 +1,4 @@
+import { Eraser, Hand, Pencil, Redo2, Slash, Trash2, Undo2, ZoomIn, ZoomOut, type LucideIcon } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import {
   addStroke,
@@ -142,87 +143,111 @@ export function HandwritingCanvas({ history, onChange, disabled = false }: Props
     onChange(addStroke(historyRef.current, cur.stroke));
   }
 
-  const toolBtn = (t: Tool, label: string, icon: string) => (
+
+  const iconBtnBase =
+    'flex h-11 w-11 items-center justify-center rounded-lg border transition-colors duration-150 active:scale-95 disabled:opacity-40 disabled:active:scale-100';
+
+  /** Werkzeug-Button (umschaltbar). Reines Icon mit aria-label + Tooltip (Briefing C2: nur in der Werkzeugleiste). */
+  const toolBtn = (t: Tool, label: string, Icon: LucideIcon) => (
     <button
       type="button"
       onClick={() => setTool(t)}
       aria-pressed={tool === t}
+      aria-label={label}
+      title={label}
       disabled={disabled}
-      className={`min-w-11 px-3 rounded-lg border text-sm font-medium ${tool === t ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white border-slate-300 text-slate-700'}`}
+      className={`${iconBtnBase} ${tool === t ? 'border-indigo-600 bg-indigo-600 text-white shadow-sm' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100'}`}
     >
-      <span aria-hidden="true">{icon}</span> {label}
+      <Icon aria-hidden="true" size={22} />
     </button>
   );
-  const actionBtn = (label: string, onClick: () => void, enabled: boolean, icon: string) => (
+  const actionBtn = (label: string, onClick: () => void, enabled: boolean, Icon: LucideIcon) => (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled || !enabled}
       aria-label={label}
       title={label}
-      className="min-w-11 px-3 rounded-lg border border-slate-300 bg-white text-slate-700 disabled:opacity-40"
+      className={`${iconBtnBase} border-slate-200 bg-white text-slate-700 hover:bg-slate-100`}
     >
-      <span aria-hidden="true">{icon}</span>
-      <span className="sr-only sm:not-sr-only sm:ml-1 text-sm">{label}</span>
+      <Icon aria-hidden="true" size={22} />
     </button>
   );
+  /** Gruppen: hoch nebeneinander, quer als 2-spaltiges Raster in der senkrechten Leiste. */
+  const group = 'flex flex-wrap items-center gap-2 landscape:grid landscape:grid-cols-2';
+  const divider = <span className="h-8 w-px bg-slate-200 landscape:h-px landscape:w-full" aria-hidden="true" />;
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-2 space-y-2">
-      <div className="flex flex-wrap gap-2 items-center" role="toolbar" aria-label="Werkzeuge der Schreibfläche">
-        {toolBtn('pen', 'Stift', '✏️')}
-        {toolBtn('line', 'Linie', '📏')}
-        {toolBtn('eraser', 'Radierer', '🧽')}
-        {toolBtn('pan', 'Verschieben', '✋')}
-        <div className="flex gap-1" role="group" aria-label="Farbe">
-          {COLORS.map((c) => (
-            <button
-              key={c.value}
-              type="button"
-              onClick={() => setColor(c.value)}
-              aria-label={`Farbe ${c.label}`}
-              aria-pressed={color === c.value}
-              disabled={disabled}
-              className={`w-11 rounded-full border-4 ${color === c.value ? 'border-indigo-400' : 'border-white'}`}
-              style={{ backgroundColor: c.value }}
-            />
-          ))}
+    <div className="space-y-2">
+      {/* Querformat: Leiste links neben der Fläche (Daumennähe). Hochformat: Leiste unter der Fläche. */}
+      <div className="flex flex-col gap-3 landscape:flex-row landscape:items-start">
+        <div
+          className="order-2 flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white p-2 shadow-lg landscape:order-1 landscape:w-28 landscape:flex-none landscape:flex-col landscape:items-stretch"
+          role="toolbar"
+          aria-label="Werkzeuge der Schreibfläche"
+        >
+          <div className={group} role="group" aria-label="Werkzeug">
+            {toolBtn('pen', 'Stift', Pencil)}
+            {toolBtn('line', 'Linie', Slash)}
+            {toolBtn('eraser', 'Radierer', Eraser)}
+            {toolBtn('pan', 'Verschieben', Hand)}
+          </div>
+          {divider}
+          <div className={group} role="group" aria-label="Farbe">
+            {COLORS.map((c) => (
+              <button
+                key={c.value}
+                type="button"
+                onClick={() => setColor(c.value)}
+                aria-label={`Farbe ${c.label}`}
+                title={`Farbe ${c.label}`}
+                aria-pressed={color === c.value}
+                disabled={disabled}
+                className={`h-11 w-11 rounded-full border-4 transition-shadow ${color === c.value ? 'border-white ring-2 ring-indigo-600' : 'border-white ring-1 ring-slate-200'}`}
+                style={{ backgroundColor: c.value }}
+              />
+            ))}
+          </div>
+          {divider}
+          <div className={group} role="group" aria-label="Bearbeiten">
+            {actionBtn('Rückgängig', () => onChange(undo(history)), canUndo(history), Undo2)}
+            {actionBtn('Wiederholen', () => onChange(redo(history)), canRedo(history), Redo2)}
+            {actionBtn('Alles löschen', () => onChange(clearAll(history)), visibleStrokes(history).length > 0, Trash2)}
+          </div>
+          {divider}
+          <div className={group} role="group" aria-label="Zoom">
+            {actionBtn('Verkleinern', () => setZoom((z) => nextZoom(z, -1)), zoom > ZOOM_LEVELS[0], ZoomOut)}
+            {actionBtn('Vergrößern', () => setZoom((z) => nextZoom(z, 1)), zoom < ZOOM_LEVELS[ZOOM_LEVELS.length - 1], ZoomIn)}
+            <span className="min-w-12 text-center text-sm font-medium tabular-nums text-slate-700 landscape:col-span-2" aria-live="polite">
+              {Math.round(zoom * 100)} %
+            </span>
+          </div>
         </div>
-        <span className="mx-1 h-8 w-px bg-slate-300" aria-hidden="true" />
-        {actionBtn('Rückgängig', () => onChange(undo(history)), canUndo(history), '↶')}
-        {actionBtn('Wiederholen', () => onChange(redo(history)), canRedo(history), '↷')}
-        {actionBtn('Alles löschen', () => onChange(clearAll(history)), visibleStrokes(history).length > 0, '🗑')}
-        <span className="mx-1 h-8 w-px bg-slate-300" aria-hidden="true" />
-        {actionBtn('Verkleinern', () => setZoom((z) => nextZoom(z, -1)), zoom > ZOOM_LEVELS[0], '−')}
-        <span className="text-sm text-slate-600 w-12 text-center" aria-live="polite">
-          {Math.round(zoom * 100)} %
-        </span>
-        {actionBtn('Vergrößern', () => setZoom((z) => nextZoom(z, 1)), zoom < ZOOM_LEVELS[ZOOM_LEVELS.length - 1], '+')}
+        <div className="order-1 min-w-0 flex-1 overflow-auto max-h-[70vh] rounded-2xl border border-slate-300 bg-white shadow-sm landscape:order-2">
+          <canvas
+            ref={canvasRef}
+            aria-label="Schreibfläche für deinen Rechenweg"
+            role="img"
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={finish}
+            onPointerCancel={finish}
+            onContextMenu={(e) => e.preventDefault()}
+            className="block select-none"
+            style={{
+              width: `${zoom * 100}%`,
+              aspectRatio: `${WORLD.width} / ${WORLD.height}`,
+              touchAction: tool === 'pan' ? 'pan-x pan-y' : 'none',
+              cursor: disabled ? 'not-allowed' : tool === 'pan' ? 'grab' : 'crosshair',
+              // Kästchenpapier als CSS-Hintergrund: wird nicht exportiert und vom Radierer nicht entfernt.
+              backgroundImage:
+                'linear-gradient(to right, #dbe4f0 1px, transparent 1px), linear-gradient(to bottom, #dbe4f0 1px, transparent 1px)',
+              backgroundSize: `${(100 / WORLD.width) * 40}% ${(100 / WORLD.height) * 40}%`,
+            }}
+          />
+        </div>
       </div>
-      <div className="overflow-auto max-h-[70vh] rounded-xl border border-slate-300 bg-white">
-        <canvas
-          ref={canvasRef}
-          aria-label="Schreibfläche für deinen Rechenweg"
-          role="img"
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={finish}
-          onPointerCancel={finish}
-          onContextMenu={(e) => e.preventDefault()}
-          className="block select-none"
-          style={{
-            width: `${zoom * 100}%`,
-            aspectRatio: `${WORLD.width} / ${WORLD.height}`,
-            touchAction: tool === 'pan' ? 'pan-x pan-y' : 'none',
-            cursor: disabled ? 'not-allowed' : tool === 'pan' ? 'grab' : 'crosshair',
-            // Karopapier als CSS-Hintergrund: wird nicht exportiert und vom Radierer nicht entfernt.
-            backgroundImage:
-              'linear-gradient(to right, #e2e8f0 1px, transparent 1px), linear-gradient(to bottom, #e2e8f0 1px, transparent 1px)',
-            backgroundSize: `${(100 / WORLD.width) * 40}% ${(100 / WORLD.height) * 40}%`,
-          }}
-        />
-      </div>
-      {tool === 'pan' && <p className="text-sm text-slate-500 px-1">Verschieben aktiv: Mit dem Finger wischen bewegt die Fläche. Zum Schreiben wieder „Stift“ wählen.</p>}
+      {tool === 'pan' && <p className="text-sm text-slate-600 px-1">Verschieben aktiv: Mit dem Finger wischen bewegt die Fläche. Zum Schreiben wieder „Stift“ wählen.</p>}
     </div>
   );
 }

@@ -1,7 +1,8 @@
+import { CircleCheck } from 'lucide-react';
 import type { Choice } from '../types';
 import { MathText } from './MathText';
 
-/** Multiple Choice: große, gut treffbare Optionen (Tablet). */
+/** Multiple Choice: große, gut treffbare Optionen (Tablet); Auswahl mit Rahmen, Farbe und Häkchen-Icon. */
 export function ChoiceInput({ choices, value, onChange, disabled }: { choices: Choice[]; value: string; onChange: (id: string) => void; disabled?: boolean }) {
   return (
     <div role="radiogroup" aria-label="Antwortmöglichkeiten" className="grid gap-3 sm:grid-cols-2">
@@ -15,12 +16,21 @@ export function ChoiceInput({ choices, value, onChange, disabled }: { choices: C
             aria-checked={selected}
             disabled={disabled}
             onClick={() => onChange(c.id)}
-            className={`min-h-16 rounded-2xl border-2 px-4 py-3 text-left text-lg transition ${
-              selected ? 'border-indigo-600 bg-indigo-50 ring-2 ring-indigo-200' : 'border-slate-300 bg-white hover:border-indigo-300'
+            className={`group flex min-h-16 items-center gap-3 rounded-2xl border-2 px-4 py-3 text-left text-lg transition-colors duration-150 active:scale-[0.99] ${
+              selected ? 'border-indigo-600 bg-indigo-50 shadow-sm' : 'border-slate-200 bg-white hover:border-indigo-300'
             } disabled:opacity-70`}
           >
-            <span className="font-semibold mr-2 uppercase">{c.id})</span>
-            <MathText text={c.label} />
+            <span
+              className={`flex h-9 min-w-9 flex-none items-center justify-center rounded-full px-2 text-base font-semibold ${
+                selected ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-700'
+              }`}
+            >
+              {c.id})
+            </span>
+            <span className="flex-1 min-w-0">
+              <MathText text={c.label} />
+            </span>
+            {selected && <CircleCheck aria-hidden="true" size={24} className="flex-none text-indigo-700" />}
           </button>
         );
       })}
@@ -28,13 +38,15 @@ export function ChoiceInput({ choices, value, onChange, disabled }: { choices: C
   );
 }
 
-const inputCls = 'w-full rounded-xl border-2 border-slate-300 bg-white px-4 py-3 text-xl focus:border-indigo-500 focus:outline-none disabled:bg-slate-100';
+const inputCls =
+  'w-full min-h-12 rounded-lg border-2 border-slate-500 bg-white px-4 py-3 text-xl text-slate-900 placeholder:text-slate-500 ' +
+  'focus:border-indigo-600 focus:outline-none focus:ring-4 focus:ring-indigo-100 disabled:bg-slate-100 disabled:text-slate-700';
 
 /** Zahleneingabe: `inputMode="decimal"` öffnet die Zahlentastatur; Komma und Punkt werden von evaluate.ts akzeptiert. */
 export function NumericInput({ value, onChange, unit, disabled, id }: { value: string; onChange: (v: string) => void; unit?: string; disabled?: boolean; id: string }) {
   return (
     <div>
-      <label htmlFor={id} className="block font-medium mb-1">
+      <label htmlFor={id} className="block font-semibold mb-2">
         Dein Ergebnis{unit ? ` (in ${unit})` : ''}
       </label>
       <div className="flex items-center gap-2">
@@ -51,7 +63,7 @@ export function NumericInput({ value, onChange, unit, disabled, id }: { value: s
         />
         {unit && <span className="text-lg text-slate-600">{unit}</span>}
       </div>
-      <p className="text-sm text-slate-500 mt-1">Komma oder Punkt sind beide erlaubt.</p>
+      <p className="text-sm text-slate-600 mt-1">Komma oder Punkt sind beide erlaubt.</p>
     </div>
   );
 }
@@ -79,7 +91,7 @@ export function MathInput({
 }) {
   return (
     <div>
-      <label htmlFor={id} className="block font-medium mb-1">
+      <label htmlFor={id} className="block font-semibold mb-2">
         {label}
       </label>
       <input
@@ -96,7 +108,7 @@ export function MathInput({
       />
       {preview && value.trim() && (
         <div className="mt-2 rounded-xl bg-slate-50 border border-slate-200 px-4 py-2 overflow-x-auto" aria-label="Vorschau">
-          <span className="text-sm text-slate-500 mr-2">Vorschau:</span>
+          <span className="text-sm text-slate-600 mr-2">Vorschau:</span>
           <MathText text={toPreviewLatex(value)} display />
         </div>
       )}
