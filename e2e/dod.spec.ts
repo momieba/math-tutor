@@ -163,6 +163,25 @@ test.describe('DoD 2+3 – Thema über Texteingabe finden und zuordnen', () => {
   });
 });
 
+// ---------------------------------------------------------------- D-11 (Abnahme-Checkliste Design/UX)
+test('D-11: neuer Nutzer erreicht vom Dashboard die erste Aufgabe in ≤ 3 Tipps', async ({ page }) => {
+  await register(page); // landet auf dem Dashboard, ohne Themen
+  let taps = 0;
+  const tap = async (loc: ReturnType<typeof page.getByRole>) => {
+    await loc.click();
+    taps++;
+  };
+  // 1) Vorschlags-Chip, 2) Thema bestätigen, 3) „Direkt üben“ in der Karte „Dein nächster Schritt“
+  await tap(page.getByRole('button', { name: 'Satz des Pythagoras' }));
+  await tap(page.locator('li').filter({ hasText: 'Satz des Pythagoras' }).getByRole('button', { name: 'Thema hinzufügen' }));
+  await tap(page.locator('section[aria-labelledby="next-heading"]').getByRole('link', { name: 'Direkt üben' }));
+  await expect(page).toHaveURL(/\/app\/exercises\/pyth-grundlagen-1$/);
+  await expect(page.getByRole('button', { name: 'Abgeben' })).toBeVisible();
+  expect(taps).toBeLessThanOrEqual(3);
+  // Hauptaktion je Bildschirm ist markiert (D-09-Vorbereitung): auf der Aufgabe genau eine
+  await expect(page.locator('[data-variant="primary"]')).toHaveCount(1);
+});
+
 // ---------------------------------------------------------------- DoD 4
 test('DoD 4 – Themen-Dashboard zeigt 8 Kapitel mit Status, Fortschritt, gelöst/offen und Empfehlung', async ({ page }) => {
   await register(page);
