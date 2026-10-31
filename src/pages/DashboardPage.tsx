@@ -194,8 +194,9 @@ export default function DashboardPage() {
             <p className="text-2xl font-bold text-slate-900">{recommendation.subtopicTitle}</p>
             <p className="flex flex-wrap items-center gap-2 text-slate-600">
               <span>{recommendation.topicTitle}</span>
-              <span aria-hidden="true">·</span>
-              <span className="font-medium text-indigo-800">{recommendation.reason}</span>
+              {/* Im Hochformat eigene Zeile statt verwaistem „·“ am Zeilenende */}
+              <span aria-hidden="true" className="hidden lg:inline">·</span>
+              <span className="basis-full lg:basis-auto font-medium text-indigo-800">{recommendation.reason}</span>
               <StatusBadge status={recommendation.status} />
             </p>
           </div>

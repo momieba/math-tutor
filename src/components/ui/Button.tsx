@@ -7,7 +7,11 @@ export type ButtonSize = 'md' | 'lg';
 const BASE =
   'inline-flex items-center justify-center gap-2 min-h-11 rounded-lg font-semibold whitespace-nowrap select-none ' +
   'transition-[background-color,border-color,color,transform] duration-150 active:scale-[0.98] ' +
-  'disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100';
+  'disabled:cursor-not-allowed disabled:active:scale-100 ' +
+  // Deaktiviert: einheitlich neutral und lesbar (slate-600 auf slate-100 ≈ 6,9 : 1) statt blasser Deckkraft.
+  // Beim Laden (aria-busy) bleibt die Variante sichtbar, nur leicht gedimmt.
+  'disabled:not-aria-busy:bg-slate-100 disabled:not-aria-busy:text-slate-600 disabled:not-aria-busy:border disabled:not-aria-busy:border-slate-200 disabled:not-aria-busy:shadow-none ' +
+  'aria-busy:opacity-80';
 
 const VARIANT: Record<ButtonVariant, string> = {
   primary: 'bg-indigo-600 text-white shadow-sm hover:bg-indigo-700 active:bg-indigo-800',
