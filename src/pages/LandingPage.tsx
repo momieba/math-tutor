@@ -1,4 +1,5 @@
 import { Link } from 'react-router';
+import { Logo } from '../components/Logo';
 
 /** Öffentliche Landingpage (technisch getrennt vom geschützten Bereich /app). */
 export default function LandingPage() {
@@ -11,7 +12,7 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen">
       <header className="mx-auto max-w-5xl px-4 h-16 flex items-center">
-        <span className="font-bold text-indigo-700">MatheMentor</span>
+        <Logo />
         <nav className="ml-auto flex gap-2">
           <Link to="/login" className="px-4 flex items-center rounded-lg hover:bg-slate-100">Anmelden</Link>
           <Link to="/register" className="px-4 flex items-center rounded-lg bg-indigo-600 text-white">Kostenlos starten</Link>

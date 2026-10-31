@@ -1,23 +1,11 @@
-import { FlaskConical, History, House, LogOut, Sigma } from 'lucide-react';
+import { FlaskConical, History, House, LogOut } from 'lucide-react';
 import { Suspense } from 'react';
 import { Link, NavLink, Outlet } from 'react-router';
+import { PRODUCT_NAME } from '../config/brand';
 import { useAuth } from '../context/AuthContext';
 import { services } from '../services';
+import { Logo } from './Logo';
 import { PageFallback } from './PageFallback';
-
-/** Produktname an einer Stelle, bis der endgültige Name feststeht (Briefing R4). */
-export const PRODUCT_NAME = 'MatheMentor';
-
-export function Logo() {
-  return (
-    <span className="inline-flex items-center gap-2 font-bold text-slate-900">
-      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-white" aria-hidden="true">
-        <Sigma size={20} strokeWidth={2.5} />
-      </span>
-      {PRODUCT_NAME}
-    </span>
-  );
-}
 
 const navCls = ({ isActive }: { isActive: boolean }) =>
   `inline-flex items-center gap-2 min-h-11 px-3 rounded-lg font-medium transition-colors ${
