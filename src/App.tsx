@@ -3,6 +3,7 @@ import { BrowserRouter, Route, Routes } from 'react-router';
 import { AppLayout } from './components/AppLayout';
 import { PageFallback } from './components/PageFallback';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import { ToastProvider } from './components/ui/Toast';
 import { AuthProvider } from './context/AuthContext';
 import LandingPage from './pages/LandingPage';
 
@@ -24,6 +25,7 @@ const TopicPage = lazy(() => import('./pages/TopicPage'));
 export default function App() {
   return (
     <AuthProvider>
+      <ToastProvider>
       <BrowserRouter>
         <Suspense fallback={<PageFallback />}>
         <Routes>
@@ -44,6 +46,7 @@ export default function App() {
         </Routes>
         </Suspense>
       </BrowserRouter>
+      </ToastProvider>
     </AuthProvider>
   );
 }

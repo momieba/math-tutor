@@ -1,5 +1,129 @@
 @import "tailwindcss";
 
-/* Tablet-first: große Touch-Ziele, gut lesbare Basisschrift */
-html { font-size: 17px; -webkit-tap-highlight-color: transparent; }
+/*
+ * Designsystem (Req-eng-Briefing Teil C2)
+ * Farbrollen: Die Tailwind-Paletten werden auf die im Briefing dokumentierten Hex-Werte festgelegt,
+ * damit die Kontrastangaben (WCAG AA auf Weiß) exakt stimmen.
+ *   Primär         indigo-600 #4F46E5 (6,3:1)   · Primär dunkel indigo-700 #4338CA (Links)
+ *   Text           slate-900  #0F172A (17,9:1)  · sekundär slate-600 #475569 · Metadaten slate-500 #64748B (nur ≥ 14 px)
+ *   Richtig        emerald-700 auf emerald-50   · Unsicher amber-700 auf amber-50 · Fehler red-700 auf red-50
+ *   Themengebiete  sky-100 / violet-100 / emerald-100, immer mit Icon
+ * Radien: 8 px Bedienelemente (rounded-lg), 16 px Karten/Dialoge (rounded-2xl).
+ * Schatten: nur zwei Stufen – shadow-sm (Karten), shadow-lg (Dialoge, schwebende Leisten).
+ * Abstände: 4-px-Raster (Root-Schrift 16 px ⇒ Tailwind-Spacing = exakte 4-px-Schritte).
+ */
+@theme {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --color-indigo-50: #eef2ff;
+  --color-indigo-100: #e0e7ff;
+  --color-indigo-200: #c7d2fe;
+  --color-indigo-300: #a5b4fc;
+  --color-indigo-500: #6366f1;
+  --color-indigo-600: #4f46e5;
+  --color-indigo-700: #4338ca;
+  --color-indigo-800: #3730a3;
+  --color-indigo-900: #312e81;
+
+  --color-slate-50: #f8fafc;
+  --color-slate-100: #f1f5f9;
+  --color-slate-200: #e2e8f0;
+  --color-slate-300: #cbd5e1;
+  --color-slate-400: #94a3b8;
+  --color-slate-500: #64748b;
+  --color-slate-600: #475569;
+  --color-slate-700: #334155;
+  --color-slate-800: #1e293b;
+  --color-slate-900: #0f172a;
+
+  --color-emerald-50: #ecfdf5;
+  --color-emerald-100: #d1fae5;
+  --color-emerald-200: #a7f3d0;
+  --color-emerald-500: #10b981;
+  --color-emerald-600: #059669;
+  --color-emerald-700: #047857;
+  --color-emerald-800: #065f46;
+
+  --color-amber-50: #fffbeb;
+  --color-amber-100: #fef3c7;
+  --color-amber-200: #fde68a;
+  --color-amber-300: #fcd34d;
+  --color-amber-700: #b45309;
+  --color-amber-800: #92400e;
+  --color-amber-900: #78350f;
+
+  --color-red-50: #fef2f2;
+  --color-red-100: #fee2e2;
+  --color-red-200: #fecaca;
+  --color-red-600: #dc2626;
+  --color-red-700: #b91c1c;
+  --color-red-800: #991b1b;
+
+  --color-sky-50: #f0f9ff;
+  --color-sky-100: #e0f2fe;
+  --color-sky-200: #bae6fd;
+  --color-sky-700: #0369a1;
+  --color-sky-800: #075985;
+
+  --color-violet-100: #ede9fe;
+  --color-violet-700: #6d28d9;
+
+  --shadow-sm: 0 1px 2px 0 rgb(15 23 42 / 0.06), 0 1px 3px 0 rgb(15 23 42 / 0.08);
+  --shadow-lg: 0 10px 25px -5px rgb(15 23 42 / 0.12), 0 8px 10px -6px rgb(15 23 42 / 0.08);
+
+  --animate-fade-in: fade-in 200ms ease-out both;
+  --animate-slide-up: slide-up 220ms ease-out both;
+  --animate-pop: pop 250ms ease-out both;
+
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes slide-up {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes pop {
+    0% { transform: scale(0.6); opacity: 0; }
+    70% { transform: scale(1.08); opacity: 1; }
+    100% { transform: scale(1); }
+  }
+}
+
+/* Tablet-first: Root 16 px (exaktes Raster), Fließtext 17 px, große Touch-Ziele */
+html {
+  font-size: 16px;
+  -webkit-tap-highlight-color: transparent;
+  /* Fokus/Sprungziele nicht unter der festen Kopfzeile verstecken (WCAG 2.4.11) */
+  scroll-padding-top: 5rem;
+}
+body {
+  font-size: 1.0625rem;
+  line-height: 1.5;
+  color: var(--color-slate-900);
+  background-color: var(--color-slate-50);
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3 { line-height: 1.2; letter-spacing: -0.01em; }
 button, a, input, select { min-height: 44px; }
+
+/* Sichtbarer Fokusring für alle Bedienelemente (WCAG 2.4.7) */
+:focus-visible {
+  outline: 2px solid var(--color-indigo-600);
+  outline-offset: 2px;
+}
+
+/* Dialog-Hintergrund (natives <dialog>) */
+dialog::backdrop {
+  background: rgb(15 23 42 / 0.45);
+}
+
+/* Bewegung reduzieren, wenn das System es wünscht (WCAG 2.3.3) */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
