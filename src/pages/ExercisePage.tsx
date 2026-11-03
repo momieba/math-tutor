@@ -1,6 +1,6 @@
-import { ArrowLeft, ArrowRight, Eye, Gauge, Lightbulb, PenLine, RotateCcw, Send, TrendingDown, TrendingUp, Trophy, TriangleAlert } from 'lucide-react';
+import { ArrowRight, BookOpen, Eye, Lightbulb, RotateCcw, Send, TrendingDown, TrendingUp, TriangleAlert } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { useParams } from 'react-router';
+import { Link, useParams } from 'react-router';
 import { ChoiceInput, MathInput, NumericInput } from '../components/AnswerInputs';
 import { Breadcrumbs } from '../components/Breadcrumbs';
 import { FeedbackPanel } from '../components/FeedbackPanel';
@@ -12,14 +12,16 @@ import { MathText } from '../components/MathText';
 import { ScoreBadge } from '../components/ScoreBadge';
 import { SolutionView } from '../components/SolutionView';
 import { StatusBadge } from '../components/StatusBadge';
-import { Button, ButtonLink, Dialog, EmptyState, Skeleton, Tag, useToast } from '../components/ui';
+import { StepBar } from '../components/StepBar';
+import { Button, ButtonLink, Dialog, EmptyState, Skeleton, useToast } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import type { EvaluationResult } from '../domain/evaluate';
-import { DIFFICULTY_LABEL, EXERCISE_TYPE_LABEL, followingChapter, REQUIREMENT_LABEL } from '../domain/progressView';
+import { needsReview, stepOfExercise } from '../domain/learningPath';
+import { DIFFICULTY_LABEL, REQUIREMENT_LABEL } from '../domain/progressView';
 import { SCORE_CONFIG } from '../domain/score';
 import { services, type PendingAttempt } from '../services';
-import type { AttemptRecord, AttemptSubmission, Difficulty, Exercise, ExerciseReview, ModelSolution, Subtopic, SubtopicProgress } from '../types';
-import { pickNext } from './practice';
+import type { Attempt, AttemptRecord, AttemptSubmission, Difficulty, Exercise, ExerciseReview, ModelSolution, Subtopic, SubtopicProgress } from '../types';
+import { pathFor, pickNext } from './practice';
 
 type Phase =
   | { kind: 'answering' }
@@ -39,6 +41,11 @@ const prefersReducedMotion = () => typeof window !== 'undefined' && window.match
  * Die Seite kennt die Lösung nicht: Hinweise und Musterlösung kommen einzeln vom Bewertungsdienst (services.grading),
  * die Abgabe wird dort bewertet und gespeichert (services.attempts.submit, sonst Entwurf + erneuter Versuch).
  */
+/** Ziel von „Weiter“: nächste Aufgabe im Lernpfad; ist das Kapitel geschafft, die Kapitelseite (Abschluss). */
+function pathTarget(userId: string, chapter: Subtopic, attempts: Attempt[], score: number, currentId: string): string {
+  const p = pathFor(userId, chapter, attempts, score, currentId);
+  return p.step === 'done' || !p.exercise ? `/app/topics/${chapter.topicId}/chapters/${chapter.id}` : `/app/exercises/${p.exercise.id}`;
+}
 export default function ExercisePage() {
   const { exerciseId = '' } = useParams();
   const userId = useAuth().session!.user.id;
@@ -49,8 +56,9 @@ export default function ExercisePage() {
   const [sub, setSub] = useState<Subtopic | null>(null);
   /** Themenname für die Brotkrumen (UX-07); `null` ⇒ neutrales „Thema“. */
   const [topicTitle, setTopicTitle] = useState<string | null>(null);
-  /** Folgekapitel für die Empfehlung ab einem hohen Score. */
-  const [nextChapter, setNextChapter] = useState<Subtopic | null>(null);
+  /** Ziel von „Weiter“ im Lernpfad (nächste Aufgabe oder – wenn geschafft – die Kapitelseite) und Zurück-Vorschlag. */
+  const [pathNext, setPathNext] = useState<string | null>(null);
+  const [review, setReview] = useState(false);
   /** Nächste Aufgabe der Übungsfolge (adaptiv) und die Stufe vor bzw. nach der Abgabe. */
   const [next, setNext] = useState<{ id: string; level: Difficulty } | null>(null);
   const [levelBefore, setLevelBefore] = useState<Difficulty | null>(null);
@@ -109,7 +117,8 @@ export default function ExercisePage() {
       setEx(e);
       setSub(s);
       setTopicTitle(topic?.title ?? null);
-      setNextChapter(s && topic ? (followingChapter(topic.subtopics, s.id) ?? null) : null);
+      setPathNext(s && e ? pathTarget(userId, s, chapterAttempts, before?.score ?? 0, e.id) : null);
+      setReview(false);
       const pick = s && e ? pickNext(userId, s, chapterAttempts, e.id) : null;
       setNext(pick ? { id: pick.exercise.id, level: pick.level } : null);
       setLevelBefore(pick?.level ?? null);
@@ -186,14 +195,16 @@ export default function ExercisePage() {
     setPreviousCount((n) => n + 1);
     setPhase({ kind: 'saved', record: outcome.record, evaluation: outcome.evaluation, review: outcome.review });
     toast('Lösung gespeichert');
-    services.progress.getSubtopicProgress(userId, chapter.id).then(setChapterProgress, () => setChapterProgress(null));
-    // Nächste Aufgabe neu wählen: Die Abgabe kann die Stufe verändert haben.
-    services.learner.listAttempts(userId, { subtopicId: chapter.id }).then(
-      (attempts) => {
+    // Stand, Stufe und Lernpfad neu bestimmen: Die Abgabe kann alles verändert haben.
+    Promise.all([services.progress.getSubtopicProgress(userId, chapter.id), services.learner.listAttempts(userId, { subtopicId: chapter.id })]).then(
+      ([progress, attempts]) => {
+        setChapterProgress(progress);
         const pick = pickNext(userId, chapter, attempts, exercise.id);
         setNext(pick ? { id: pick.exercise.id, level: pick.level } : null);
+        setPathNext(pathTarget(userId, chapter, attempts, progress.score, exercise.id));
+        setReview(stepOfExercise(chapter.exercises, exercise.id) !== 'check' && needsReview(attempts));
       },
-      () => undefined,
+      () => setChapterProgress(null),
     );
   }
 
@@ -290,6 +301,8 @@ export default function ExercisePage() {
         ]}
       />
 
+      <StepBar current={stepOfExercise(chapter.exercises, exercise.id)} />
+
       {pending && phase.kind === 'answering' && (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6 space-y-4 animate-slide-up" role="alert">
           <p className="flex gap-3">
@@ -311,16 +324,10 @@ export default function ExercisePage() {
       )}
 
       <header className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <Tag>{REQUIREMENT_LABEL[exercise.requirement]}</Tag>
-          <Tag icon={<Gauge aria-hidden="true" size={16} />}>{DIFFICULTY_LABEL[exercise.difficulty]}</Tag>
-          {isHandwriting && <Tag icon={<PenLine aria-hidden="true" size={16} />}>{EXERCISE_TYPE_LABEL[exercise.type]}</Tag>}
-          {previousCount > 0 && (
-            <span className="text-sm text-slate-600">
-              bisher {previousCount} Versuch{previousCount === 1 ? '' : 'e'}
-            </span>
-          )}
-        </div>
+        <p className="text-sm text-slate-500">
+          {REQUIREMENT_LABEL[exercise.requirement]} · {DIFFICULTY_LABEL[exercise.difficulty]}
+          {previousCount > 0 && ` · bisher ${previousCount} Versuch${previousCount === 1 ? '' : 'e'}`}
+        </p>
         <h1 className="text-2xl leading-relaxed font-semibold text-slate-900">
           <MathText text={exercise.prompt} />
         </h1>
@@ -402,14 +409,12 @@ export default function ExercisePage() {
               </span>
             </p>
           )}
-          {saved && chapterProgress && nextChapter && chapterProgress.score >= SCORE_CONFIG.masteredMinScore && (
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 flex flex-wrap items-center gap-3">
-              <Trophy aria-hidden="true" size={24} className="flex-none text-emerald-700" />
-              <p className="flex-1 min-w-48">
-                <strong>Stark!</strong> Du beherrschst „{chapter.title}“ sicher. Bereit für „{nextChapter.title}“?
-              </p>
-              <ButtonLink to={`/app/topics/${nextChapter.topicId}/chapters/${nextChapter.id}`} variant="primary" icon={<ArrowRight aria-hidden="true" size={20} />}>
-                Nächstes Kapitel
+          {saved && review && (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 flex flex-wrap items-center gap-3" role="status">
+              <Lightbulb aria-hidden="true" size={22} className="flex-none text-amber-700" />
+              <p className="flex-1 min-w-48">Gerade läuft es noch nicht so rund. Schau dir die Erklärung nochmal an – danach geht es leichter.</p>
+              <ButtonLink to={chapterUrl} variant="secondary" icon={<BookOpen aria-hidden="true" size={20} />}>
+                Zur Erklärung
               </ButtonLink>
             </div>
           )}
@@ -441,15 +446,7 @@ export default function ExercisePage() {
       )}
 
       {!saved && (
-        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-4" aria-labelledby="hints-heading">
-          <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-sky-100 text-sky-800" aria-hidden="true">
-              <Lightbulb size={20} />
-            </span>
-            <h2 id="hints-heading" className="text-xl font-semibold">
-              Hinweise
-            </h2>
-          </div>
+        <section className="space-y-3" aria-label="Hilfe">
           {hintsUsed > 0 && (
             <ol className="space-y-2">
               {hints.map((h, i) => (
@@ -459,30 +456,26 @@ export default function ExercisePage() {
               ))}
             </ol>
           )}
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="secondary"
-              icon={<Lightbulb aria-hidden="true" size={20} />}
-              onClick={() => void revealHint()}
-              disabled={hintsUsed >= 3 || solutionViewed || locked}
-              loading={helpBusy}
-            >
-              {hintsUsed >= 3 ? 'Alle Hinweise genutzt' : `Hinweis ${hintsUsed + 1} von 3`}
-            </Button>
-            {!solutionViewed && (
-              <Button variant="ghost" icon={<Eye aria-hidden="true" size={20} />} onClick={() => setConfirmSolution(true)} disabled={locked || helpBusy}>
-                Lösung anzeigen
-              </Button>
-            )}
-          </div>
+          {/* Immer nur eine Hilfe-Schaltfläche: erst die drei Hinweise der Reihe nach, danach „Lösung anzeigen“. */}
+          {!solutionViewed && (
+            <div className="flex flex-wrap items-center gap-3">
+              {hintsUsed < 3 ? (
+                <Button variant="ghost" icon={<Lightbulb aria-hidden="true" size={20} />} onClick={() => void revealHint()} disabled={locked} loading={helpBusy}>
+                  {`Hinweis ${hintsUsed + 1} von 3`}
+                </Button>
+              ) : (
+                <Button variant="ghost" icon={<Eye aria-hidden="true" size={20} />} onClick={() => setConfirmSolution(true)} disabled={locked || helpBusy}>
+                  Lösung anzeigen
+                </Button>
+              )}
+              <span className="text-sm text-slate-500">Jeder Hinweis kostet {hintPenalty} % der Punkte.</span>
+            </div>
+          )}
           {helpError && (
             <p role="alert" className="text-sm text-red-700">
               {helpError}
             </p>
           )}
-          <p className="text-sm text-slate-600">
-            Hinweise kosten ein paar Punkte ({hintPenalty} % pro Hinweis), helfen aber beim Lernen. Hauptsache, du verstehst es.
-          </p>
         </section>
       )}
 
@@ -509,24 +502,25 @@ export default function ExercisePage() {
 
       {shownSolution && <SolutionView key={exercise.id} solution={shownSolution} stepwise />}
 
-      <nav className="flex flex-wrap items-center gap-3 border-t border-slate-200 pt-6" aria-label="Weiter">
-        {saved && (
-          <Button variant="ghost" icon={<RotateCcw aria-hidden="true" size={20} />} onClick={resetForm}>
-            Nochmal versuchen
-          </Button>
-        )}
-        <ButtonLink to={chapterUrl} variant={saved && !next ? 'primary' : 'secondary'} icon={<ArrowLeft aria-hidden="true" size={20} />}>
-          Zurück zum Kapitel
-        </ButtonLink>
-        {next && (
-          <ButtonLink
-            to={`/app/exercises/${next.id}`}
-            variant={saved ? 'primary' : 'ghost'}
-            className="sm:ml-auto"
-          >
-            Nächste Aufgabe →
+      <nav className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-slate-200 pt-6" aria-label="Weiter">
+        {saved && pathNext && (
+          <ButtonLink to={pathNext} variant="primary" size="lg" icon={<ArrowRight aria-hidden="true" size={20} />}>
+            Weiter
           </ButtonLink>
         )}
+        {saved && (
+          <button type="button" onClick={resetForm} className="inline-flex min-h-11 items-center gap-1 text-slate-600 underline underline-offset-2">
+            <RotateCcw aria-hidden="true" size={16} /> Nochmal versuchen
+          </button>
+        )}
+        {!saved && pathNext && (
+          <Link to={pathNext} className="inline-flex min-h-11 items-center text-slate-600 underline underline-offset-2">
+            Aufgabe überspringen
+          </Link>
+        )}
+        <Link to={chapterUrl} className="inline-flex min-h-11 items-center text-slate-600 underline underline-offset-2 sm:ml-auto">
+          Zur Kapitelübersicht
+        </Link>
       </nav>
     </div>
   );

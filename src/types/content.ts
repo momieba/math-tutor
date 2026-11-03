@@ -22,6 +22,8 @@ export type Requirement =
   | 'reasoning' // begründen, prüfen, argumentieren
   | 'construction'; // zeichnen, konstruieren, ablesen
 
+export type Checkpoint = 'formula' | 'concept';
+
 export const REQUIREMENTS: Requirement[] = ['knowledge', 'calculation', 'application', 'reasoning', 'construction'];
 
 /**
@@ -120,6 +122,8 @@ export interface Exercise {
   /** Schweregrad für NRW-Gymnasium; das Content-Repository ersetzt ihn durch den Wert für Land und Schulart des Nutzers. */
   difficulty: Difficulty;
   levels?: ExerciseLevel[];
+  /** Teil des Formel-Checks im Lernpfad (Schritt 3): Formel abfragen bzw. zentrale Begriffe. */
+  checkpoint?: Checkpoint;
   prompt: string;
   choices?: Choice[];
   answerFormat: AnswerFormat;

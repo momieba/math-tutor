@@ -51,7 +51,7 @@ topics.forEach((t, ti) => {
       out.push(
         upsert('exercises', ['id'], {
           id: e.id, subtopic_id: e.subtopicId, position: ei, type: e.type, requirement: e.requirement, difficulty: e.difficulty,
-          levels: { json: e.levels }, prompt: e.prompt,
+          levels: { json: e.levels }, checkpoint: e.checkpoint, prompt: e.prompt,
           choices: { json: e.choices }, answer_format: { json: answerFormatOf(e.answer) }, objectives: { arr: e.objectives },
           figure: { json: e.figure },
         }),

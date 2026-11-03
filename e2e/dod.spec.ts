@@ -201,43 +201,62 @@ test('D-11: neuer Nutzer erreicht vom Dashboard die erste Aufgabe in ≤ 3 Tipps
 });
 
 // ---------------------------------------------------------------- DoD 4
-test('DoD 4 – Themen-Dashboard zeigt 8 Kapitel mit Status, Fortschritt, gelöst/offen und Empfehlung', async ({ page }) => {
+test('DoD 4 – Themenseite: vorgeschlagener Weg im Vordergrund, 8 Kapitel dezent und zugeklappt', async ({ page }) => {
   await register(page);
   await addTopic(page, 'Pythagoras', 'Satz des Pythagoras');
   await page.goto('/app/topics/pythagoras');
-  const chapters = page.locator('main ol > li');
+  await expect(page.locator('#next-chapter-heading')).toContainText('Grundlagen und Definition');
+  await expect(page.getByRole('link', { name: 'Thema starten' })).toBeVisible();
+  const list = page.getByRole('list', { name: 'Kapitel' });
+  await expect(list).toBeHidden(); // Kapitelliste ist zugeklappt
+  await page.getByText('Alle Kapitel ansehen (8)').click();
+  const chapters = list.getByRole('listitem');
   await expect(chapters).toHaveCount(8);
   for (let i = 0; i < 8; i++) {
     const c = chapters.nth(i);
-    await expect(c.getByRole('heading', { level: 2 })).toBeVisible();
-    await expect(c.getByText('Nicht begonnen')).toBeVisible();
-    await expect(c.getByRole('progressbar')).toBeVisible();
-    await expect(c).toContainText(/0 bearbeitet · 0 gelöst · \d+ Aufgaben zum Üben/);
-    await expect(scoreBadges(c)).toHaveCount(1);
+    await expect(scoreBadges(c)).toHaveCount(1); // Status-Ring
+    await expect(c.getByRole('progressbar')).toHaveCount(0); // kein Balken
+    await expect(c).not.toContainText('bearbeitet');
   }
-  await expect(page.getByText('Als Nächstes empfohlen')).toHaveCount(1);
-  await expect(chapters.first()).toContainText('Als Nächstes empfohlen');
-  await expect(chapters.first()).toContainText('Grundlagen und Definition');
+  await expect(chapters.first().getByRole('link')).toHaveAttribute('aria-label', /Grundlagen und Definition \(empfohlen\)/);
 });
 
 // ---------------------------------------------------------------- DoD 5
-test('DoD 5 – Kapitel: Lernziel, Einführung, Regeln (KaTeX), Video-Platzhalter, Beispiel, Aufgaben, Zusammenfassung', async ({ page }) => {
+test('DoD 5 – Kapitel als Lernpfad: Einstieg → Erklärung (KaTeX, Beispiel schrittweise) → Formel-Check; Mehr-Bereich', async ({ page }) => {
   await register(page);
   await page.goto('/app/topics/pythagoras/chapters/pyth-hypotenuse');
   await expect(page.getByRole('heading', { level: 1, name: 'Hypotenuse berechnen' })).toBeVisible();
-  await expect(page.getByText('Lernziel:')).toBeVisible();
-  for (const h of ['Einführung', 'Begriffe und Regeln', 'Video', 'Beispiel', 'Übungsaufgaben', 'Zusammenfassung']) {
-    await expect(page.getByRole('heading', { level: 2, name: h, exact: true })).toBeVisible();
-  }
-  expect(await page.locator('.katex').count()).toBeGreaterThan(0);
-  expect(await page.locator('.katex-error').count()).toBe(0); // kein fehlerhaftes LaTeX
+  await expect(page.getByText('Schritt 1 von 6')).toBeVisible();
+  await expect(page.getByRole('heading', { level: 2, name: 'Einstieg' })).toBeVisible();
+  await expect(page.getByText('Das lernst du:')).toBeVisible();
   await expect(page.getByText(/Video folgt/).first()).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Üben starten' })).toBeVisible();
-  // Die vollständige Aufgabenliste ist aufklappbar
-  await page.getByText(/Alle Aufgaben ansehen \(\d+\)/).click();
-  const tasks = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Übungsaufgaben' }) }).getByRole('listitem');
-  expect(await tasks.count()).toBeGreaterThanOrEqual(3);
-  await expect(tasks.first()).toContainText('Offen');
+  // Genau eine Hauptaktion
+  await expect(page.locator('main [data-variant="primary"]')).toHaveCount(1);
+
+  await page.getByRole('button', { name: 'Weiter zur Erklärung' }).click();
+  await expect(page.getByText('Schritt 2 von 6')).toBeVisible();
+  await expect(page.getByRole('heading', { level: 2, name: 'Erklärung' })).toBeVisible();
+  expect(await page.locator('.katex').count()).toBeGreaterThan(0);
+  expect(await page.locator('.katex-error').count()).toBe(0);
+  while (await page.getByRole('button', { name: 'Nächster Schritt' }).isVisible()) await page.getByRole('button', { name: 'Nächster Schritt' }).click();
+
+  await page.getByRole('button', { name: 'Weiter zum Formel-Check' }).click();
+  await expect(page).toHaveURL(/\/app\/exercises\/pyth-hypotenuse-\d+$/);
+
+  // Zurück im Kapitel: Einstieg/Erklärung sind gemerkt, es geht mit dem Üben weiter
+  await page.goto('/app/topics/pythagoras/chapters/pyth-hypotenuse');
+  await expect(page.getByRole('heading', { level: 2, name: 'Einstieg' })).toHaveCount(0);
+  await page.getByText('Mehr zu diesem Kapitel').click();
+  await expect(page.getByRole('heading', { name: 'Zusammenfassung' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Alle Aufgaben \(\d+\)/ })).toBeVisible();
+});
+
+test('Lernpfad: Einstieg überspringen führt direkt zur ersten Aufgabe', async ({ page }) => {
+  await register(page);
+  await page.goto('/app/topics/lineare-funktionen/chapters/lf-steigung');
+  await page.getByRole('button', { name: 'Kenne ich schon – überspringen' }).click();
+  await expect(page).toHaveURL(/\/app\/exercises\/lf-st-/);
+  await expect(page.getByText('Schritt 3 von 6')).toBeVisible(); // Formel-Check
 });
 
 test('DoD 5 – kein KaTeX-Renderfehler in irgendeinem Kapitel', async ({ page }) => {
@@ -251,7 +270,8 @@ test('DoD 5 – kein KaTeX-Renderfehler in irgendeinem Kapitel', async ({ page }
   for (const [topic, subs] of Object.entries(chapters)) {
     for (const s of subs) {
       await page.goto(`/app/topics/${topic}/chapters/${s}`);
-      await expect(page.getByRole('heading', { name: 'Zusammenfassung' })).toBeVisible();
+      await page.getByRole('button', { name: 'Weiter zur Erklärung' }).click();
+      await expect(page.getByRole('heading', { level: 2, name: 'Erklärung' })).toBeVisible();
       const n = await page.locator('.katex-error').count();
       const raw = await page.locator('main').evaluate((m) => (m.textContent ?? '').match(/\$[^$]{1,40}\$/g) ?? []);
       if (n || raw.length) broken.push(`${s}: ${n} katex-error, ungerendert: ${raw.join(' | ')}`);
@@ -478,8 +498,8 @@ test('DoD 7 – 3 gestufte Hinweise, Rückfrage vor „Lösung anzeigen“, Feed
     await page.getByRole('button', { name: new RegExp(`Hinweis ${i} von 3`) }).click();
     await expect(page.getByText(`Hinweis ${i}:`)).toBeVisible();
   }
-  const exhausted = page.getByRole('button', { name: 'Alle Hinweise genutzt' });
-  await expect(exhausted).toBeDisabled();
+  // Danach gibt es nur noch „Lösung anzeigen“ (immer genau eine Hilfe-Schaltfläche)
+  await expect(page.getByRole('button', { name: /Hinweis \d von 3/ })).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Lösung anzeigen' }).click();
   await expect(page.getByText(/zählt diese Aufgabe nur noch 25 %/)).toBeVisible();
@@ -500,9 +520,9 @@ test('DoD 7 – 3 gestufte Hinweise, Rückfrage vor „Lösung anzeigen“, Feed
   // Navigation nach Abgabe
   await expect(page.getByRole('button', { name: 'Nochmal versuchen' })).toBeVisible();
   // „Nächste Aufgabe“ wählt adaptiv eine andere Aufgabe aus demselben Kapitel
-  await page.getByRole('link', { name: 'Nächste Aufgabe →' }).click();
+  await page.getByRole('link', { name: 'Weiter', exact: true }).click();
   await expect(page).toHaveURL(/\/app\/exercises\/pyth-hypotenuse-(?!1$)\d+$/);
-  await page.getByRole('link', { name: 'Zurück zum Kapitel' }).click();
+  await page.getByRole('link', { name: 'Zur Kapitelübersicht' }).click();
   await expect(page).toHaveURL(/chapters\/pyth-hypotenuse$/);
 });
 
@@ -575,14 +595,14 @@ test('DoD 9 – Aufgaben in 2 Kapiteln: Themenfortschritt und Empfehlung ändern
   await solveTyped(page, 'pyth-erkennen-2', '90');
 
   await page.goto('/app/topics/pythagoras');
-  const chapters = page.locator('main ol > li');
-  await expect(chapters.nth(0)).toContainText('Sicher beherrscht');
-  await expect(chapters.nth(0)).toContainText('4 bearbeitet · 4 gelöst');
-  await expect(chapters.nth(1)).toContainText('In Bearbeitung');
-  await expect(chapters.nth(1)).toContainText('1 bearbeitet · 1 gelöst');
-  await expect(chapters.nth(1)).toContainText('Als Nächstes empfohlen');
-  const topicBar = page.locator('header').getByRole('progressbar');
-  expect(Number(await topicBar.getAttribute('aria-valuenow'))).toBeGreaterThan(0);
+  await expect(page.locator('#next-chapter-heading')).toContainText('Rechtwinklige Dreiecke erkennen');
+  await expect(page.getByRole('link', { name: 'Weiter lernen' })).toBeVisible();
+  await page.getByText('Alle Kapitel ansehen (8)').click();
+  const chapters = page.getByRole('list', { name: 'Kapitel' }).getByRole('listitem');
+  await expect(chapters.nth(0).getByRole('link')).toHaveAttribute('aria-label', /sicher beherrscht/);
+  await expect(chapters.nth(1).getByRole('link')).toHaveAttribute('aria-label', /empfohlen/);
+  expect(await readScore(scoreBadges(chapters.nth(1)).first())).toBeGreaterThan(0);
+  expect(await readScore(scoreBadges(page.locator('main header')).first())).toBeGreaterThan(0);
 
   await page.goto('/app');
   await expect(rec).toContainText('Rechtwinklige Dreiecke erkennen');
@@ -605,11 +625,11 @@ test('DoD 10 – Score-Erklärung zeigt greifende Deckel; ohne Typabdeckung höc
   await expect(feedbackPanel(page)).toContainText('Richtig');
 
   await page.goto('/app/topics/pythagoras/chapters/pyth-herleitung');
+  await page.getByText('Mehr zu diesem Kapitel').click();
   const stand = page.locator('section[aria-labelledby="score-heading"]');
   const score = await readScore(scoreBadges(stand).first());
   expect(score).toBeLessThanOrEqual(79);
   expect(score).toBe(79); // Deckel greift tatsächlich (nicht nur zufällig darunter)
-  await stand.getByText('Wie entsteht mein Score?').click();
   await expect(stand).toContainText('Löse jede Aufgabenart dieses Kapitels (z. B. Wissen, Rechnen, Sachaufgabe) mindestens einmal (max. 79 bis dahin).');
   await expect(stand).toContainText('Löse eine Aufgabe an einem späteren Tag erneut richtig (max. 94 bis dahin).');
   await expect(stand).not.toContainText('höchsten Schwierigkeitsstufe'); // schwere Gleichung ist gelöst
@@ -618,6 +638,7 @@ test('DoD 10 – Score-Erklärung zeigt greifende Deckel; ohne Typabdeckung höc
   // Jetzt den fehlenden Typ lösen ⇒ Deckel 79 fällt weg
   await solveChoice(page, 'pyth-herleitung-1', 'Der Flächeninhalt eines Quadrats mit Seite');
   await page.goto('/app/topics/pythagoras/chapters/pyth-herleitung');
+  await page.getByText('Mehr zu diesem Kapitel').click();
   expect(await readScore(scoreBadges(stand).first())).toBe(94);
 });
 
@@ -751,21 +772,21 @@ test.describe('Robustheit: unbekannte URLs und geschützte Routen', () => {
     await register(page);
     await page.goto('/app/topics/prozentrechnung/chapters/pyth-grundlagen');
     await expect(page.getByText('Dieses Kapitel gibt es nicht.')).toBeVisible({ timeout: 2000 });
-    await expect(page.getByRole('link', { name: '← Zum Thema' })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: /^← / })).toHaveCount(0);
 
     // Gegenprobe: dasselbe Kapitel unter seinem eigenen Thema
     await page.goto('/app/topics/pythagoras/chapters/pyth-grundlagen');
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     await expect(page.getByText('Dieses Kapitel gibt es nicht.')).toHaveCount(0);
-    await expect(page.getByText('Lernziel:')).toBeVisible();
-    const back = page.getByRole('link', { name: '← Zum Thema' });
+    await expect(page.getByText('Das lernst du:')).toBeVisible();
+    const back = page.getByRole('link', { name: '← Satz des Pythagoras' });
     await expect(back).toHaveAttribute('href', '/app/topics/pythagoras');
 
     // Client-seitige Navigation Thema → Kapitel (Effekt hängt jetzt auch von topicId ab)
     await back.click();
     await expect(page).toHaveURL(/\/app\/topics\/pythagoras$/);
-    await page.getByRole('link', { name: /Grundlagen/ }).first().click();
+    await page.getByRole('link', { name: 'Thema starten' }).click();
     await expect(page).toHaveURL(/\/app\/topics\/pythagoras\/chapters\/pyth-grundlagen$/);
-    await expect(page.getByText('Lernziel:')).toBeVisible();
+    await expect(page.getByText('Das lernst du:')).toBeVisible();
   });
 });

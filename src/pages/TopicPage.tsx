@@ -1,14 +1,17 @@
+import { ArrowRight, ChevronRight } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router';
-import { ProgressBar } from '../components/ProgressBar';
-import { ScoreBadge } from '../components/ScoreBadge';
-import { StatusBadge } from '../components/StatusBadge';
+import { ProgressRing } from '../components/ProgressRing';
+import { ButtonLink } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { nextChapterId } from '../domain/progressView';
 import { services } from '../services';
 import type { Topic, TopicProgress } from '../types';
 
-/** Themen-Dashboard: alle Kapitel mit Status, Fortschritt, Score, gelösten/offenen Aufgaben; nächstes Kapitel hervorgehoben. */
+/**
+ * Thema: Im Vordergrund steht der vorgeschlagene Weg („Weiter lernen“ ins nächste nicht beherrschte Kapitel).
+ * Die Kapitelliste ist zugeklappt und dezent: untereinander, mit Status-Ring statt Balken und Zahlen.
+ */
 export default function TopicPage() {
   const { topicId = '' } = useParams();
   const userId = useAuth().session!.user.id;
@@ -45,75 +48,72 @@ export default function TopicPage() {
   }
 
   const nextId = progress ? nextChapterId(topic.subtopics, progress) : topic.subtopics[0]?.id;
-  const masteredCount = progress?.subtopics.filter((s) => s.status === 'mastered').length ?? 0;
+  const next = topic.subtopics.find((s) => s.id === nextId);
+  const started = progress?.subtopics.some((s) => s.status !== 'not_started') ?? false;
+  const statusOf = (id: string) => progress?.subtopics.find((p) => p.subtopicId === id);
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-3xl space-y-6">
       <Link to="/app" className="text-indigo-700 underline min-h-11 inline-flex items-center text-sm">
         ← Dashboard
       </Link>
-      <header className="rounded-2xl bg-white p-5 shadow-sm space-y-3">
-        <p className="text-sm text-slate-500">
-          Klasse {topic.grade} · {topic.area}
-        </p>
-        <h1 className="text-2xl sm:text-3xl font-bold">{topic.title}</h1>
-        <p className="text-slate-700">{topic.description}</p>
-        {progress && (
-          <div className="flex flex-wrap items-center gap-3">
-            <StatusBadge status={progress.status} />
-            <ScoreBadge score={progress.score} />
-            <span className="text-sm text-slate-600">
-              {masteredCount} von {topic.subtopics.length} Kapiteln sicher beherrscht
-            </span>
-          </div>
-        )}
-        {progress && <ProgressBar value={progress.completion} label="Fortschritt im Thema" />}
+
+      <header className="flex items-start gap-4">
+        <div className="flex-1 space-y-1">
+          <p className="text-sm text-slate-500">
+            Klasse {topic.grade} · {topic.area}
+          </p>
+          <h1 className="text-2xl sm:text-3xl font-bold">{topic.title}</h1>
+          <p className="text-slate-600">{topic.description}</p>
+        </div>
+        {progress && <ProgressRing score={progress.score} mastered={progress.status === 'mastered'} size={56} />}
       </header>
 
-      <ol className="grid sm:grid-cols-2 gap-4">
-        {topic.subtopics.map((s) => {
-          const p = progress?.subtopics.find((x) => x.subtopicId === s.id);
-          const isNext = s.id === nextId;
-          const done = p?.status === 'mastered';
-          return (
-            <li key={s.id}>
-              <Link
-                to={`/app/topics/${topic.id}/chapters/${s.id}`}
-                aria-label={`Kapitel ${s.order}: ${s.title}${isNext ? ' (empfohlen)' : ''}${done ? ' (abgeschlossen)' : ''}`}
-                className={`h-full rounded-2xl bg-white p-5 shadow-sm flex flex-col gap-3 border-2 ${
-                  isNext ? 'border-indigo-500 ring-4 ring-indigo-100' : done ? 'border-emerald-300' : 'border-transparent'
-                }`}
-              >
-                <div className="flex items-start gap-2">
-                  <span
-                    className={`flex-none w-9 h-9 rounded-full flex items-center justify-center font-bold ${done ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-700'}`}
-                    aria-hidden="true"
+      {next ? (
+        <section className="rounded-2xl bg-white p-6 shadow-sm space-y-4" aria-labelledby="next-chapter-heading">
+          <p className="text-sm font-semibold uppercase tracking-wide text-indigo-700">{started ? 'Weiter lernen' : 'Hier geht’s los'}</p>
+          <h2 id="next-chapter-heading" className="text-xl font-semibold">
+            Kapitel {next.order} · {next.title}
+          </h2>
+          <p className="text-slate-600">{next.description}</p>
+          <ButtonLink to={`/app/topics/${topic.id}/chapters/${next.id}`} variant="primary" size="lg" icon={<ArrowRight aria-hidden="true" size={20} />}>
+            {started ? 'Weiter lernen' : 'Thema starten'}
+          </ButtonLink>
+        </section>
+      ) : (
+        <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6">
+          <h2 className="text-xl font-semibold">Alle Kapitel sicher beherrscht – stark!</h2>
+          <p className="mt-1 text-slate-700">Du kannst jedes Kapitel unten jederzeit wiederholen.</p>
+        </section>
+      )}
+
+      <details className="rounded-2xl border border-slate-200 bg-white" open={!next}>
+        <summary className="cursor-pointer min-h-11 flex items-center px-5 font-medium text-slate-700">Alle Kapitel ansehen ({topic.subtopics.length})</summary>
+        <ol className="divide-y divide-slate-100 px-2 pb-2" aria-label="Kapitel">
+          {[...topic.subtopics]
+            .sort((a, b) => a.order - b.order)
+            .map((s) => {
+              const p = statusOf(s.id);
+              return (
+                <li key={s.id}>
+                  <Link
+                    to={`/app/topics/${topic.id}/chapters/${s.id}`}
+                    aria-label={`Kapitel ${s.order}: ${s.title}${s.id === nextId ? ' (empfohlen)' : ''}${p?.status === 'mastered' ? ' (sicher beherrscht)' : ''}`}
+                    className="flex min-h-14 items-center gap-3 rounded-xl px-3 py-2 hover:bg-slate-50"
                   >
-                    {done ? '✓' : s.order}
-                  </span>
-                  <div className="flex-1">
-                    {isNext && <p className="text-sm font-semibold uppercase tracking-wide text-indigo-700">Als Nächstes empfohlen</p>}
-                    <h2 className="font-semibold text-lg leading-snug">{s.title}</h2>
-                    <p className="text-sm text-slate-600">{s.description}</p>
-                  </div>
-                </div>
-                {p && (
-                  <>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <StatusBadge status={p.status} />
-                      <ScoreBadge score={p.score} compact />
-                    </div>
-                    <ProgressBar value={p.completion} label="Bearbeitet" />
-                    <p className="text-sm text-slate-700">
-                      <strong>{p.attemptedExercises}</strong> bearbeitet · <strong>{p.solvedExercises}</strong> gelöst · {p.totalExercises} Aufgaben zum Üben
-                    </p>
-                  </>
-                )}
-              </Link>
-            </li>
-          );
-        })}
-      </ol>
+                    <span className="w-6 flex-none text-center text-sm font-semibold text-slate-500">{s.order}</span>
+                    <span className="flex-1 min-w-0">
+                      <span className="block font-medium text-slate-900">{s.title}</span>
+                      <span className="block truncate text-sm text-slate-600">{s.description}</span>
+                    </span>
+                    <ProgressRing score={p?.score ?? 0} mastered={p?.status === 'mastered'} size={40} />
+                    <ChevronRight aria-hidden="true" size={18} className="flex-none text-slate-400" />
+                  </Link>
+                </li>
+              );
+            })}
+        </ol>
+      </details>
     </div>
   );
 }

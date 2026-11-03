@@ -33,6 +33,7 @@ interface ExerciseRow {
   requirement: Exercise['requirement'];
   difficulty: Exercise['difficulty'];
   levels: ExerciseLevel[] | null;
+  checkpoint: Exercise['checkpoint'] | null;
   prompt: string;
   choices: Choice[] | null;
   answer_format: AnswerFormat;
@@ -66,7 +67,7 @@ interface TopicRow {
   subtopics: SubtopicRow[];
 }
 
-const EXERCISE_COLUMNS = 'id, subtopic_id, position, type, requirement, difficulty, levels, prompt, choices, answer_format, objectives, figure';
+const EXERCISE_COLUMNS = 'id, subtopic_id, position, type, requirement, difficulty, levels, checkpoint, prompt, choices, answer_format, objectives, figure';
 const TOPIC_SELECT = `*, subtopics(*, learning_materials(*), exercises(${EXERCISE_COLUMNS}))`;
 
 const byPosition = <T extends { position: number }>(rows: T[]) => [...rows].sort((a, b) => a.position - b.position);
@@ -79,6 +80,7 @@ function mapExercise(r: ExerciseRow): Exercise {
     requirement: r.requirement,
     difficulty: r.difficulty,
     levels: r.levels ?? undefined,
+    checkpoint: r.checkpoint ?? undefined,
     prompt: r.prompt,
     choices: r.choices ?? undefined,
     answerFormat: r.answer_format,

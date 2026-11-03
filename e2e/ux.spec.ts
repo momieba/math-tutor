@@ -87,8 +87,8 @@ async function seed(page: Page) {
 
 const APP_PAGES: { name: string; url: string; ready: (p: Page) => Promise<void> }[] = [
   { name: 'dashboard', url: '/app', ready: (p) => expect(p.getByRole('heading', { name: 'Deine Themen' })).toBeVisible() },
-  { name: 'thema', url: '/app/topics/pythagoras', ready: (p) => expect(p.locator('main ol > li')).toHaveCount(8) },
-  { name: 'kapitel', url: '/app/topics/pythagoras/chapters/pyth-hypotenuse', ready: (p) => expect(p.getByRole('heading', { name: 'Zusammenfassung' })).toBeVisible() },
+  { name: 'thema', url: '/app/topics/pythagoras', ready: (p) => expect(p.locator('#next-chapter-heading')).toBeVisible() },
+  { name: 'kapitel', url: '/app/topics/pythagoras/chapters/pyth-hypotenuse', ready: (p) => expect(p.locator('#step-heading')).toBeVisible() },
   { name: 'aufgabe-mc', url: '/app/exercises/pyth-grundlagen-2', ready: (p) => expect(p.getByRole('button', { name: 'Abgeben' })).toBeVisible() },
   { name: 'aufgabe-zahl', url: '/app/exercises/pyth-hypotenuse-3', ready: (p) => expect(p.getByRole('button', { name: 'Abgeben' })).toBeVisible() },
   { name: 'aufgabe-gleichung', url: '/app/exercises/quad-pq-formel-1', ready: (p) => expect(p.getByRole('button', { name: 'Abgeben' })).toBeVisible() },
@@ -302,7 +302,6 @@ test('Touch-Ziele: zentrale Bedienelemente sind ≥ 44 px hoch', async ({ page }
   checks.push(
     page.getByRole('button', { name: 'Abgeben' }),
     page.getByRole('button', { name: /Hinweis 1 von 3/ }),
-    page.getByRole('button', { name: 'Lösung anzeigen' }),
     page.getByRole('button', { name: 'Rückgängig' }),
     page.getByRole('button', { name: 'Farbe Blau' }),
     page.getByRole('button', { name: /Radierer/ }),

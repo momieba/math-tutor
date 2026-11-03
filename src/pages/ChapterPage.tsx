@@ -1,71 +1,64 @@
-import { ArrowRight, Trophy } from 'lucide-react';
+import { ArrowRight, BookOpen, Lightbulb, PlayCircle, RotateCcw, Trophy } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router';
-import { LevelIndicator } from '../components/LevelIndicator';
+import { Link, useNavigate, useParams } from 'react-router';
 import { MathText } from '../components/MathText';
-import { ProgressBar } from '../components/ProgressBar';
 import { ScoreBadge } from '../components/ScoreBadge';
 import { StatusBadge } from '../components/StatusBadge';
+import { StepBar } from '../components/StepBar';
+import { Button, ButtonLink } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
-import {
-  DIFFICULTY_LABEL,
-  EXERCISE_STATUS_LABEL,
-  exerciseState,
-  followingChapter,
-  REQUIREMENT_LABEL,
-  type ExerciseState,
-  type ExerciseStatus,
-} from '../domain/progressView';
+import { needsReview, PATH_STEP_LABEL, type PathStep } from '../domain/learningPath';
+import { DIFFICULTY_LABEL, EXERCISE_STATUS_LABEL, exerciseState, followingChapter, REQUIREMENT_LABEL, type ExerciseState } from '../domain/progressView';
 import { CAP_EXPLANATION, SCORE_CONFIG } from '../domain/score';
 import { services } from '../services';
-import type { AttemptRecord, Difficulty, Subtopic, SubtopicProgress, Topic } from '../types';
-import { pickNext } from './practice';
+import type { AttemptRecord, Subtopic, SubtopicProgress, Topic } from '../types';
+import { markSeen } from './pathStorage';
+import { pathFor } from './practice';
 
-const EX_STATUS_STYLE: Record<ExerciseStatus, { cls: string; icon: string }> = {
-  open: { cls: 'bg-slate-100 text-slate-700', icon: '○' },
-  practiced: { cls: 'bg-amber-100 text-amber-900', icon: '◐' },
-  solved: { cls: 'bg-emerald-100 text-emerald-800', icon: '✓' },
+const STEP_TEXT: Partial<Record<PathStep, string>> = {
+  check: 'Drei kurze Fragen: Sitzt die Formel?',
+  starter: 'Drei leichte Aufgaben zum Warmwerden.',
+  practice: 'Übe weiter – die Aufgaben passen sich deinem Stand an.',
 };
 
 /**
- * Lernkapitel: Lernziel, Einführung, Regeln, Video-Platzhalter, Beispiel, Üben mit Aufgabenpool, Score-Erklärung, Zusammenfassung.
- * Geübt wird über „Üben starten / Weiter üben“: Die App wählt die nächste Aufgabe passend zur aktuellen Stufe
- * (domain/exerciseSelection.ts). Die vollständige Liste bleibt aufklappbar.
+ * Lernkapitel als geführter Lernpfad (domain/learningPath.ts): immer ein Schritt, ein Hauptbutton.
+ * Einstieg und Erklärung lassen sich überspringen und über die Schrittleiste erneut öffnen.
+ * Score-Erklärung, Zusammenfassung und alle Aufgaben stehen zurückhaltend unter „Mehr zu diesem Kapitel“.
  */
 export default function ChapterPage() {
   const { topicId = '', subtopicId = '' } = useParams();
   const userId = useAuth().session!.user.id;
+  const navigate = useNavigate();
   const [loaded, setLoaded] = useState(false);
   const [sub, setSub] = useState<Subtopic | null>(null);
+  const [topic, setTopic] = useState<Topic | null>(null);
   const [progress, setProgress] = useState<SubtopicProgress | null>(null);
-  const [states, setStates] = useState<Map<string, ExerciseState>>(new Map());
-  const [next, setNext] = useState<{ id: string; level: Difficulty } | null>(null);
-  const [nextChapter, setNextChapter] = useState<Subtopic | null>(null);
+  const [attempts, setAttempts] = useState<AttemptRecord[]>([]);
+  /** Angezeigter Schritt; `null` ⇒ der aus dem Fortschritt abgeleitete. */
+  const [view, setView] = useState<PathStep | null>(null);
+  const [revealed, setRevealed] = useState(1);
 
   useEffect(() => {
     let active = true;
     setLoaded(false);
+    setView(null);
     void (async () => {
       const found = await services.content.getSubtopic(subtopicId);
-      // BUG-07: Kapitel nur unter seinem eigenen Thema anzeigen, sonst „nicht gefunden“ (kein falscher „Zum Thema“-Link).
+      // BUG-07: Kapitel nur unter seinem eigenen Thema anzeigen, sonst „nicht gefunden“.
       const s = found && found.topicId === topicId ? found : null;
-      let p: SubtopicProgress | null = null;
-      let attempts: AttemptRecord[] = [];
-      let topic: Topic | null = null;
-      if (s) {
-        [p, attempts, topic] = await Promise.all([
-          services.progress.getSubtopicProgress(userId, s.id).catch(() => null),
-          services.learner.listAttempts(userId, { subtopicId: s.id }).catch(() => []),
-          services.content.getTopic(s.topicId).catch(() => null),
-        ]);
-      }
+      const [p, a, t] = s
+        ? await Promise.all([
+            services.progress.getSubtopicProgress(userId, s.id).catch(() => null),
+            services.learner.listAttempts(userId, { subtopicId: s.id }).catch(() => []),
+            services.content.getTopic(s.topicId).catch(() => null),
+          ])
+        : [null, [], null];
       if (!active) return;
       setSub(s);
       setProgress(p);
-      setStates(new Map((s?.exercises ?? []).map((e) => [e.id, exerciseState(attempts.filter((a) => a.exerciseId === e.id))])));
-      const pick = s ? pickNext(userId, s, attempts) : null;
-      setNext(pick ? { id: pick.exercise.id, level: pick.level } : null);
-      setNextChapter(s && topic ? (followingChapter(topic.subtopics, s.id) ?? null) : null);
+      setAttempts(a);
+      setTopic(t);
       setLoaded(true);
     })();
     return () => {
@@ -85,207 +78,262 @@ export default function ChapterPage() {
     );
   }
 
-  const started = (progress?.attemptedExercises ?? 0) > 0;
-  const recommendNext = nextChapter && progress && progress.score >= SCORE_CONFIG.masteredMinScore;
+  const chapter = sub;
+  const score = progress?.score ?? 0;
+  const path = pathFor(userId, chapter, attempts, score);
+  const step = view ?? path.step;
+  const nextChapter = topic ? followingChapter(topic.subtopics, chapter.id) : undefined;
+  const review = (path.step === 'starter' || path.step === 'practice') && needsReview(attempts);
+  const video = chapter.materials.find((m) => m.kind === 'video');
+  const exerciseUrl = path.exercise ? `/app/exercises/${path.exercise.id}` : null;
+
+  function open(s: 'intro' | 'explain') {
+    setView(s);
+    setRevealed(1);
+  }
+  function finishIntro() {
+    markSeen(userId, chapter.id, { intro: true });
+    setView('explain');
+  }
+  function skipToPractice() {
+    markSeen(userId, chapter.id, { intro: true, explain: true });
+    const next = pathFor(userId, chapter, attempts, score);
+    if (next.exercise) navigate(`/app/exercises/${next.exercise.id}`);
+    else setView(null);
+  }
 
   return (
-    <article className="space-y-8 pb-12">
-      <Link to={`/app/topics/${sub.topicId}`} className="text-indigo-700 underline min-h-11 inline-flex items-center text-sm">
-        ← Zum Thema
+    <article className="mx-auto max-w-3xl space-y-6 pb-12">
+      <Link to={`/app/topics/${chapter.topicId}`} className="text-indigo-700 underline min-h-11 inline-flex items-center text-sm">
+        ← {topic?.title ?? 'Zum Thema'}
       </Link>
 
-      <header className="space-y-3">
-        <p className="text-sm text-slate-500">Kapitel {sub.order}</p>
-        <h1 className="text-2xl sm:text-3xl font-bold">{sub.title}</h1>
-        <p className="rounded-2xl bg-indigo-50 p-4">
-          <strong>Lernziel:</strong> <MathText text={sub.objective} />
-        </p>
+      <header className="space-y-1">
+        <p className="text-sm text-slate-500">Kapitel {chapter.order}</p>
+        <h1 className="text-2xl sm:text-3xl font-bold">{chapter.title}</h1>
       </header>
 
-      {progress && (
-        <section className="rounded-2xl bg-white p-5 shadow-sm space-y-3" aria-labelledby="score-heading">
-          <h2 id="score-heading" className="text-lg font-semibold">
-            Dein Stand in diesem Kapitel
-          </h2>
-          <div className="flex flex-wrap items-center gap-3">
-            <StatusBadge status={progress.status} />
-            <ScoreBadge score={progress.score} />
+      <StepBar current={step} onOpen={open} />
+
+      {review && step !== 'intro' && step !== 'explain' && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 space-y-3" role="status">
+          <p className="flex gap-3">
+            <Lightbulb aria-hidden="true" size={22} className="flex-none text-amber-700" />
+            <span>Gerade läuft es noch nicht so rund. Schau dir die Erklärung {video ? 'oder das Video ' : ''}nochmal an – danach geht es leichter.</span>
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" icon={<BookOpen aria-hidden="true" size={20} />} onClick={() => open('explain')}>
+              Erklärung ansehen
+            </Button>
+            {video && (
+              <Button variant="ghost" icon={<PlayCircle aria-hidden="true" size={20} />} onClick={() => open('intro')}>
+                Video ansehen
+              </Button>
+            )}
           </div>
-          <ProgressBar
-            value={progress.completion}
-            label={`${progress.attemptedExercises} Aufgabe${progress.attemptedExercises === 1 ? '' : 'n'} bearbeitet, ${progress.solvedExercises} gelöst`}
-          />
-          <details className="rounded-xl border border-slate-200 p-3">
-            <summary className="cursor-pointer min-h-11 flex items-center font-medium">Wie entsteht mein Score?</summary>
-            <div className="mt-2 space-y-2 text-sm text-slate-700">
-              <p>
-                {Math.round(SCORE_CONFIG.masteryWeight * 100)} % zählt, wie sicher du deine letzten {SCORE_CONFIG.windowSize} Aufgaben gelöst hast (schwerere
-                Aufgaben zählen mehr, Hinweise verringern die Punkte, für die volle Punktzahl braucht es etwa 8 Aufgaben):{' '}
-                <strong>{Math.round(progress.components.mastery * 100)} %</strong>.
-              </p>
-              <p>
-                {Math.round(SCORE_CONFIG.coverageWeight * 100)} % zählt, wie viele Aufgabenarten (z. B. Wissen, Rechnen, Sachaufgaben) du sicher
-                beherrschst:{' '}
-                <strong>{Math.round(progress.components.typeCoverage * 100)} %</strong>.
-              </p>
-              {progress.caps.length > 0 ? (
-                <>
-                  <p className="font-medium">So kannst du deinen Score weiter steigern:</p>
-                  <ul className="list-disc ml-5 space-y-1">
-                    {progress.caps.map((c) => (
-                      <li key={c}>{CAP_EXPLANATION[c]}</li>
-                    ))}
-                  </ul>
-                </>
+        </div>
+      )}
+
+      {step === 'intro' && (
+        <section className="rounded-2xl bg-white p-6 shadow-sm space-y-5" aria-labelledby="step-heading">
+          <h2 id="step-heading" className="text-xl font-semibold">
+            {PATH_STEP_LABEL.intro}
+          </h2>
+          <p className="rounded-xl bg-indigo-50 p-4">
+            <strong>Das lernst du:</strong> <MathText text={chapter.objective} />
+          </p>
+          {video && (
+            <div className="aspect-video rounded-2xl bg-slate-200 flex flex-col items-center justify-center text-slate-600 text-center p-4 gap-1">
+              <PlayCircle aria-hidden="true" size={40} />
+              {video.url ? (
+                <a href={video.url} target="_blank" rel="noopener noreferrer" className="underline">
+                  {video.title}
+                </a>
               ) : (
-                progress.attemptedExercises > 0 && <p>Keine Obergrenze aktiv – dein Score spiegelt deine Leistung voll wider.</p>
+                <>
+                  <span className="font-medium">{video.title}</span>
+                  <span className="text-sm">Video folgt{video.durationSec ? ` (ca. ${Math.round(video.durationSec / 60)} Min.)` : ''}</span>
+                </>
               )}
             </div>
-          </details>
+          )}
+          <p className="leading-relaxed">
+            <MathText text={chapter.intro} />
+          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button variant="primary" size="lg" icon={<ArrowRight aria-hidden="true" size={20} />} onClick={finishIntro}>
+              Weiter zur Erklärung
+            </Button>
+            <button type="button" onClick={skipToPractice} className="min-h-11 px-2 text-indigo-700 underline underline-offset-2">
+              Kenne ich schon – überspringen
+            </button>
+          </div>
         </section>
       )}
 
-      <section className="space-y-2">
-        <h2 className="font-semibold text-xl">Einführung</h2>
-        <p className="leading-relaxed">
-          <MathText text={sub.intro} />
-        </p>
-      </section>
-
-      <section>
-        <h2 className="font-semibold text-xl">Begriffe und Regeln</h2>
-        <ul className="space-y-3 mt-2">
-          {sub.rules.map((r) => (
-            <li key={r.term} className="rounded-xl bg-white p-4 shadow-sm">
-              <strong>
-                <MathText text={r.term} />
-              </strong>
-              {r.explanation && (
-                <>
-                  : <MathText text={r.explanation} />
-                </>
-              )}
-              {r.math && (
-                <div className="overflow-x-auto">
-                  <MathText text={r.math} display />
-                </div>
-              )}
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <section className="space-y-2">
-        <h2 className="font-semibold text-xl">Video</h2>
-        <div className="grid sm:grid-cols-2 gap-3">
-          {sub.materials
-            .filter((m) => m.kind === 'video')
-            .map((m) => (
-              <div key={m.id} className="aspect-video rounded-2xl bg-slate-200 flex flex-col items-center justify-center text-slate-600 text-center p-4 gap-1">
-                <span className="text-4xl" aria-hidden="true">
-                  ▶
-                </span>
-                {m.url ? (
-                  <a href={m.url} target="_blank" rel="noopener noreferrer" className="underline">
-                    {m.title}
-                  </a>
-                ) : (
+      {step === 'explain' && (
+        <section className="rounded-2xl bg-white p-6 shadow-sm space-y-5" aria-labelledby="step-heading">
+          <h2 id="step-heading" className="text-xl font-semibold">
+            {PATH_STEP_LABEL.explain}
+          </h2>
+          <ul className="space-y-3">
+            {chapter.rules.map((r) => (
+              <li key={r.term} className="rounded-xl border border-slate-200 p-4">
+                <strong>
+                  <MathText text={r.term} />
+                </strong>
+                {r.explanation && (
                   <>
-                    <span className="font-medium">{m.title}</span>
-                    <span className="text-sm">Video folgt{m.durationSec ? ` (ca. ${Math.round(m.durationSec / 60)} Min.)` : ''}</span>
+                    : <MathText text={r.explanation} />
                   </>
                 )}
-              </div>
+                {r.math && (
+                  <div className="overflow-x-auto">
+                    <MathText text={r.math} display />
+                  </div>
+                )}
+              </li>
             ))}
-        </div>
-      </section>
-
-      <section className="rounded-2xl bg-white p-5 shadow-sm">
-        <h2 className="font-semibold text-xl">Beispiel</h2>
-        <p className="mt-2">
-          <MathText text={sub.example.problem} />
-        </p>
-        <ol className="list-decimal ml-6 mt-3 space-y-2">
-          {sub.example.steps.map((s, i) => (
-            <li key={i}>
-              <MathText text={s.text} />
-              {s.math && (
-                <div className="overflow-x-auto">
-                  <MathText text={s.math} display />
-                </div>
-              )}
-            </li>
-          ))}
-        </ol>
-        <p className="mt-3 font-medium rounded-xl bg-emerald-50 p-3">
-          <MathText text={sub.example.result} />
-        </p>
-      </section>
-
-      <section className="space-y-3">
-        <div className="flex flex-wrap items-center gap-3">
-          <h2 className="font-semibold text-xl flex-1">Übungsaufgaben</h2>
-          {next && (
-            <Link to={`/app/exercises/${next.id}`} className="min-h-11 rounded-xl bg-indigo-600 text-white px-5 font-semibold inline-flex items-center">
-              {started ? 'Weiter üben' : 'Üben starten'}
-            </Link>
-          )}
-        </div>
-        <p className="text-slate-700">
-          {sub.exercises.length} Aufgaben in diesem Kapitel. Du übst einfach mit „Nächste Aufgabe“ weiter: Wer sicher ist, bekommt schwerere Aufgaben, wer
-          noch unsicher ist, leichtere.
-        </p>
-        {started && next && <LevelIndicator level={next.level} />}
-        {recommendNext && (
-          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 flex flex-wrap items-center gap-3">
-            <Trophy aria-hidden="true" size={24} className="flex-none text-emerald-700" />
-            <p className="flex-1 min-w-48">
-              <strong>Stark!</strong> Du beherrschst dieses Kapitel sicher. Weiter mit „{nextChapter.title}“?
+          </ul>
+          <div className="rounded-xl bg-slate-50 p-4 space-y-3">
+            <h3 className="font-semibold">Beispiel</h3>
+            <p>
+              <MathText text={chapter.example.problem} />
             </p>
-            <Link
-              to={`/app/topics/${nextChapter.topicId}/chapters/${nextChapter.id}`}
-              className="min-h-11 rounded-xl bg-emerald-700 text-white px-5 font-semibold inline-flex items-center gap-2"
-            >
-              Nächstes Kapitel <ArrowRight aria-hidden="true" size={18} />
-            </Link>
+            <ol className="list-decimal ml-6 space-y-2">
+              {chapter.example.steps.slice(0, revealed).map((s, i) => (
+                <li key={i} className="animate-slide-up">
+                  <MathText text={s.text} />
+                  {s.math && (
+                    <div className="overflow-x-auto">
+                      <MathText text={s.math} display />
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ol>
+            {revealed < chapter.example.steps.length ? (
+              <Button variant="secondary" onClick={() => setRevealed((n) => n + 1)}>
+                Nächster Schritt
+              </Button>
+            ) : (
+              <p className="rounded-lg bg-emerald-50 p-3 font-medium">
+                <MathText text={chapter.example.result} />
+              </p>
+            )}
           </div>
+          <Button variant="primary" size="lg" icon={<ArrowRight aria-hidden="true" size={20} />} onClick={skipToPractice}>
+            Weiter zum Formel-Check
+          </Button>
+        </section>
+      )}
+
+      {(step === 'check' || step === 'starter' || step === 'practice') && (
+        <section className="rounded-2xl bg-white p-6 shadow-sm space-y-4" aria-labelledby="step-heading">
+          <h2 id="step-heading" className="text-xl font-semibold">
+            {PATH_STEP_LABEL[step]}
+          </h2>
+          <p className="text-slate-700">{STEP_TEXT[step]}</p>
+          {exerciseUrl && (
+            <ButtonLink to={exerciseUrl} variant="primary" size="lg" icon={<ArrowRight aria-hidden="true" size={20} />}>
+              {attempts.length ? 'Weiter üben' : 'Los geht’s'}
+            </ButtonLink>
+          )}
+        </section>
+      )}
+
+      {step === 'done' && (
+        <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6 space-y-4" aria-labelledby="step-heading">
+          <h2 id="step-heading" className="flex items-center gap-2 text-xl font-semibold">
+            <Trophy aria-hidden="true" size={24} className="text-emerald-700" /> Geschafft!
+          </h2>
+          <p>Du beherrschst dieses Kapitel sicher. Das Wichtigste in Kürze:</p>
+          <ul className="list-disc ml-6 space-y-1">
+            {chapter.summary.map((s) => (
+              <li key={s}>
+                <MathText text={s} />
+              </li>
+            ))}
+          </ul>
+          <div className="flex flex-wrap gap-2">
+            {nextChapter && (
+              <ButtonLink to={`/app/topics/${nextChapter.topicId}/chapters/${nextChapter.id}`} variant="primary" size="lg" icon={<ArrowRight aria-hidden="true" size={20} />}>
+                Weiter mit „{nextChapter.title}“
+              </ButtonLink>
+            )}
+            {exerciseUrl && (
+              <ButtonLink to={exerciseUrl} variant={nextChapter ? 'ghost' : 'primary'} icon={<RotateCcw aria-hidden="true" size={20} />}>
+                Weiter üben
+              </ButtonLink>
+            )}
+          </div>
+        </section>
+      )}
+
+      <MoreAboutChapter chapter={chapter} progress={progress} attempts={attempts} />
+    </article>
+  );
+}
+
+/** Zurückhaltender Bereich für Neugierige, Eltern und Lehrkräfte: Stand, Zusammenfassung, alle Aufgaben. */
+function MoreAboutChapter({ chapter, progress, attempts }: { chapter: Subtopic; progress: SubtopicProgress | null; attempts: AttemptRecord[] }) {
+  const states = new Map<string, ExerciseState>(chapter.exercises.map((e) => [e.id, exerciseState(attempts.filter((a) => a.exerciseId === e.id))]));
+  return (
+    <details className="rounded-2xl border border-slate-200 bg-white">
+      <summary className="cursor-pointer min-h-11 flex items-center px-5 font-medium text-slate-700">Mehr zu diesem Kapitel</summary>
+      <div className="space-y-6 px-5 pb-5">
+        {progress && (
+          <section className="space-y-2" aria-labelledby="score-heading">
+            <h3 id="score-heading" className="font-semibold">
+              Dein Stand
+            </h3>
+            <div className="flex flex-wrap items-center gap-3">
+              <StatusBadge status={progress.status} />
+              <ScoreBadge score={progress.score} />
+            </div>
+            <p className="text-sm text-slate-700">
+              {Math.round(SCORE_CONFIG.masteryWeight * 100)} % zählt, wie sicher du deine letzten {SCORE_CONFIG.windowSize} Aufgaben gelöst hast (für die volle
+              Punktzahl braucht es etwa 8 Aufgaben), {Math.round(SCORE_CONFIG.coverageWeight * 100)} %, wie viele Aufgabenarten du sicher beherrschst.
+            </p>
+            {progress.caps.length > 0 && (
+              <ul className="list-disc ml-5 space-y-1 text-sm text-slate-700">
+                {progress.caps.map((c) => (
+                  <li key={c}>{CAP_EXPLANATION[c]}</li>
+                ))}
+              </ul>
+            )}
+          </section>
         )}
-        <details className="rounded-xl border border-slate-200 bg-white">
-          <summary className="cursor-pointer min-h-11 flex items-center px-4 font-medium">Alle Aufgaben ansehen ({sub.exercises.length})</summary>
-          <ul className="space-y-2 p-3 pt-0">
-            {sub.exercises.map((e, i) => {
-              const st = states.get(e.id) ?? { status: 'open' as const, credit: 0, attemptCount: 0 };
-              const style = EX_STATUS_STYLE[st.status];
+        <section className="space-y-2">
+          <h3 className="font-semibold">Zusammenfassung</h3>
+          <ul className="list-disc ml-5 space-y-1">
+            {chapter.summary.map((s) => (
+              <li key={s}>
+                <MathText text={s} />
+              </li>
+            ))}
+          </ul>
+        </section>
+        <section className="space-y-2">
+          <h3 className="font-semibold">Alle Aufgaben ({chapter.exercises.length})</h3>
+          <ul className="space-y-1">
+            {chapter.exercises.map((e, i) => {
+              const st = states.get(e.id)!;
               return (
                 <li key={e.id}>
-                  <Link to={`/app/exercises/${e.id}`} className="rounded-xl bg-slate-50 p-4 flex flex-wrap items-center gap-3">
-                    <span className="font-semibold">Aufgabe {i + 1}</span>
-                    <span className="text-sm text-slate-600 flex-1 min-w-40">
+                  <Link to={`/app/exercises/${e.id}`} className="flex min-h-11 flex-wrap items-center gap-3 rounded-lg px-3 hover:bg-slate-50">
+                    <span className="font-medium">Aufgabe {i + 1}</span>
+                    <span className="flex-1 min-w-40 text-sm text-slate-600">
                       {REQUIREMENT_LABEL[e.requirement]} · {DIFFICULTY_LABEL[e.difficulty]}
-                      {st.attemptCount > 0 && ` · ${st.attemptCount} Versuch${st.attemptCount === 1 ? '' : 'e'}`}
                     </span>
-                    <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-sm font-medium ${style.cls}`}>
-                      <span aria-hidden="true">{style.icon}</span>
-                      {EXERCISE_STATUS_LABEL[st.status]}
-                    </span>
+                    <span className="text-sm text-slate-600">{EXERCISE_STATUS_LABEL[st.status]}</span>
                   </Link>
                 </li>
               );
             })}
           </ul>
-        </details>
-      </section>
-
-      <section className="rounded-2xl bg-white p-5 shadow-sm">
-        <h2 className="font-semibold text-xl">Zusammenfassung</h2>
-        <ul className="list-disc ml-6 mt-2 space-y-1">
-          {sub.summary.map((s) => (
-            <li key={s}>
-              <MathText text={s} />
-            </li>
-          ))}
-        </ul>
-      </section>
-    </article>
+        </section>
+      </div>
+    </details>
   );
 }
