@@ -1,13 +1,13 @@
-import type { AuthoredTopic } from '../types';
-import { CURRICULUM_ID, videoPlaceholder } from './helpers';
+import type { AuthoredTopic } from '../../types';
+import { CURRICULUM_ID, videoPlaceholder } from '../helpers';
 
 const T = 'pythagoras';
 
-export const pythagoras: AuthoredTopic = {
+export const pythagorasBasis: AuthoredTopic = {
   id: T,
   curriculumId: CURRICULUM_ID,
   subject: 'Mathematik',
-  grade: 8,
+  grade: 9, // NRW G9: Klasse 9
   area: 'Geometrie',
   title: 'Satz des Pythagoras',
   description: 'Seitenlängen in rechtwinkligen Dreiecken berechnen, prüfen und in Sachaufgaben anwenden.',

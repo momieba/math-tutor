@@ -150,3 +150,8 @@ export function shuffledChoices(rng: Rng, correct: string, distractors: string[]
   const choices = labels.map((label, i) => ({ id: ids[i], label }));
   return { choices, correctId: ids[labels.indexOf(correct)] };
 }
+
+/** Hängt die Vorlagen-Aufgaben eines Themas an die handgeschriebenen Aufgaben der Kapitel an (IDs bleiben). */
+export function withPool<S extends { id: string; exercises: AuthoredExercise[] }>(subs: S[], pool: Record<string, AuthoredExercise[]>): S[] {
+  return subs.map((s) => ({ ...s, exercises: [...s.exercises, ...(pool[s.id] ?? [])] }));
+}

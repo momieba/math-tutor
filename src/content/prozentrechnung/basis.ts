@@ -1,9 +1,9 @@
-import type { AuthoredTopic } from '../types';
-import { CURRICULUM_ID, videoPlaceholder } from './helpers';
+import type { AuthoredTopic } from '../../types';
+import { CURRICULUM_ID, videoPlaceholder } from '../helpers';
 
 const T = 'prozentrechnung';
 
-export const prozentrechnung: AuthoredTopic = {
+export const prozentBasis: AuthoredTopic = {
   id: T,
   curriculumId: CURRICULUM_ID,
   subject: 'Mathematik',

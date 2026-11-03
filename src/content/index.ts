@@ -10,8 +10,8 @@ import { gleichungssysteme } from './gleichungssysteme';
 import { kreisZylinder } from './kreis-zylinder';
 import { lineareFunktionen } from './lineare-funktionen';
 import { pythagoras } from './pythagoras';
-import { prozentrechnung } from './prozent';
-import { quadratischeGleichungen } from './quadratisch';
+import { prozentrechnung } from './prozentrechnung';
+import { quadratischeGleichungen } from './quadratische-gleichungen';
 
 export const curricula: Curriculum[] = [
   {
@@ -28,4 +28,4 @@ export const curricula: Curriculum[] = [
 export const topics: AuthoredTopic[] = [prozentrechnung, lineareFunktionen, gleichungssysteme, pythagoras, quadratischeGleichungen, kreisZylinder];
 
 /** Themen mit Aufgabenpool (≥ 50 Aufgaben je Kapitel, adaptives Üben). Die ersten drei Themen werden später nachgezogen. */
-export const POOL_TOPIC_IDS = ['lineare-funktionen', 'lineare-gleichungssysteme', 'kreis-zylinder'];
+export const POOL_TOPIC_IDS = ['lineare-funktionen', 'lineare-gleichungssysteme', 'kreis-zylinder', 'prozentrechnung'];
