@@ -88,6 +88,8 @@ export type GradeOutcome =
 export interface GradingService {
   /** Bereits aufgedeckte Hilfen der laufenden Bearbeitung. */
   getSession(userId: string, exerciseId: string): Promise<ExerciseSessionState>;
+  /** Aufgabe ohne Abgabe verlassen (überspringen): genutzte Hilfen verwerfen, beim nächsten Mal beginnt sie von vorn. */
+  discardSession(userId: string, exerciseId: string): Promise<void>;
   /** Deckt Hinweis `level` auf (nur der Reihe nach) und liefert die Hinweise 1…level. */
   revealHint(userId: string, exerciseId: string, level: 1 | 2 | 3): Promise<string[]>;
   /** Musterlösung VOR der Abgabe: zählt als „Lösung angesehen“. */

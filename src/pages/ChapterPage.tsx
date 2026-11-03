@@ -2,14 +2,11 @@ import { ArrowRight, BookOpen, Lightbulb, PlayCircle, RotateCcw, Trophy } from '
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { MathText } from '../components/MathText';
-import { ScoreBadge } from '../components/ScoreBadge';
-import { StatusBadge } from '../components/StatusBadge';
 import { StepBar } from '../components/StepBar';
 import { Button, ButtonLink } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { needsReview, PATH_STEP_LABEL, type PathStep } from '../domain/learningPath';
-import { DIFFICULTY_LABEL, EXERCISE_STATUS_LABEL, exerciseState, followingChapter, REQUIREMENT_LABEL, type ExerciseState } from '../domain/progressView';
-import { CAP_EXPLANATION, SCORE_CONFIG } from '../domain/score';
+import { followingChapter } from '../domain/progressView';
 import { services } from '../services';
 import type { AttemptRecord, Subtopic, SubtopicProgress, Topic } from '../types';
 import { markSeen } from './pathStorage';
@@ -24,7 +21,6 @@ const STEP_TEXT: Partial<Record<PathStep, string>> = {
 /**
  * Lernkapitel als geführter Lernpfad (domain/learningPath.ts): immer ein Schritt, ein Hauptbutton.
  * Einstieg und Erklärung lassen sich überspringen und über die Schrittleiste erneut öffnen.
- * Score-Erklärung, Zusammenfassung und alle Aufgaben stehen zurückhaltend unter „Mehr zu diesem Kapitel“.
  */
 export default function ChapterPage() {
   const { topicId = '', subtopicId = '' } = useParams();
@@ -270,70 +266,6 @@ export default function ChapterPage() {
         </section>
       )}
 
-      <MoreAboutChapter chapter={chapter} progress={progress} attempts={attempts} />
     </article>
-  );
-}
-
-/** Zurückhaltender Bereich für Neugierige, Eltern und Lehrkräfte: Stand, Zusammenfassung, alle Aufgaben. */
-function MoreAboutChapter({ chapter, progress, attempts }: { chapter: Subtopic; progress: SubtopicProgress | null; attempts: AttemptRecord[] }) {
-  const states = new Map<string, ExerciseState>(chapter.exercises.map((e) => [e.id, exerciseState(attempts.filter((a) => a.exerciseId === e.id))]));
-  return (
-    <details className="rounded-2xl border border-slate-200 bg-white">
-      <summary className="cursor-pointer min-h-11 flex items-center px-5 font-medium text-slate-700">Mehr zu diesem Kapitel</summary>
-      <div className="space-y-6 px-5 pb-5">
-        {progress && (
-          <section className="space-y-2" aria-labelledby="score-heading">
-            <h3 id="score-heading" className="font-semibold">
-              Dein Stand
-            </h3>
-            <div className="flex flex-wrap items-center gap-3">
-              <StatusBadge status={progress.status} />
-              <ScoreBadge score={progress.score} />
-            </div>
-            <p className="text-sm text-slate-700">
-              {Math.round(SCORE_CONFIG.masteryWeight * 100)} % zählt, wie sicher du deine letzten {SCORE_CONFIG.windowSize} Aufgaben gelöst hast (für die volle
-              Punktzahl braucht es etwa 8 Aufgaben), {Math.round(SCORE_CONFIG.coverageWeight * 100)} %, wie viele Aufgabenarten du sicher beherrschst.
-            </p>
-            {progress.caps.length > 0 && (
-              <ul className="list-disc ml-5 space-y-1 text-sm text-slate-700">
-                {progress.caps.map((c) => (
-                  <li key={c}>{CAP_EXPLANATION[c]}</li>
-                ))}
-              </ul>
-            )}
-          </section>
-        )}
-        <section className="space-y-2">
-          <h3 className="font-semibold">Zusammenfassung</h3>
-          <ul className="list-disc ml-5 space-y-1">
-            {chapter.summary.map((s) => (
-              <li key={s}>
-                <MathText text={s} />
-              </li>
-            ))}
-          </ul>
-        </section>
-        <section className="space-y-2">
-          <h3 className="font-semibold">Alle Aufgaben ({chapter.exercises.length})</h3>
-          <ul className="space-y-1">
-            {chapter.exercises.map((e, i) => {
-              const st = states.get(e.id)!;
-              return (
-                <li key={e.id}>
-                  <Link to={`/app/exercises/${e.id}`} className="flex min-h-11 flex-wrap items-center gap-3 rounded-lg px-3 hover:bg-slate-50">
-                    <span className="font-medium">Aufgabe {i + 1}</span>
-                    <span className="flex-1 min-w-40 text-sm text-slate-600">
-                      {REQUIREMENT_LABEL[e.requirement]} · {DIFFICULTY_LABEL[e.difficulty]}
-                    </span>
-                    <span className="text-sm text-slate-600">{EXERCISE_STATUS_LABEL[st.status]}</span>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      </div>
-    </details>
   );
 }

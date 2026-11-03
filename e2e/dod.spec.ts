@@ -5,8 +5,6 @@
  * Neue offene Befunde würden als `test.fail()` mit Bug-ID markiert: Sie laufen „grün“, solange der Fehler besteht,
  * und schlagen an, sobald er behoben ist (dann Markierung entfernen = Re-Test).
  */
-import { topics } from '../src/content';
-import { canonicalAnswer } from '../src/domain/evaluate';
 import {
   addTopic,
   answerInput,
@@ -203,15 +201,14 @@ test('D-11: neuer Nutzer erreicht vom Dashboard die erste Aufgabe in ≤ 3 Tipps
 });
 
 // ---------------------------------------------------------------- DoD 4
-test('DoD 4 – Themenseite: vorgeschlagener Weg im Vordergrund, 8 Kapitel dezent und zugeklappt', async ({ page }) => {
+test('DoD 4 – Themenseite: vorgeschlagener Weg im Vordergrund, darunter alle 8 Kapitel dezent', async ({ page }) => {
   await register(page);
   await addTopic(page, 'Pythagoras', 'Satz des Pythagoras');
   await page.goto('/app/topics/pythagoras');
   await expect(page.locator('#next-chapter-heading')).toContainText('Grundlagen und Definition');
   await expect(page.getByRole('link', { name: 'Thema starten' })).toBeVisible();
   const list = page.getByRole('list', { name: 'Kapitel' });
-  await expect(list).toBeHidden(); // Kapitelliste ist zugeklappt
-  await page.getByText('Alle Kapitel ansehen (8)').click();
+  await expect(list).toBeVisible(); // immer ausgeklappt
   const chapters = list.getByRole('listitem');
   await expect(chapters).toHaveCount(8);
   for (let i = 0; i < 8; i++) {
@@ -248,9 +245,8 @@ test('DoD 5 – Kapitel als Lernpfad: Einstieg → Erklärung (KaTeX, Beispiel s
   // Zurück im Kapitel: Einstieg/Erklärung sind gemerkt, es geht mit dem Üben weiter
   await page.goto('/app/topics/pythagoras/chapters/pyth-hypotenuse');
   await expect(page.getByRole('heading', { level: 2, name: 'Einstieg' })).toHaveCount(0);
-  await page.getByText('Mehr zu diesem Kapitel').click();
-  await expect(page.getByRole('heading', { name: 'Zusammenfassung' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: /Alle Aufgaben \(\d+\)/ })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 2, name: 'Formel-Check' })).toBeVisible();
+  await expect(page.getByText('Mehr zu diesem Kapitel')).toHaveCount(0); // keine Zusatzinfos mehr
 });
 
 test('Lernpfad: Einstieg überspringen führt direkt zur ersten Aufgabe', async ({ page }) => {
@@ -370,18 +366,30 @@ test.describe('DoD 6 – Aufgaben bearbeiten und einreichen', () => {
     }
   });
 
-  test('UX-07 (Regression): Brotkrumen der Aufgabe zeigen den Themennamen und führen zum Thema', async ({ page }) => {
+  test('Aufgabe: oben nur ein Zurück-Pfeil mit dem Kapitelnamen, er führt zum Kapitel', async ({ page }) => {
     await register(page);
-    for (const [id, title, topicId] of [
-      ['pyth-hypotenuse-3', 'Satz des Pythagoras', 'pythagoras'],
-      ['quad-reinquadratisch-1', 'Quadratische Gleichungen', 'quadratische-gleichungen'],
+    for (const [id, title, url] of [
+      ['pyth-hypotenuse-3', 'Hypotenuse berechnen', '/app/topics/pythagoras/chapters/pyth-hypotenuse'],
+      ['quad-reinquadratisch-1', 'Reinquadratische Gleichungen', '/app/topics/quadratische-gleichungen/chapters/quad-reinquadratisch'],
     ] as const) {
       await openExercise(page, id);
-      const crumbs = page.getByRole('navigation', { name: 'Brotkrumen' });
-      const topicLink = crumbs.getByRole('link').first();
-      await expect(topicLink, id).toHaveText(title);
-      await expect(topicLink, id).toHaveAttribute('href', `/app/topics/${topicId}`);
+      const back = page.getByRole('link', { name: title, exact: true });
+      await expect(back, id).toHaveAttribute('href', url);
     }
+  });
+
+  test('Überspringen verwirft genutzte Hinweise: beim nächsten Mal beginnt die Aufgabe von vorn', async ({ page }) => {
+    await register(page);
+    await openExercise(page, 'pyth-hypotenuse-3');
+    await page.getByRole('button', { name: /Hinweis 1 von 3/ }).click();
+    await expect(page.getByText('Hinweis 1:')).toBeVisible();
+    await page.reload(); // Neuladen behält die Hilfen (Punktabzug bleibt)
+    await expect(page.getByText('Hinweis 1:')).toBeVisible();
+    await page.getByRole('link', { name: 'Aufgabe überspringen' }).click();
+    await expect(page).not.toHaveURL(/pyth-hypotenuse-3$/);
+    await openExercise(page, 'pyth-hypotenuse-3');
+    await expect(page.getByText('Hinweis 1:')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /Hinweis 1 von 3/ })).toBeVisible();
   });
 
   test('Gleichung: „7; -7“ mit KaTeX-Vorschau, „x=7 oder x=-7“ ebenfalls richtig', async ({ page }) => {
@@ -524,7 +532,7 @@ test('DoD 7 – 3 gestufte Hinweise, Rückfrage vor „Lösung anzeigen“, Feed
   // „Nächste Aufgabe“ wählt adaptiv eine andere Aufgabe aus demselben Kapitel
   await page.getByRole('link', { name: 'Weiter', exact: true }).click();
   await expect(page).toHaveURL(/\/app\/exercises\/pyth-(?!hypotenuse-1$)[\w-]+$/); // nächste Aufgabe im Lernpfad
-  await page.getByRole('link', { name: 'Zur Kapitelübersicht' }).click();
+  await page.getByRole('link', { name: 'Hypotenuse berechnen', exact: true }).click();
   await expect(page).toHaveURL(/chapters\/pyth-hypotenuse$/);
 });
 
@@ -599,7 +607,6 @@ test('DoD 9 – Aufgaben in 2 Kapiteln: Fortschritt in Themenseite und Dashboard
   await page.goto('/app/topics/pythagoras');
   await expect(page.locator('#next-chapter-heading')).toContainText('Grundlagen und Definition');
   await expect(page.getByRole('link', { name: 'Weiter lernen' })).toBeVisible(); // begonnen ⇒ „Weiter lernen“ statt „Thema starten“
-  await page.getByText('Alle Kapitel ansehen (8)').click();
   const chapters = page.getByRole('list', { name: 'Kapitel' }).getByRole('listitem');
   await expect(chapters.nth(0).getByRole('link')).toHaveAttribute('aria-label', /empfohlen/);
   expect(await readScore(scoreBadges(chapters.nth(0)).first())).toBeGreaterThan(0);
@@ -615,38 +622,7 @@ test('DoD 9 – Aufgaben in 2 Kapiteln: Fortschritt in Themenseite und Dashboard
   expect(Number(await tile.getByRole('progressbar').getAttribute('aria-valuenow'))).toBeGreaterThan(0);
 });
 
-const allExercises = topics.flatMap((t) => t.subtopics.flatMap((c) => c.exercises));
-
 // ---------------------------------------------------------------- DoD 10
-test('DoD 10 – Score-Erklärung zeigt greifende Deckel; ohne Abdeckung aller Aufgabenarten höchstens 79', async ({ page }) => {
-  await register(page);
-  // Herleitung: Rechnen (2), Begründen (3, schwer), Zeichnen (4). Wissen und Sachaufgaben fehlen noch.
-  await solveTyped(page, 'pyth-herleitung-2', '169');
-  await solveTyped(page, 'pyth-herleitung-3', 'a^2+b^2');
-  await openExercise(page, 'pyth-herleitung-4');
-  await drawWithMouse(page, page.locator('canvas'), [0.2, 0.3], [0.7, 0.5]);
-  await answerInput(page).fill('25');
-  await submitButton(page).click();
-  await expect(feedbackPanel(page)).toContainText('Richtig');
-
-  await page.goto('/app/topics/pythagoras/chapters/pyth-herleitung');
-  await page.getByText('Mehr zu diesem Kapitel').click();
-  const stand = page.locator('section[aria-labelledby="score-heading"]');
-  expect(await readScore(scoreBadges(stand).first())).toBeLessThanOrEqual(79);
-  await expect(stand).toContainText('Löse jede Aufgabenart dieses Kapitels (z. B. Wissen, Rechnen, Sachaufgabe) mindestens einmal (max. 79 bis dahin).');
-  await expect(stand).toContainText('Löse eine Aufgabe an einem späteren Tag erneut richtig (max. 94 bis dahin).');
-  await expect(stand).not.toContainText('höchsten Schwierigkeitsstufe'); // schwere Aufgabe ist gelöst
-  await expect(stand).toContainText('In Bearbeitung');
-
-  // Fehlende Aufgabenarten lösen ⇒ der Hinweis auf die Abdeckung verschwindet
-  await solveChoice(page, 'pyth-herleitung-1', 'Der Flächeninhalt eines Quadrats mit Seite');
-  const beet = allExercises.find((e) => e.id === 'pyth-hl-beete-01')!;
-  await solveTyped(page, beet.id, canonicalAnswer(beet.answer));
-  await page.goto('/app/topics/pythagoras/chapters/pyth-herleitung');
-  await page.getByText('Mehr zu diesem Kapitel').click();
-  await expect(stand).not.toContainText('Löse jede Aufgabenart');
-});
-
 // ---------------------------------------------------------------- Persistenz & Fehlerfall
 test.describe('Persistenz und Speicherfehler', () => {
   test('Daten überstehen Reload und Ab-/Anmelden', async ({ page }) => {

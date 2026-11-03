@@ -1,8 +1,7 @@
-import { ArrowRight, BookOpen, Eye, Lightbulb, RotateCcw, Send, TrendingDown, TrendingUp, TriangleAlert } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BookOpen, Eye, Lightbulb, RotateCcw, Send, TrendingDown, TrendingUp, TriangleAlert } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { ChoiceInput, MathInput, NumericInput } from '../components/AnswerInputs';
-import { Breadcrumbs } from '../components/Breadcrumbs';
 import { FeedbackPanel } from '../components/FeedbackPanel';
 import { ExerciseFigure } from '../components/figures/ExerciseFigure';
 import { compactStrokes, emptyHistory, historyFromStrokes, isBlank, isStrokeList, visibleStrokes, type CanvasHistory } from '../components/handwriting/canvasModel';
@@ -54,8 +53,6 @@ export default function ExercisePage() {
   const [loaded, setLoaded] = useState(false);
   const [ex, setEx] = useState<Exercise | null>(null);
   const [sub, setSub] = useState<Subtopic | null>(null);
-  /** Themenname für die Brotkrumen (UX-07); `null` ⇒ neutrales „Thema“. */
-  const [topicTitle, setTopicTitle] = useState<string | null>(null);
   /** Ziel von „Weiter“ im Lernpfad (nächste Aufgabe oder – wenn geschafft – die Kapitelseite) und Zurück-Vorschlag. */
   const [pathNext, setPathNext] = useState<string | null>(null);
   const [review, setReview] = useState(false);
@@ -104,19 +101,17 @@ export default function ExercisePage() {
     void (async () => {
       const e = await services.content.getExercise(exerciseId);
       const s = e ? await services.content.getSubtopic(e.subtopicId) : null;
-      const [draft, chapterAttempts, topic, before, help] = e
+      const [draft, chapterAttempts, before, help] = e
         ? await Promise.all([
             services.attempts.getPending(userId, e.id),
             s ? services.learner.listAttempts(userId, { subtopicId: s.id }).catch(() => []) : [],
-            s ? services.content.getTopic(s.topicId).catch(() => null) : null,
             s ? services.progress.getSubtopicProgress(userId, s.id).catch(() => null) : null,
             services.grading.getSession(userId, e.id).catch(() => null),
           ])
-        : [null, [], null, null, null];
+        : [null, [], null, null];
       if (!active) return;
       setEx(e);
       setSub(s);
-      setTopicTitle(topic?.title ?? null);
       setPathNext(s && e ? pathTarget(userId, s, chapterAttempts, before?.score ?? 0, e.id) : null);
       setReview(false);
       const pick = s && e ? pickNext(userId, s, chapterAttempts, e.id) : null;
@@ -167,7 +162,6 @@ export default function ExercisePage() {
 
   const exercise = ex;
   const chapter = sub;
-  const index = chapter.exercises.findIndex((e) => e.id === exercise.id);
   const chapterUrl = `/app/topics/${chapter.topicId}/chapters/${chapter.id}`;
   const locked = phase.kind !== 'answering';
   const isHandwriting = exercise.type === 'handwriting';
@@ -175,6 +169,11 @@ export default function ExercisePage() {
   const saved = phase.kind === 'saved';
   const hintsUsed = hints.length;
   const solutionViewed = solution !== null;
+
+  /** Ohne Abgabe verlassen: genutzte Hilfen verwerfen, damit die Aufgabe beim nächsten Mal von vorn beginnt. */
+  function leave() {
+    if (!saved && (hintsUsed > 0 || solutionViewed)) void services.grading.discardSession(userId, exercise.id).catch(() => undefined);
+  }
 
   async function send(input: AttemptSubmission) {
     setNotice(null);
@@ -293,13 +292,9 @@ export default function ExercisePage() {
 
   return (
     <div className={`mx-auto space-y-6 pb-16 ${isHandwriting ? 'max-w-5xl' : 'max-w-3xl'}`}>
-      <Breadcrumbs
-        items={[
-          { label: topicTitle ?? 'Thema', to: `/app/topics/${chapter.topicId}` },
-          { label: chapter.title, to: chapterUrl },
-          { label: `Aufgabe ${index + 1}` },
-        ]}
-      />
+      <Link to={chapterUrl} onClick={leave} className="inline-flex min-h-11 items-center gap-2 font-medium text-indigo-700">
+        <ArrowLeft aria-hidden="true" size={20} /> {chapter.title}
+      </Link>
 
       <StepBar current={stepOfExercise(chapter.exercises, exercise.id)} />
 
@@ -514,13 +509,10 @@ export default function ExercisePage() {
           </button>
         )}
         {!saved && pathNext && (
-          <Link to={pathNext} className="inline-flex min-h-11 items-center text-slate-600 underline underline-offset-2">
+          <Link to={pathNext} onClick={leave} className="inline-flex min-h-11 items-center text-slate-600 underline underline-offset-2">
             Aufgabe überspringen
           </Link>
         )}
-        <Link to={chapterUrl} className="inline-flex min-h-11 items-center text-slate-600 underline underline-offset-2 sm:ml-auto">
-          Zur Kapitelübersicht
-        </Link>
       </nav>
     </div>
   );

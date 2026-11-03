@@ -101,6 +101,7 @@ await expectValue('Lösung vor Abgabe', `select reveal_solution($1) ? 'finalAnsw
 await expectValue('Stand nach Neuladen', `select jsonb_array_length(s->'hints')::text || '/' || (s->'solution' is not null and s->'solution' <> 'null')::text from get_exercise_session($1) s`, '2/true', [ex.id]);
 await expectDenied('Bearbeitung zurücksetzen (Hilfen tilgen)', `delete from exercise_sessions`);
 await expectDenied('Hilfen-Zähler ändern', `update exercise_sessions set hints_used = 0`);
+await expectDenied('Abgelaufene Bearbeitung direkt löschen', `select drop_stale_session($1, $2)`, [U1, ex.id]);
 
 console.log('Schüler U1 – Schreiben nur serverseitig:');
 await expectDenied('Versuch selbst anlegen', `insert into attempts (user_id, exercise_id, subtopic_id, topic_id, answer_raw, points, is_correct) values ($1,$2,$3,$4,'5',1,true)`, [U1, ex.id, ex.subtopic_id, ex.topic_id]);
@@ -131,6 +132,9 @@ await as(U1);
 await expectValue('eigene Versuche sichtbar', `select count(*) from attempts`, 1);
 await expectValue('Nachlesen nach Versuch', `select get_exercise_review($1) ?& array['hints','solution','commonMistakes']`, true, [ex.id]);
 await expectValue('neue Bearbeitung ohne Hilfen', `select jsonb_array_length(get_exercise_session($1)->'hints')`, 0, [ex.id]);
+await expectValue('Hinweis in neuer Bearbeitung', `select jsonb_array_length(reveal_hint($1, 1))`, 1, [ex.id]);
+await expectOk('Überspringen verwirft die Hilfen', `select discard_exercise_session($1)`, [ex.id]);
+await expectValue('nach dem Überspringen ohne Hilfen', `select jsonb_array_length(get_exercise_session($1)->'hints')`, 0, [ex.id]);
 await expectValue('Storage: eigenes Bild lesbar', `select count(*) from storage.objects`, 1);
 await expectOk('Einwilligung per RPC', `select accept_terms('2026-11')`);
 await expectValue('Einwilligung gespeichert', `select consent_version from profiles where id = $1`, '2026-11', [U1]);

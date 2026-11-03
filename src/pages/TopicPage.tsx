@@ -10,7 +10,7 @@ import type { Topic, TopicProgress } from '../types';
 
 /**
  * Thema: Im Vordergrund steht der vorgeschlagene Weg („Weiter lernen“ ins nächste nicht beherrschte Kapitel).
- * Die Kapitelliste ist zugeklappt und dezent: untereinander, mit Status-Ring statt Balken und Zahlen.
+ * Darunter die Kapitelliste, dezent: untereinander, mit Status-Ring statt Balken und Zahlen.
  */
 export default function TopicPage() {
   const { topicId = '' } = useParams();
@@ -87,8 +87,10 @@ export default function TopicPage() {
         </section>
       )}
 
-      <details className="rounded-2xl border border-slate-200 bg-white" open={!next}>
-        <summary className="cursor-pointer min-h-11 flex items-center px-5 font-medium text-slate-700">Alle Kapitel ansehen ({topic.subtopics.length})</summary>
+      <section className="rounded-2xl border border-slate-200 bg-white" aria-labelledby="chapters-heading">
+        <h2 id="chapters-heading" className="px-5 pt-4 pb-1 font-medium text-slate-700">
+          Alle Kapitel ({topic.subtopics.length})
+        </h2>
         <ol className="divide-y divide-slate-100 px-2 pb-2" aria-label="Kapitel">
           {[...topic.subtopics]
             .sort((a, b) => a.order - b.order)
@@ -113,7 +115,7 @@ export default function TopicPage() {
               );
             })}
         </ol>
-      </details>
+      </section>
     </div>
   );
 }

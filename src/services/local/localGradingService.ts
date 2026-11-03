@@ -13,7 +13,11 @@ interface ExerciseSession {
   hintsUsed: 0 | 1 | 2 | 3;
   solutionViewed: boolean;
   startedAt: string;
+  /** Letzte Aktivität; nach SESSION_TTL_MS verfallen die Hilfen (wie in 0005_session_reset.sql). */
+  updatedAt?: string;
 }
+
+const SESSION_TTL_MS = 30 * 60_000;
 
 const sessionKey = (userId: string, exerciseId: string) => `exsession:${userId}:${exerciseId}`;
 
@@ -29,10 +33,14 @@ async function exerciseOf(exerciseId: string): Promise<{ e: AuthoredExercise; to
 const reviewOf = (e: AuthoredExercise): ExerciseReview => ({ hints: [...e.hints], solution: e.solution, commonMistakes: e.commonMistakes });
 
 export function createLocalGradingService(learner: LocalLearnerRepository): GradingService {
-  const load = (userId: string, exerciseId: string) => readJson<ExerciseSession | null>(sessionKey(userId, exerciseId), null);
+  const load = (userId: string, exerciseId: string) => {
+    const s = readJson<ExerciseSession | null>(sessionKey(userId, exerciseId), null);
+    const last = Date.parse(s?.updatedAt ?? s?.startedAt ?? '');
+    return s && Date.now() - last < SESSION_TTL_MS ? s : null;
+  };
   const update = (userId: string, exerciseId: string, change: (s: ExerciseSession) => ExerciseSession) => {
     const current = load(userId, exerciseId) ?? { hintsUsed: 0, solutionViewed: false, startedAt: new Date().toISOString() };
-    const next = change(current);
+    const next = { ...change(current), updatedAt: new Date().toISOString() };
     writeJson(sessionKey(userId, exerciseId), next);
     return next;
   };
@@ -42,6 +50,9 @@ export function createLocalGradingService(learner: LocalLearnerRepository): Grad
       const { e } = await exerciseOf(exerciseId);
       const s = load(userId, exerciseId);
       return { hints: e.hints.slice(0, s?.hintsUsed ?? 0), solution: s?.solutionViewed ? e.solution : null };
+    },
+    async discardSession(userId, exerciseId) {
+      removeKey(sessionKey(userId, exerciseId));
     },
     async revealHint(userId, exerciseId, level) {
       const { e } = await exerciseOf(exerciseId);

@@ -30,6 +30,9 @@ export function createSupabaseGradingService(learner: LearnerRepository): Gradin
     async getSession(_userId, exerciseId) {
       return rpc<ExerciseSessionState>('get_exercise_session', { p_exercise: exerciseId });
     },
+    async discardSession(_userId, exerciseId) {
+      await rpc<null>('discard_exercise_session', { p_exercise: exerciseId });
+    },
     async revealHint(_userId, exerciseId, level) {
       return rpc<string[]>('reveal_hint', { p_exercise: exerciseId, p_level: level });
     },
