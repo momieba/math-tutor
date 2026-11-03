@@ -1,21 +1,52 @@
-# Spielt Migrationen, Inhalte (seed.sql) und Edge Functions in ein Supabase-Projekt ein. Bewusst nur manuell.
-# Voraussetzung je GitHub-Environment (staging, production): Secrets SUPABASE_ACCESS_TOKEN, SUPABASE_DB_PASSWORD,
-# Variable SUPABASE_PROJECT_REF. Ablauf und Erstkonfiguration: README „Go-Live“.
+# Spielt Migrationen, Inhalte (seed.sql) und Edge Functions in Supabase ein.
+# Automatisch bei jedem Push auf main, der etwas unter supabase/ ändert; zusätzlich manuell startbar (Actions → Run workflow).
+# Erst wenn alle Prüfungen grün sind, wird eingespielt. Migrationen werden nur einmal angewendet (Supabase merkt sich den Stand),
+# seed.sql ist idempotent (UPSERT).
+# Voraussetzung im GitHub-Environment „production“: Secrets SUPABASE_ACCESS_TOKEN und SUPABASE_DB_PASSWORD,
+# Variable SUPABASE_PROJECT_REF. Einrichtung: README „Go-Live“.
 name: Supabase deploy
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/**'
+      - '.github/workflows/supabase-deploy.yml'
   workflow_dispatch:
     inputs:
       environment:
         description: Zielumgebung
         type: choice
-        options: [staging, production]
-        default: staging
+        options: [production, staging]
+        default: production
+
+# Nie zwei Deploys gleichzeitig; ein laufender Deploy wird nicht abgebrochen.
+concurrency:
+  group: supabase-deploy-${{ inputs.environment || 'production' }}
+  cancel-in-progress: false
 
 jobs:
-  deploy:
+  checks:
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: seed.sql passt zu src/content
+        run: npm run seed:sql && git diff --exit-code supabase/seed.sql
+      - name: Schema, Seed und RLS (PGlite)
+        run: npm run db:check
+      - name: Edge Functions (synchron + Deno-Tests)
+        run: npm run test:functions
+
+  deploy:
+    needs: checks
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment || 'production' }}
     timeout-minutes: 15
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
@@ -27,14 +58,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-      - run: npm ci
-      - name: Vorab prüfen (Schema, RLS, Functions)
-        run: npm run db:check && npm run test:functions
       - name: Projekt verknüpfen
-        run: $CLI link --project-ref "${{ vars.SUPABASE_PROJECT_REF }}" --password "$SUPABASE_DB_PASSWORD"
+        run: $CLI link --project-ref "${{ vars.SUPABASE_PROJECT_REF }}"
       - name: Migrationen + Inhalte
-        run: $CLI db push --remote --include-seed
+        run: $CLI db push --remote --include-seed --password "$SUPABASE_DB_PASSWORD"
       - name: Edge Functions
         run: |
           $CLI functions deploy grade-attempt --use-api

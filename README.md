@@ -46,7 +46,8 @@ Einmalig, je Umgebung (`staging`, `production`):
    npx supabase@3.0.0 functions deploy grade-attempt --use-api
    npx supabase@3.0.0 functions deploy delete-account --use-api
    ```
-   oder über den GitHub-Workflow **Supabase deploy** (Actions → „Run workflow“). Dafür im GitHub-Environment die Secrets `SUPABASE_ACCESS_TOKEN` und `SUPABASE_DB_PASSWORD` sowie die Variable `SUPABASE_PROJECT_REF` anlegen.
+   oder automatisch über den GitHub-Workflow **Supabase deploy**: Er läuft bei jedem Push auf `main`, der etwas unter `supabase/` ändert (Migrationen, `seed.sql`, Edge Functions), erst nach grünen Prüfungen. Manuell startbar unter Actions → „Run workflow“.
+   Einrichtung: GitHub-Repo → Settings → Environments → **New environment** `production`. Dort die Secrets `SUPABASE_ACCESS_TOKEN` (erzeugen unter supabase.com/dashboard/account/tokens) und `SUPABASE_DB_PASSWORD` anlegen, dazu die Variable `SUPABASE_PROJECT_REF` (die 20 Zeichen aus der Dashboard-URL).
 3. **Auth konfigurieren** (Dashboard → Authentication):
    - URL Configuration: *Site URL* = Produktions-Domain; *Redirect URLs* = `https://<domain>/app`, `https://<domain>/reset-password` (Staging zusätzlich `https://*.vercel.app/**`).
    - E-Mail: Bestätigung an, Mindestlänge Passwort 8 mit Buchstaben + Ziffern (steht auch in `supabase/config.toml`, übertragbar mit `npx supabase@3.0.0 config push`).
@@ -57,5 +58,6 @@ Einmalig, je Umgebung (`staging`, `production`):
 5. **Rechtliches (Blocker):** Impressum, Datenschutzerklärung und Nutzungsbedingungen (`src/pages/LegalPage.tsx`, derzeit Platzhalter) mit echten Angaben füllen und prüfen lassen, AV-Verträge mit Supabase und Vercel abschließen. Bei geänderten Texten `CONSENT_VERSION` in `src/config/legal.ts` hochzählen, dann werden alle Nutzer erneut gefragt.
 6. **Abnahme auf staging:** Registrieren (Bestätigungs-Mail), Google-Login, Aufgabe mit Hinweis + Handschrift abgeben, Verlauf mit Bild, Passwort zurücksetzen, Datenexport, Konto löschen.
 
-**Inhalte ändern:** in `src/content` bearbeiten → `npm test` → `npm run seed:sql` → Pull Request mit Review → nach dem Merge den Workflow *Supabase deploy* ausführen. Der Seed ist idempotent (UPSERT), vorhandene Versuche bleiben erhalten.
-**Bewertungslogik ändern:** `src/domain/evaluate.ts` bearbeiten → `npm run functions:sync` → `grade-attempt` neu deployen, damit Server und lokaler Modus gleich bewerten (CI prüft die Synchronität).
+**Inhalte ändern:** in `src/content` bearbeiten → `npm test` → `npm run seed:sql` → Pull Request mit Review → nach dem Merge spielt der Workflow *Supabase deploy* die Inhalte automatisch ein. Der Seed ist idempotent (UPSERT), vorhandene Versuche bleiben erhalten.
+**Bewertungslogik ändern:** `src/domain/evaluate.ts` bearbeiten → `npm run functions:sync` → committen und pushen; der Workflow deployt `grade-attempt` neu, damit Server und lokaler Modus gleich bewerten (CI prüft die Synchronität).
+**Datenbank ändern:** nie eine bestehende Migration bearbeiten, sondern eine neue Datei `supabase/migrations/000N_<name>.sql` anlegen → `npm run db:check` → pushen. Supabase merkt sich, welche Migrationen schon angewendet sind, und spielt nur neue ein.

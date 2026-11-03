@@ -9,7 +9,7 @@ Legende: 🔴 blockiert den Start mit echten Schülern · 🟡 vor dem Start dri
 
 ## 1. Code sichern
 
-- [ ] 🔴 Produktionsumbau committen (Branch + Pull Request) – liegt derzeit nur im Arbeitsverzeichnis
+- [x] Produktionsumbau committet und gepusht („some more stuff“), CI grün – 03.11.2026
 - [ ] ⚪ `tmp-measure.mjs` löschen (temporäres Messskript der Landingpage-Bilder, laut Kommentar nach der Prüfung zu entfernen)
 - [ ] ⚪ Ungenutzte Komponente `src/components/Placeholder.tsx` entfernen oder verwenden
 
@@ -18,11 +18,12 @@ Legende: 🔴 blockiert den Start mit echten Schülern · 🟡 vor dem Start dri
 Befehle und Details: [README „Go-Live“](../README.md#go-live-supabase--vercel).
 
 - [x] Supabase-Projekt über die Vercel-Integration angelegt (Region Frankfurt, Präfix `VITE_`, Free-Plan) – 02.11.2026
-- [ ] 🔴 In Vercel prüfen, dass `VITE_SUPABASE_URL` und `VITE_SUPABASE_ANON_KEY` existieren (falls nur ein `…PUBLISHABLE_KEY` angelegt wurde: `src/services/config.ts` anpassen)
-- [ ] 🔴 Projekt verknüpfen: `npx supabase@3.0.0 login` und `link --project-ref <ref>`
-- [ ] 🔴 Schema + Inhalte einspielen: `db push --remote --include-seed`
-- [ ] 🔴 Edge Functions deployen: `grade-attempt` und `delete-account` (`functions deploy … --use-api`)
-- [ ] 🔴 GitHub-Environment(s) für den Workflow *Supabase deploy* anlegen: Secrets `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`, Variable `SUPABASE_PROJECT_REF`
+- [x] In Vercel geprüft: `VITE_SUPABASE_URL` und `VITE_SUPABASE_ANON_KEY` sind für Production und Preview gesetzt – 03.11.2026
+- [x] Ordner mit dem Supabase-Projekt verknüpft (`bwuiseqburexduujykdr`, „supabase-mmm“) – 03.11.2026
+- [ ] 🔴 Erstes Einspielen von Schema, Inhalten und Edge Functions: geschieht automatisch beim nächsten Push (geänderter Workflow löst aus). Danach in GitHub → Actions prüfen, dass *Supabase deploy* grün ist (manuell alternativ: `npx supabase@3.0.0 db push --remote --include-seed` und `functions deploy … --use-api`)
+- [x] GitHub-Environment `production` angelegt (Secrets `SUPABASE_ACCESS_TOKEN` mit eingeschränkten Rechten, `SUPABASE_DB_PASSWORD`; Variable `SUPABASE_PROJECT_REF`) – 03.11.2026. Der Workflow *Supabase deploy* deployt bei jedem Push auf `main` mit Änderungen unter `supabase/` automatisch
+- [ ] 🟡 Im Environment `production` unter *Deployment branches and tags* nur `main` zulassen (sonst kann jeder Branch die Secrets nutzen)
+- [ ] ⚪ Ablaufdatum des Supabase-Tokens im Kalender notieren und rechtzeitig erneuern
 
 ## 3. Anmeldung (Supabase → Authentication)
 
