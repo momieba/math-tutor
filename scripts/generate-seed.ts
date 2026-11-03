@@ -1,9 +1,14 @@
 /**
- * Erzeugt supabase/seed.sql aus der geprüften Wissensbasis (src/content).
+ * Erzeugt supabase/seeds/content-<prüfsumme>.sql aus der geprüften Wissensbasis (src/content).
  * Idempotent (UPSERT), damit bestehende Attempts (FK auf exercises) erhalten bleiben.
+ *
+ * Warum ein Dateiname mit Prüfsumme: `supabase db push --include-seed` spielt eine Seed-Datei nur beim ersten Mal ein;
+ * ändert sie sich später, aktualisiert die CLI nur ihre Prüfsumme („Updating seed hash“) und führt sie NICHT aus.
+ * Mit neuem Namen bei jeder Inhaltsänderung ist es für die CLI eine neue Datei – sie wird eingespielt.
  * Aufruf: npm run seed:sql
  */
-import { writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { curricula, topics } from '../src/content/index';
 import { answerFormatOf } from '../src/content/publicView';
@@ -65,6 +70,10 @@ topics.forEach((t, ti) => {
 });
 out.push('commit;', '');
 
-const target = fileURLToPath(new URL('../supabase/seed.sql', import.meta.url));
-writeFileSync(target, out.join('\n'), 'utf8');
-console.log(`seed.sql geschrieben: ${out.length - 3} Statements`);
+const sql = out.join('\n');
+const dir = fileURLToPath(new URL('../supabase/seeds/', import.meta.url));
+const name = `content-${createHash('sha256').update(sql).digest('hex').slice(0, 12)}.sql`;
+mkdirSync(dir, { recursive: true });
+for (const f of readdirSync(dir)) if (/^content-[0-9a-f]+\.sql$/.test(f) && f !== name) rmSync(dir + f);
+writeFileSync(dir + name, sql, 'utf8');
+console.log(`supabase/seeds/${name} geschrieben: ${out.length - 3} Statements`);

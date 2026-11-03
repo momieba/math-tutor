@@ -25,8 +25,8 @@ jobs:
         run: npm run typecheck
       - name: Unit-Tests
         run: npm test
-      - name: seed.sql passt zu src/content
-        run: npm run seed:sql && git diff --exit-code supabase/seed.sql
+      - name: Inhalts-Seed passt zu src/content
+        run: npm run seed:sql && git diff --exit-code supabase/ && test -z "$(git status --porcelain supabase/)"
       - name: Schema, Seed und RLS (PGlite)
         run: npm run db:check
       - name: Edge Functions (synchron + Deno-Tests)

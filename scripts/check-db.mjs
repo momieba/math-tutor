@@ -1,11 +1,13 @@
-// Validiert alle Migrationen + seed.sql gegen PGlite mit minimalen Supabase-Stubs und prüft RLS, Rechte und RPCs.
+// Validiert alle Migrationen + Inhalts-Seed (supabase/seeds/content-*.sql) gegen PGlite mit minimalen Supabase-Stubs und prüft RLS, Rechte und RPCs.
 // Aufruf: npm run db:check  (Supabase-Stubs für auth/storage; echte Supabase-Instanz nicht nötig)
 import { readdirSync, readFileSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 
 const root = new URL('../supabase/', import.meta.url);
 const migrations = readdirSync(new URL('migrations/', root)).filter((f) => f.endsWith('.sql')).sort();
-const seed = readFileSync(new URL('seed.sql', root), 'utf8');
+const seedFiles = readdirSync(new URL('seeds/', root)).filter((f) => /^content-[0-9a-f]+\.sql$/.test(f));
+if (seedFiles.length !== 1) throw new Error(`Genau eine Inhaltsdatei in supabase/seeds/ erwartet, gefunden: ${seedFiles.join(', ') || 'keine'}`);
+const seed = readFileSync(new URL(`seeds/${seedFiles[0]}`, root), 'utf8');
 const db = new PGlite();
 
 await db.exec(`

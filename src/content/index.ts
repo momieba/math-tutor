@@ -1,7 +1,7 @@
 /**
  * Geprüfte Seed-Wissensbasis (Single Source of Truth für Lerninhalte im MVP).
  * - Wird im lokalen Modus direkt genutzt.
- * - Für Supabase per `npm run seed:sql` nach supabase/seed.sql exportiert.
+ * - Für Supabase per `npm run seed:sql` nach supabase/seeds/content-<prüfsumme>.sql exportiert.
  * Änderungen an Inhalten: hier pflegen, Tests (content.test.ts) laufen lassen, Seed neu erzeugen.
  */
 import type { AuthoredTopic, Curriculum } from '../types';

@@ -17,7 +17,7 @@ Ohne `.env` läuft der Entwicklungsserver im **lokalen Modus**: Konten und Lerns
 | `npm run build` | Typecheck + Produktions-Build |
 | `npm test` | Unit-Tests (Content-Vollständigkeit, Bewertung, Score, Topic-Matching, Abgabe/Hilfen) |
 | `npm run typecheck` | nur TypeScript |
-| `npm run seed:sql` | `supabase/seed.sql` aus `src/content` erzeugen (nach jeder Inhaltsänderung) |
+| `npm run seed:sql` | `supabase/seeds/content-<prüfsumme>.sql` aus `src/content` erzeugen (nach jeder Inhaltsänderung; neuer Dateiname, damit `db push` die Inhalte erneut einspielt) |
 | `npm run db:check` | alle Migrationen + Seed + RLS/RPC-Regeln lokal gegen PGlite prüfen (mit Supabase-Standardrechten) |
 | `npm run functions:sync` | Bewertungslogik (`src/domain/evaluate.ts`, Typen) in die Edge Functions kopieren (nach Änderungen daran) |
 | `npm run test:functions` | Edge Functions: Synchronität prüfen + Deno-Tests (lädt Deno per npx) |
@@ -27,7 +27,7 @@ CI (`.github/workflows/ci.yml`) führt all das bei jedem Push und Pull Request a
 
 ## Stand
 **Produktionsreif im Code** (Supabase + Vercel), Klassen 7–9 mit den Themen Prozentrechnung, Satz des Pythagoras und quadratische Gleichungen (55 Aufgaben).
-- **Inhalte in der Datenbank:** Im Supabase-Modus liest die App Themen, Kapitel und Aufgaben aus Postgres. Gepflegt werden sie geprüft in `src/content` und per `seed.sql` eingespielt.
+- **Inhalte in der Datenbank:** Im Supabase-Modus liest die App Themen, Kapitel und Aufgaben aus Postgres. Gepflegt werden sie geprüft in `src/content` und per Inhalts-Seed (`supabase/seeds/`) eingespielt.
 - **Bewertung serverseitig:** Antworten, Hinweise, Musterlösungen und typische Fehler sind für Clients nicht lesbar. Bewertet wird in der Edge Function `grade-attempt`, Hinweise und Lösung gibt es nur über protokollierende RPCs. Der Score lässt sich nicht fälschen.
 - **Konten:** E-Mail (mit Bestätigung) und Google, Einwilligung mit Version, Passwort vergessen/ändern, Datenexport (JSON), Konto löschen inkl. Bilder.
 - **Betrieb:** Security-Header/CSP auf Vercel, lokaler Modus in Production gesperrt, CI, manueller Supabase-Deploy-Workflow.
@@ -46,7 +46,7 @@ Einmalig, je Umgebung (`staging`, `production`):
    npx supabase@3.0.0 functions deploy grade-attempt --use-api
    npx supabase@3.0.0 functions deploy delete-account --use-api
    ```
-   oder automatisch über den GitHub-Workflow **Supabase deploy**: Er läuft bei jedem Push auf `main`, der etwas unter `supabase/` ändert (Migrationen, `seed.sql`, Edge Functions), erst nach grünen Prüfungen. Manuell startbar unter Actions → „Run workflow“.
+   oder automatisch über den GitHub-Workflow **Supabase deploy**: Er läuft bei jedem Push auf `main`, der etwas unter `supabase/` ändert (Migrationen, Inhalts-Seed, Edge Functions), erst nach grünen Prüfungen. Manuell startbar unter Actions → „Run workflow“.
    Einrichtung: GitHub-Repo → Settings → Environments → **New environment** `production`. Dort die Secrets `SUPABASE_ACCESS_TOKEN` (erzeugen unter supabase.com/dashboard/account/tokens) und `SUPABASE_DB_PASSWORD` anlegen, dazu die Variable `SUPABASE_PROJECT_REF` (die 20 Zeichen aus der Dashboard-URL).
 3. **Auth konfigurieren** (Dashboard → Authentication):
    - URL Configuration: *Site URL* = Produktions-Domain; *Redirect URLs* = `https://<domain>/app`, `https://<domain>/reset-password` (Staging zusätzlich `https://*.vercel.app/**`).

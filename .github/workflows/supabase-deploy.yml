@@ -1,7 +1,7 @@
-# Spielt Migrationen, Inhalte (seed.sql) und Edge Functions in Supabase ein.
+# Spielt Migrationen, Inhalte (supabase/seeds/content-<prüfsumme>.sql) und Edge Functions in Supabase ein.
 # Automatisch bei jedem Push auf main, der etwas unter supabase/ ändert; zusätzlich manuell startbar (Actions → Run workflow).
 # Erst wenn alle Prüfungen grün sind, wird eingespielt. Migrationen werden nur einmal angewendet (Supabase merkt sich den Stand),
-# seed.sql ist idempotent (UPSERT).
+# Der Inhalts-Seed ist idempotent (UPSERT).
 # Voraussetzung im GitHub-Environment „production“: Secrets SUPABASE_ACCESS_TOKEN und SUPABASE_DB_PASSWORD,
 # Variable SUPABASE_PROJECT_REF. Einrichtung: README „Go-Live“.
 name: Supabase deploy
@@ -36,8 +36,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: seed.sql passt zu src/content
-        run: npm run seed:sql && git diff --exit-code supabase/seed.sql
+      - name: Inhalts-Seed passt zu src/content
+        run: npm run seed:sql && git diff --exit-code supabase/ && test -z "$(git status --porcelain supabase/)"
       - name: Schema, Seed und RLS (PGlite)
         run: npm run db:check
       - name: Edge Functions (synchron + Deno-Tests)

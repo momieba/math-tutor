@@ -38,7 +38,7 @@ src/
   context/ components/ pages/
 supabase/
   migrations/   0001_init.sql (Schema, RLS), 0002_production.sql (Lösungsschutz, RPCs, Einwilligung)
-  seed.sql      ERZEUGT aus src/content (`npm run seed:sql`)
+  seeds/        content-<prüfsumme>.sql, ERZEUGT aus src/content (`npm run seed:sql`)
   functions/    grade-attempt, delete-account (index.ts = Verdrahtung, handler.ts = Logik + Tests)
     _shared/    domain/ + types/ KOPIERT aus src (`npm run functions:sync`)
   config.toml   Auth-Einstellungen (`supabase config push`)
@@ -71,7 +71,7 @@ Lokal setzt `localGradingService` dieselben Regeln im Browser um.
 **Handschrift (Phase 1):** Bewertet wird nur das eingetippte Endergebnis. Der Rechenweg wird als PNG (≤ 1000 px) plus Strichdaten gespeichert, aber nicht gelesen und deshalb immer gelb als „nicht automatisch geprüft“ markiert.
 
 ## 6. Datenmodell
-**Inhalte** (Text-Slug-IDs; Clients dürfen nur lesen, schreiben darf nur `service_role` über `seed.sql`):
+**Inhalte** (Text-Slug-IDs; Clients dürfen nur lesen, schreiben darf nur `service_role` über den Inhalts-Seed):
 `curricula → topics → subtopics → {learning_materials, exercises → {exercise_keys, solutions, hints}}`, dazu `tests → test_exercises` (Phase 2).
 `exercise_keys`, `solutions` und `hints` sind für Clients **nicht lesbar**, Themen mit `review_status = 'draft'` sind unsichtbar.
 
@@ -123,7 +123,7 @@ Jedes Kapitel folgt demselben Schema mit einem Hauptbutton je Bildschirm: **1. E
 
 ## 9. Entscheidungen
 - **Serverlogik in Supabase Edge Functions, nicht in Vercel Functions:** Sie laufen in der EU neben der Datenbank (Vercel Functions standardmäßig in den USA). Der `service_role`-Key bleibt bei Supabase. Vercel bleibt reines Hosting und ist austauschbar (z. B. Cloudflare Pages).
-- **Inhalte im Git, Datenbank als Auslieferung:** Inhalte werden als typgeprüfte TS-Dateien mit Review und `content.test.ts` gepflegt und per idempotentem `seed.sql` (UPSERT) eingespielt. Vorhandene Versuche bleiben dabei erhalten. Eine Redaktions-UI kommt später.
+- **Inhalte im Git, Datenbank als Auslieferung:** Inhalte werden als typgeprüfte TS-Dateien mit Review und `content.test.ts` gepflegt und per idempotentem Inhalts-Seed (UPSERT) eingespielt. Vorhandene Versuche bleiben dabei erhalten. Der Dateiname enthält eine Prüfsumme, weil `supabase db push --include-seed` eine bereits eingespielte, geänderte Seed-Datei sonst nicht erneut ausführt. Eine Redaktions-UI kommt später.
 - **Unklare Eingaben werden nie gespeichert** (`verdict = 'unclear'`): gelbe Rückfrage statt eines Versuchs, der den Score senkt.
 - **Annahme Lehrplan:** „DE/Gymnasium Kl. 7–9“, orientiert an den KMK-Standards. Länderspezifische Varianten folgen über `curricula`.
 
