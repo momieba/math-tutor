@@ -12,6 +12,7 @@ import type { MatchCandidate, MatchResult } from '../domain/topicMatcher';
 import { services } from '../services';
 import type { AttemptRecord, TopicProgress, TopicSummary, Verdict } from '../types';
 import { resolveAttemptContexts, type AttemptContext } from './attemptLabels';
+import { pickNext } from './practice';
 
 interface Tile {
   topic: TopicSummary;
@@ -49,7 +50,7 @@ export default function DashboardPage() {
   const [recent, setRecent] = useState<AttemptRecord[]>([]);
   const [recentCtx, setRecentCtx] = useState<Map<string, AttemptContext>>(new Map());
   const [recommendation, setRecommendation] = useState<Recommendation | undefined>();
-  /** Erste noch offene Aufgabe im empfohlenen Kapitel („Direkt üben“, kurzer Einstieg D-11). */
+  /** Nächste Aufgabe der Übungsfolge im empfohlenen Kapitel („Direkt üben“, kurzer Einstieg D-11). */
   const [practiceExerciseId, setPracticeExerciseId] = useState<string | undefined>();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -84,8 +85,8 @@ export default function DashboardPage() {
       setRecommendation(rec);
       if (rec) {
         const chapter = valid.find((v) => v.topic.id === rec.topicId)?.topic.subtopics.find((s) => s.id === rec.subtopicId);
-        const tried = new Set((await services.learner.listAttempts(userId, { subtopicId: rec.subtopicId }).catch(() => [])).map((a) => a.exerciseId));
-        setPracticeExerciseId((chapter?.exercises.find((e) => !tried.has(e.id)) ?? chapter?.exercises[0])?.id);
+        const attempts = await services.learner.listAttempts(userId, { subtopicId: rec.subtopicId }).catch(() => []);
+        setPracticeExerciseId(chapter ? pickNext(userId, chapter, attempts)?.exercise.id : undefined);
       } else {
         setPracticeExerciseId(undefined);
       }

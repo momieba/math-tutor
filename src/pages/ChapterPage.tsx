@@ -1,14 +1,25 @@
+import { ArrowRight, Trophy } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router';
+import { LevelIndicator } from '../components/LevelIndicator';
 import { MathText } from '../components/MathText';
 import { ProgressBar } from '../components/ProgressBar';
 import { ScoreBadge } from '../components/ScoreBadge';
 import { StatusBadge } from '../components/StatusBadge';
 import { useAuth } from '../context/AuthContext';
-import { DIFFICULTY_LABEL, EXERCISE_STATUS_LABEL, EXERCISE_TYPE_LABEL, exerciseState, type ExerciseState, type ExerciseStatus } from '../domain/progressView';
+import {
+  DIFFICULTY_LABEL,
+  EXERCISE_STATUS_LABEL,
+  exerciseState,
+  followingChapter,
+  REQUIREMENT_LABEL,
+  type ExerciseState,
+  type ExerciseStatus,
+} from '../domain/progressView';
 import { CAP_EXPLANATION, SCORE_CONFIG } from '../domain/score';
 import { services } from '../services';
-import type { AttemptRecord, Subtopic, SubtopicProgress } from '../types';
+import type { AttemptRecord, Difficulty, Subtopic, SubtopicProgress, Topic } from '../types';
+import { pickNext } from './practice';
 
 const EX_STATUS_STYLE: Record<ExerciseStatus, { cls: string; icon: string }> = {
   open: { cls: 'bg-slate-100 text-slate-700', icon: '○' },
@@ -16,7 +27,11 @@ const EX_STATUS_STYLE: Record<ExerciseStatus, { cls: string; icon: string }> = {
   solved: { cls: 'bg-emerald-100 text-emerald-800', icon: '✓' },
 };
 
-/** Lernkapitel: Lernziel, Einführung, Regeln, Video-Platzhalter, Beispiel, Aufgaben mit Status, Score-Erklärung, Zusammenfassung. */
+/**
+ * Lernkapitel: Lernziel, Einführung, Regeln, Video-Platzhalter, Beispiel, Üben mit Aufgabenpool, Score-Erklärung, Zusammenfassung.
+ * Geübt wird über „Üben starten / Weiter üben“: Die App wählt die nächste Aufgabe passend zur aktuellen Stufe
+ * (domain/exerciseSelection.ts). Die vollständige Liste bleibt aufklappbar.
+ */
 export default function ChapterPage() {
   const { topicId = '', subtopicId = '' } = useParams();
   const userId = useAuth().session!.user.id;
@@ -24,6 +39,8 @@ export default function ChapterPage() {
   const [sub, setSub] = useState<Subtopic | null>(null);
   const [progress, setProgress] = useState<SubtopicProgress | null>(null);
   const [states, setStates] = useState<Map<string, ExerciseState>>(new Map());
+  const [next, setNext] = useState<{ id: string; level: Difficulty } | null>(null);
+  const [nextChapter, setNextChapter] = useState<Subtopic | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -34,16 +51,21 @@ export default function ChapterPage() {
       const s = found && found.topicId === topicId ? found : null;
       let p: SubtopicProgress | null = null;
       let attempts: AttemptRecord[] = [];
+      let topic: Topic | null = null;
       if (s) {
-        [p, attempts] = await Promise.all([
+        [p, attempts, topic] = await Promise.all([
           services.progress.getSubtopicProgress(userId, s.id).catch(() => null),
           services.learner.listAttempts(userId, { subtopicId: s.id }).catch(() => []),
+          services.content.getTopic(s.topicId).catch(() => null),
         ]);
       }
       if (!active) return;
       setSub(s);
       setProgress(p);
       setStates(new Map((s?.exercises ?? []).map((e) => [e.id, exerciseState(attempts.filter((a) => a.exerciseId === e.id))])));
+      const pick = s ? pickNext(userId, s, attempts) : null;
+      setNext(pick ? { id: pick.exercise.id, level: pick.level } : null);
+      setNextChapter(s && topic ? (followingChapter(topic.subtopics, s.id) ?? null) : null);
       setLoaded(true);
     })();
     return () => {
@@ -63,7 +85,8 @@ export default function ChapterPage() {
     );
   }
 
-  const firstOpen = sub.exercises.find((e) => states.get(e.id)?.status !== 'solved') ?? sub.exercises[0];
+  const started = (progress?.attemptedExercises ?? 0) > 0;
+  const recommendNext = nextChapter && progress && progress.score >= SCORE_CONFIG.masteredMinScore;
 
   return (
     <article className="space-y-8 pb-12">
@@ -88,16 +111,21 @@ export default function ChapterPage() {
             <StatusBadge status={progress.status} />
             <ScoreBadge score={progress.score} />
           </div>
-          <ProgressBar value={progress.completion} label={`${progress.attemptedExercises} von ${progress.totalExercises} Aufgaben bearbeitet`} />
+          <ProgressBar
+            value={progress.completion}
+            label={`${progress.attemptedExercises} Aufgabe${progress.attemptedExercises === 1 ? '' : 'n'} bearbeitet, ${progress.solvedExercises} gelöst`}
+          />
           <details className="rounded-xl border border-slate-200 p-3">
             <summary className="cursor-pointer min-h-11 flex items-center font-medium">Wie entsteht mein Score?</summary>
             <div className="mt-2 space-y-2 text-sm text-slate-700">
               <p>
-                {Math.round(SCORE_CONFIG.masteryWeight * 100)} % zählt, wie sicher du die Aufgaben löst (schwerere Aufgaben zählen mehr, Hinweise verringern die
-                Punkte): <strong>{Math.round(progress.components.mastery * 100)} %</strong>.
+                {Math.round(SCORE_CONFIG.masteryWeight * 100)} % zählt, wie sicher du deine letzten {SCORE_CONFIG.windowSize} Aufgaben gelöst hast (schwerere
+                Aufgaben zählen mehr, Hinweise verringern die Punkte, für die volle Punktzahl braucht es etwa 8 Aufgaben):{' '}
+                <strong>{Math.round(progress.components.mastery * 100)} %</strong>.
               </p>
               <p>
-                {Math.round(SCORE_CONFIG.coverageWeight * 100)} % zählt, wie viele Aufgabentypen du sicher beherrschst:{' '}
+                {Math.round(SCORE_CONFIG.coverageWeight * 100)} % zählt, wie viele Aufgabenarten (z. B. Wissen, Rechnen, Sachaufgaben) du sicher
+                beherrschst:{' '}
                 <strong>{Math.round(progress.components.typeCoverage * 100)} %</strong>.
               </p>
               {progress.caps.length > 0 ? (
@@ -197,33 +225,55 @@ export default function ChapterPage() {
       <section className="space-y-3">
         <div className="flex flex-wrap items-center gap-3">
           <h2 className="font-semibold text-xl flex-1">Übungsaufgaben</h2>
-          {firstOpen && (
-            <Link to={`/app/exercises/${firstOpen.id}`} className="rounded-xl bg-indigo-600 text-white px-5 font-semibold inline-flex items-center">
-              {states.get(firstOpen.id)?.status === 'open' && firstOpen === sub.exercises[0] ? 'Üben starten' : 'Weiter üben'}
+          {next && (
+            <Link to={`/app/exercises/${next.id}`} className="min-h-11 rounded-xl bg-indigo-600 text-white px-5 font-semibold inline-flex items-center">
+              {started ? 'Weiter üben' : 'Üben starten'}
             </Link>
           )}
         </div>
-        <ul className="space-y-2">
-          {sub.exercises.map((e, i) => {
-            const st = states.get(e.id) ?? { status: 'open' as const, credit: 0, attemptCount: 0 };
-            const style = EX_STATUS_STYLE[st.status];
-            return (
-              <li key={e.id}>
-                <Link to={`/app/exercises/${e.id}`} className="rounded-xl bg-white p-4 shadow-sm flex flex-wrap items-center gap-3">
-                  <span className="font-semibold">Aufgabe {i + 1}</span>
-                  <span className="text-sm text-slate-600 flex-1 min-w-40">
-                    {EXERCISE_TYPE_LABEL[e.type]} · {DIFFICULTY_LABEL[e.difficulty]}
-                    {st.attemptCount > 0 && ` · ${st.attemptCount} Versuch${st.attemptCount === 1 ? '' : 'e'}`}
-                  </span>
-                  <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-sm font-medium ${style.cls}`}>
-                    <span aria-hidden="true">{style.icon}</span>
-                    {EXERCISE_STATUS_LABEL[st.status]}
-                  </span>
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
+        <p className="text-slate-700">
+          {sub.exercises.length} Aufgaben in diesem Kapitel. Du übst einfach mit „Nächste Aufgabe“ weiter: Wer sicher ist, bekommt schwerere Aufgaben, wer
+          noch unsicher ist, leichtere.
+        </p>
+        {started && next && <LevelIndicator level={next.level} />}
+        {recommendNext && (
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 flex flex-wrap items-center gap-3">
+            <Trophy aria-hidden="true" size={24} className="flex-none text-emerald-700" />
+            <p className="flex-1 min-w-48">
+              <strong>Stark!</strong> Du beherrschst dieses Kapitel sicher. Weiter mit „{nextChapter.title}“?
+            </p>
+            <Link
+              to={`/app/topics/${nextChapter.topicId}/chapters/${nextChapter.id}`}
+              className="min-h-11 rounded-xl bg-emerald-700 text-white px-5 font-semibold inline-flex items-center gap-2"
+            >
+              Nächstes Kapitel <ArrowRight aria-hidden="true" size={18} />
+            </Link>
+          </div>
+        )}
+        <details className="rounded-xl border border-slate-200 bg-white">
+          <summary className="cursor-pointer min-h-11 flex items-center px-4 font-medium">Alle Aufgaben ansehen ({sub.exercises.length})</summary>
+          <ul className="space-y-2 p-3 pt-0">
+            {sub.exercises.map((e, i) => {
+              const st = states.get(e.id) ?? { status: 'open' as const, credit: 0, attemptCount: 0 };
+              const style = EX_STATUS_STYLE[st.status];
+              return (
+                <li key={e.id}>
+                  <Link to={`/app/exercises/${e.id}`} className="rounded-xl bg-slate-50 p-4 flex flex-wrap items-center gap-3">
+                    <span className="font-semibold">Aufgabe {i + 1}</span>
+                    <span className="text-sm text-slate-600 flex-1 min-w-40">
+                      {REQUIREMENT_LABEL[e.requirement]} · {DIFFICULTY_LABEL[e.difficulty]}
+                      {st.attemptCount > 0 && ` · ${st.attemptCount} Versuch${st.attemptCount === 1 ? '' : 'e'}`}
+                    </span>
+                    <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-sm font-medium ${style.cls}`}>
+                      <span aria-hidden="true">{style.icon}</span>
+                      {EXERCISE_STATUS_LABEL[st.status]}
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </details>
       </section>
 
       <section className="rounded-2xl bg-white p-5 shadow-sm">

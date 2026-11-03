@@ -30,8 +30,8 @@ const FAQ: { q: string; a: ReactNode }[] = [
     q: 'Was passiert mit den Daten meines Kindes?',
     a: (
       <>
-        Wir speichern nur, was für das Lernen nötig ist. Keine Werbung, kein Verkauf. Daten exportieren und löschen zu können, ist fest eingeplant
-        und kommt vor dem offiziellen Start. Mehr dazu in der{' '}
+        Wir speichern nur, was für das Lernen nötig ist. Keine Werbung, kein Verkauf. Im Konto lassen sich alle Daten herunterladen und das
+        Konto endgültig löschen. Mehr dazu in der{' '}
         <Link to="/legal/datenschutz" className="font-medium text-indigo-700 underline underline-offset-2">
           Datenschutzerklärung
         </Link>

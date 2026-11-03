@@ -15,6 +15,26 @@ export type ExerciseType =
 
 export const EXERCISE_TYPES: ExerciseType[] = ['multiple-choice', 'numeric', 'equation', 'text', 'handwriting'];
 
+/** Was eine Aufgabe verlangt (unabhängig vom Antwortformat), angelehnt an die Anforderungsbereiche der KMK-Bildungsstandards. */
+export type Requirement =
+  | 'knowledge' // Begriffe, Definitionen, Regeln wiedergeben
+  | 'calculation' // Verfahren ausführen, rechnen
+  | 'application' // Sach- und Textaufgaben, Modellieren
+  | 'reasoning' // begründen, prüfen, argumentieren
+  | 'construction'; // zeichnen, konstruieren, ablesen
+
+export const REQUIREMENTS: Requirement[] = ['knowledge', 'calculation', 'application', 'reasoning', 'construction'];
+
+/**
+ * Abweichender Schweregrad für ein Bundesland und/oder eine Schulart. Ohne `state` gilt der Eintrag in allen Ländern.
+ * `difficulty: null` ⇒ die Aufgabe wird dort nicht angeboten. Grundwert ist `Exercise.difficulty` (NRW-Gymnasium).
+ */
+export interface ExerciseLevel {
+  state?: string;
+  schoolType: string;
+  difficulty: Difficulty | null;
+}
+
 export type ReviewStatus = 'draft' | 'internal-review' | 'approved';
 
 export interface Curriculum {
@@ -66,7 +86,9 @@ export type ExpectedAnswer =
   | { kind: 'choice'; correct: string }
   | { kind: 'numeric'; value: number; tolerance: number; unit?: string }
   | { kind: 'numeric-set'; values: number[]; tolerance: number } // z. B. Lösungsmenge {3; -5}
-  | { kind: 'text'; accepted: string[] }; // Vergleich nach Normalisierung
+  | { kind: 'text'; accepted: string[] } // Vergleich nach Normalisierung
+  | { kind: 'point'; x: number; y: number; tolerance: number } // geordnetes Paar, z. B. Schnittpunkt (2|3) oder LGS-Lösung
+  | { kind: 'linear'; m: number; b: number; tolerance: number }; // Funktionsgleichung y = mx + b
 
 export interface CommonMistake {
   description: string;
@@ -95,14 +117,39 @@ export interface Exercise {
   id: string;
   subtopicId: string;
   type: ExerciseType;
+  requirement: Requirement;
+  /** Schweregrad für NRW-Gymnasium; das Content-Repository ersetzt ihn durch den Wert für Land und Schulart des Nutzers. */
   difficulty: Difficulty;
+  levels?: ExerciseLevel[];
   prompt: string;
   choices?: Choice[];
   answerFormat: AnswerFormat;
   objectives: string[];
-  /** Optional: Abbildung (später SVG/Bild). */
-  figure?: { alt: string; src?: string };
+  figure?: Figure;
 }
+
+/** Abbildung zu einer Aufgabe. `alt` ist Pflicht (Barrierefreiheit); gezeichnet wird deklarativ als SVG. */
+export type Figure =
+  | { kind?: undefined; alt: string; src?: string }
+  | {
+      kind: 'coordinate-plane';
+      alt: string;
+      /** Sichtbarer Ausschnitt, z. B. [-5, 5]. */
+      x: [number, number];
+      y: [number, number];
+      lines?: { m: number; b: number; label?: string }[];
+      points?: { x: number; y: number; label?: string }[];
+    }
+  | {
+      kind: 'circle';
+      alt: string;
+      /** Ausschnitt mit Mittelpunktswinkel in Grad (fehlt ⇒ Vollkreis). */
+      angle?: number;
+      /** Innenradius als Anteil des Außenradius (Kreisring), z. B. 0.6. */
+      inner?: number;
+      /** Beschriftungen, z. B. { r: 'r = 4 cm' }. */
+      labels?: { r?: string; angle?: string; inner?: string };
+    };
 
 /** Lösungsschlüssel einer Aufgabe. Supabase: Tabellen exercise_keys/hints/solutions ohne Leserecht für Clients. */
 export interface ExerciseKey {

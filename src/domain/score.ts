@@ -3,17 +3,19 @@
  * Single Source of Truth sind die Attempts; Progress-Zeilen in der DB sind nur Snapshots.
  * Formel und Konstanten: siehe ARCHITECTURE.md, Abschnitt „Score-Formel“.
  */
-import type { Attempt, ChapterStatus, Difficulty, Exercise, ExerciseType, ScoreCap, SubtopicProgress, TopicProgress } from '../types';
+import type { Attempt, ChapterStatus, Difficulty, Exercise, Requirement, ScoreCap, SubtopicProgress, TopicProgress } from '../types';
 
 export const SCORE_CONFIG = {
   difficultyWeight: { 1: 1, 2: 1.5, 3: 2 } as Record<Difficulty, number>,
   hintPenaltyPerHint: 0.15, // je genutztem Hinweis −15 % der Aufgabenpunkte
   solutionViewedFactor: 0.25, // Musterlösung vor Abgabe angesehen ⇒ max. 25 %
   lastAttemptWeight: 0.7, // Stabilität: 70 % letzter, 30 % vorletzter Versuch
+  windowSize: 15, // Beherrschung über die zuletzt bearbeiteten 15 Aufgaben eines Kapitels
+  targetWeight: 12, // Mindest-Nenner: etwa 8 gemischte Aufgaben (bei kleineren Kapiteln: alle Aufgaben)
   masteryWeight: 0.8,
   coverageWeight: 0.2,
   solvedThreshold: 0.8, // Aufgabe gilt als „gelöst“ ab q ≥ 0,8
-  typeCoveredThreshold: 0.6, // Aufgabentyp gilt als „abgedeckt“ ab q ≥ 0,6
+  typeCoveredThreshold: 0.6, // Anforderungsart gilt als „abgedeckt“ ab q ≥ 0,6
   caps: { 'type-coverage': 79, 'no-hard-exercise': 89, 'no-confirmation': 94 } as Record<ScoreCap, number>,
   confirmationMinHours: 20, // Wiederholung frühestens nach 20 h zählt als Bestätigung
   masteredMinScore: 80,
@@ -38,43 +40,49 @@ export function exerciseCredit(attempts: Attempt[]): number {
   return w * last + (1 - w) * prev;
 }
 
-/** Für den Score zählen nur Kennung, Typ und Schwierigkeit einer Aufgabe. */
-export type ScoredExercise = Pick<Exercise, 'id' | 'type' | 'difficulty'>;
+/** Für den Score zählen nur Kennung, Anforderungsart und Schwierigkeit einer Aufgabe. */
+export type ScoredExercise = Pick<Exercise, 'id' | 'requirement' | 'difficulty'>;
 
+/**
+ * Score eines Kapitels mit Aufgabenpool. Ein Kapitel kann 100 Aufgaben haben; niemand muss alle bearbeiten:
+ * - Beherrschung M zählt nur die zuletzt bearbeiteten `windowSize` Aufgaben (alte Fehler wachsen heraus).
+ * - Der Nenner ist mindestens das Zielgewicht (≈ 8 gemischte Aufgaben), bei kleinen Kapiteln das Gewicht aller Aufgaben.
+ *   Zwei gelöste Aufgaben ergeben also noch keinen hohen Score.
+ * - Abdeckung T: Anteil der im Kapitel vorkommenden Anforderungsarten, die mindestens einmal gut gelöst wurden.
+ */
 export function computeSubtopicProgress(subtopicId: string, exercises: ScoredExercise[], attempts: Attempt[]): SubtopicProgress {
   const c = SCORE_CONFIG;
-  const own = attempts.filter((a) => a.subtopicId === subtopicId);
+  const pool = new Map(exercises.map((e) => [e.id, e]));
+  const own = attempts.filter((a) => a.subtopicId === subtopicId && pool.has(a.exerciseId));
   const byExercise = groupBy(own, (a) => a.exerciseId);
 
-  let weightSum = 0;
-  let creditSum = 0;
-  let attempted = 0;
-  let solved = 0;
-  let attemptedCreditSum = 0;
-  const typesPresent = new Set<ExerciseType>();
-  const typesCovered = new Set<ExerciseType>();
+  const lastAt = (id: string) => byExercise.get(id)!.reduce((max, a) => (a.submittedAt > max ? a.submittedAt : max), '');
+  const attemptedIds = [...byExercise.keys()].sort((x, y) => lastAt(y).localeCompare(lastAt(x)));
+  const credit = new Map(attemptedIds.map((id) => [id, exerciseCredit(byExercise.get(id)!)]));
+  const weight = (id: string) => c.difficultyWeight[pool.get(id)!.difficulty];
+
+  const poolWeight = exercises.reduce((sum, e) => sum + c.difficultyWeight[e.difficulty], 0);
+  const target = Math.min(c.targetWeight, poolWeight);
+  const window = attemptedIds.slice(0, c.windowSize);
+  const windowWeight = window.reduce((sum, id) => sum + weight(id), 0);
+  const windowCredit = window.reduce((sum, id) => sum + weight(id) * credit.get(id)!, 0);
+  const mastery = target > 0 ? windowCredit / Math.max(windowWeight, target) : 0; // M
+
+  const requirementsPresent = new Set<Requirement>(exercises.map((e) => e.requirement));
+  const requirementsCovered = new Set<Requirement>();
   const maxDifficulty = Math.max(0, ...exercises.map((e) => e.difficulty));
   let hardSolved = false;
-
-  for (const e of exercises) {
-    const w = c.difficultyWeight[e.difficulty];
-    weightSum += w;
-    typesPresent.add(e.type);
-    const list = byExercise.get(e.id) ?? [];
-    if (list.length === 0) continue;
-    const q = exerciseCredit(list);
-    attempted++;
-    attemptedCreditSum += q;
-    creditSum += w * q;
+  let solved = 0;
+  for (const id of attemptedIds) {
+    const q = credit.get(id)!;
+    const e = pool.get(id)!;
     if (q >= c.solvedThreshold) {
       solved++;
       if (e.difficulty === maxDifficulty) hardSolved = true;
     }
-    if (q >= c.typeCoveredThreshold) typesCovered.add(e.type);
+    if (q >= c.typeCoveredThreshold) requirementsCovered.add(e.requirement);
   }
-
-  const mastery = weightSum > 0 ? creditSum / weightSum : 0; // M
-  const typeCoverage = typesPresent.size > 0 ? typesCovered.size / typesPresent.size : 0; // T
+  const typeCoverage = requirementsPresent.size > 0 ? requirementsCovered.size / requirementsPresent.size : 0; // T
   let score = 100 * (c.masteryWeight * mastery + c.coverageWeight * typeCoverage);
 
   const caps: ScoreCap[] = [];
@@ -84,17 +92,20 @@ export function computeSubtopicProgress(subtopicId: string, exercises: ScoredExe
   for (const cap of caps) score = Math.min(score, c.caps[cap]);
   score = Math.round(score);
 
+  const attempted = attemptedIds.length;
+  const windowAverage = window.length ? window.reduce((sum, id) => sum + credit.get(id)!, 0) / window.length : 0;
   let status: ChapterStatus;
   if (attempted === 0) status = 'not_started';
   else if (score >= c.masteredMinScore && typeCoverage === 1) status = 'mastered';
-  else if (attempted >= 2 && attemptedCreditSum / attempted < c.needsPracticeBelow) status = 'needs_practice';
+  else if (attempted >= 2 && windowAverage < c.needsPracticeBelow) status = 'needs_practice';
   else status = 'in_progress';
 
+  const attemptedWeight = attemptedIds.reduce((sum, id) => sum + weight(id), 0);
   return {
     subtopicId,
     score,
     status,
-    completion: exercises.length ? attempted / exercises.length : 0,
+    completion: target > 0 ? Math.min(1, attemptedWeight / target) : 0,
     totalExercises: exercises.length,
     attemptedExercises: attempted,
     solvedExercises: solved,
@@ -122,8 +133,6 @@ export function computeTopicProgress(
   const subs = subtopics.map((s) => computeSubtopicProgress(s.id, s.exercises, attempts));
   const n = subs.length || 1;
   const score = Math.round(subs.reduce((sum, s) => sum + s.score, 0) / n);
-  const total = subs.reduce((sum, s) => sum + s.totalExercises, 0);
-  const done = subs.reduce((sum, s) => sum + s.attemptedExercises, 0);
   const own = attempts.filter((a) => a.topicId === topicId);
   let status: ChapterStatus = 'in_progress';
   if (subs.every((s) => s.status === 'not_started')) status = 'not_started';
@@ -132,7 +141,7 @@ export function computeTopicProgress(
   return {
     topicId,
     score,
-    completion: total ? done / total : 0,
+    completion: subs.reduce((sum, s) => sum + s.completion, 0) / n,
     status,
     subtopics: subs,
     lastActivityAt: own.map((a) => a.submittedAt).sort().at(-1),
@@ -152,7 +161,7 @@ export function scoreBand(score: number): string {
 }
 
 export const CAP_EXPLANATION: Record<ScoreCap, string> = {
-  'type-coverage': 'Löse jeden Aufgabentyp dieses Kapitels mindestens einmal (max. 79 bis dahin).',
+  'type-coverage': 'Löse jede Aufgabenart dieses Kapitels (z. B. Wissen, Rechnen, Sachaufgabe) mindestens einmal (max. 79 bis dahin).',
   'no-hard-exercise': 'Löse eine Aufgabe der höchsten Schwierigkeitsstufe (max. 89 bis dahin).',
   'no-confirmation': 'Löse eine Aufgabe an einem späteren Tag erneut richtig (max. 94 bis dahin).',
 };

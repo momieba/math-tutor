@@ -67,7 +67,7 @@ export default function TopicPage() {
             </span>
           </div>
         )}
-        {progress && <ProgressBar value={progress.completion} label="Aufgaben im Thema bearbeitet" />}
+        {progress && <ProgressBar value={progress.completion} label="Fortschritt im Thema" />}
       </header>
 
       <ol className="grid sm:grid-cols-2 gap-4">
@@ -75,7 +75,6 @@ export default function TopicPage() {
           const p = progress?.subtopics.find((x) => x.subtopicId === s.id);
           const isNext = s.id === nextId;
           const done = p?.status === 'mastered';
-          const open = (p?.totalExercises ?? s.exercises.length) - (p?.solvedExercises ?? 0);
           return (
             <li key={s.id}>
               <Link
@@ -106,7 +105,7 @@ export default function TopicPage() {
                     </div>
                     <ProgressBar value={p.completion} label="Bearbeitet" />
                     <p className="text-sm text-slate-700">
-                      <strong>{p.solvedExercises}</strong> gelöst · <strong>{open}</strong> offen · {p.totalExercises} Aufgaben
+                      <strong>{p.attemptedExercises}</strong> bearbeitet · <strong>{p.solvedExercises}</strong> gelöst · {p.totalExercises} Aufgaben zum Üben
                     </p>
                   </>
                 )}

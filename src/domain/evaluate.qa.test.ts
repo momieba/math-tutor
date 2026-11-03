@@ -17,7 +17,7 @@
 import { describe, expect, it } from 'vitest';
 import { topics } from '../content';
 import type { AuthoredExercise } from '../types';
-import { evaluateAnswer, evaluateHandwriting, parseNumber, parseNumberSet } from './evaluate';
+import { canonicalAnswer, evaluateAnswer, evaluateHandwriting, parseNumber, parseNumberSet } from './evaluate';
 
 const all = topics.flatMap((t) => t.subtopics.flatMap((s) => s.exercises));
 const ex = (id: string): AuthoredExercise => {
@@ -270,12 +270,16 @@ function ownAnswers(e: AuthoredExercise): string[] {
     }
     case 'text':
       return [...a.accepted, ...a.accepted.map((s) => s.toUpperCase()), ...a.accepted.map((s) => ` ${s} `)];
+    case 'point':
+      return [`(${de(a.x)}|${de(a.y)})`, `x = ${de(a.x)}; y = ${de(a.y)}`, `y = ${de(a.y)} und x = ${de(a.x)}`];
+    case 'linear':
+      return [canonicalAnswer(a), `f(x) = ${de(a.m)}x + ${de(a.b)}`.replace('+ -', '- ')];
   }
 }
 
 describe('Regression neuer Parser: jede Aufgabe akzeptiert ihre eigene Soll-Antwort', () => {
-  it('Inhaltsbasis hat 55 Aufgaben (sonst Testumfang prüfen)', () => {
-    expect(all).toHaveLength(55);
+  it('Inhaltsbasis hat mindestens die 55 Aufgaben der ersten Themen (sonst Testumfang prüfen)', () => {
+    expect(all.length).toBeGreaterThanOrEqual(55);
   });
 
   const cases = all.flatMap((e) => ownAnswers(e).map((raw) => [e.id, e.answer.kind, raw] as const));

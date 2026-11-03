@@ -5,4 +5,4 @@ export function videoPlaceholder(id: string, title: string, durationSec = 240): 
   return { id, kind: 'video', title, url: null, provider: 'own', durationSec };
 }
 
-export const CURRICULUM_ID = 'de-gym-mathe-7-9-v1';
+export const CURRICULUM_ID = 'nrw-gym-g9-mathe';

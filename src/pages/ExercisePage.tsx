@@ -1,9 +1,10 @@
-import { ArrowLeft, Eye, Gauge, Lightbulb, PenLine, RotateCcw, Send, TriangleAlert } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Eye, Gauge, Lightbulb, PenLine, RotateCcw, Send, TrendingDown, TrendingUp, Trophy, TriangleAlert } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router';
 import { ChoiceInput, MathInput, NumericInput } from '../components/AnswerInputs';
 import { Breadcrumbs } from '../components/Breadcrumbs';
 import { FeedbackPanel } from '../components/FeedbackPanel';
+import { ExerciseFigure } from '../components/figures/ExerciseFigure';
 import { compactStrokes, emptyHistory, historyFromStrokes, isBlank, isStrokeList, visibleStrokes, type CanvasHistory } from '../components/handwriting/canvasModel';
 import { HandwritingCanvas } from '../components/handwriting/HandwritingCanvas';
 import { exportStrokesAsPng } from '../components/handwriting/renderStrokes';
@@ -14,10 +15,11 @@ import { StatusBadge } from '../components/StatusBadge';
 import { Button, ButtonLink, Dialog, EmptyState, Skeleton, Tag, useToast } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import type { EvaluationResult } from '../domain/evaluate';
-import { DIFFICULTY_LABEL, EXERCISE_TYPE_LABEL } from '../domain/progressView';
+import { DIFFICULTY_LABEL, EXERCISE_TYPE_LABEL, followingChapter, REQUIREMENT_LABEL } from '../domain/progressView';
 import { SCORE_CONFIG } from '../domain/score';
 import { services, type PendingAttempt } from '../services';
-import type { AttemptRecord, AttemptSubmission, Exercise, ExerciseReview, ModelSolution, Subtopic, SubtopicProgress } from '../types';
+import type { AttemptRecord, AttemptSubmission, Difficulty, Exercise, ExerciseReview, ModelSolution, Subtopic, SubtopicProgress } from '../types';
+import { pickNext } from './practice';
 
 type Phase =
   | { kind: 'answering' }
@@ -47,6 +49,11 @@ export default function ExercisePage() {
   const [sub, setSub] = useState<Subtopic | null>(null);
   /** Themenname für die Brotkrumen (UX-07); `null` ⇒ neutrales „Thema“. */
   const [topicTitle, setTopicTitle] = useState<string | null>(null);
+  /** Folgekapitel für die Empfehlung ab einem hohen Score. */
+  const [nextChapter, setNextChapter] = useState<Subtopic | null>(null);
+  /** Nächste Aufgabe der Übungsfolge (adaptiv) und die Stufe vor bzw. nach der Abgabe. */
+  const [next, setNext] = useState<{ id: string; level: Difficulty } | null>(null);
+  const [levelBefore, setLevelBefore] = useState<Difficulty | null>(null);
   const [previousCount, setPreviousCount] = useState(0);
   const [pending, setPending] = useState<PendingAttempt | null>(null);
   /** Kapitel-Score vor der Abgabe, um nach der Abgabe die Veränderung zu zeigen („62 → 66“). */
@@ -89,10 +96,10 @@ export default function ExercisePage() {
     void (async () => {
       const e = await services.content.getExercise(exerciseId);
       const s = e ? await services.content.getSubtopic(e.subtopicId) : null;
-      const [draft, previous, topic, before, help] = e
+      const [draft, chapterAttempts, topic, before, help] = e
         ? await Promise.all([
             services.attempts.getPending(userId, e.id),
-            services.learner.listAttempts(userId, { exerciseId: e.id }).catch(() => []),
+            s ? services.learner.listAttempts(userId, { subtopicId: s.id }).catch(() => []) : [],
             s ? services.content.getTopic(s.topicId).catch(() => null) : null,
             s ? services.progress.getSubtopicProgress(userId, s.id).catch(() => null) : null,
             services.grading.getSession(userId, e.id).catch(() => null),
@@ -102,7 +109,11 @@ export default function ExercisePage() {
       setEx(e);
       setSub(s);
       setTopicTitle(topic?.title ?? null);
-      setPreviousCount(previous.length);
+      setNextChapter(s && topic ? (followingChapter(topic.subtopics, s.id) ?? null) : null);
+      const pick = s && e ? pickNext(userId, s, chapterAttempts, e.id) : null;
+      setNext(pick ? { id: pick.exercise.id, level: pick.level } : null);
+      setLevelBefore(pick?.level ?? null);
+      setPreviousCount(chapterAttempts.filter((a) => a.exerciseId === e?.id).length);
       setScoreBefore(before?.score ?? null);
       setHints(help?.hints ?? []);
       setSolution(help?.solution ?? null);
@@ -148,8 +159,6 @@ export default function ExercisePage() {
   const exercise = ex;
   const chapter = sub;
   const index = chapter.exercises.findIndex((e) => e.id === exercise.id);
-  const total = chapter.exercises.length;
-  const next = chapter.exercises[index + 1];
   const chapterUrl = `/app/topics/${chapter.topicId}/chapters/${chapter.id}`;
   const locked = phase.kind !== 'answering';
   const isHandwriting = exercise.type === 'handwriting';
@@ -178,6 +187,14 @@ export default function ExercisePage() {
     setPhase({ kind: 'saved', record: outcome.record, evaluation: outcome.evaluation, review: outcome.review });
     toast('Lösung gespeichert');
     services.progress.getSubtopicProgress(userId, chapter.id).then(setChapterProgress, () => setChapterProgress(null));
+    // Nächste Aufgabe neu wählen: Die Abgabe kann die Stufe verändert haben.
+    services.learner.listAttempts(userId, { subtopicId: chapter.id }).then(
+      (attempts) => {
+        const pick = pickNext(userId, chapter, attempts, exercise.id);
+        setNext(pick ? { id: pick.exercise.id, level: pick.level } : null);
+      },
+      () => undefined,
+    );
   }
 
   async function revealHint() {
@@ -237,15 +254,18 @@ export default function ExercisePage() {
     }
     const id = `answer-${exercise.id}`;
     if (exercise.answerFormat.kind === 'numeric') return <NumericInput id={id} value={answer} onChange={setAnswer} unit={unit} disabled={locked} />;
-    const isSet = exercise.answerFormat.kind === 'numeric-set';
+    const kind = exercise.answerFormat.kind;
+    const isSet = kind === 'numeric-set';
+    const placeholder =
+      kind === 'linear' ? 'z. B. y = 2x - 3' : kind === 'point' ? 'z. B. (2|-3)' : isSet ? 'z. B. 3; -5' : exercise.type === 'equation' ? 'z. B. x^2 + 2x' : 'Antwort eingeben';
     return (
       <MathInput
         id={id}
         value={answer}
         onChange={setAnswer}
         disabled={locked}
-        label={isHandwriting ? 'Dein Endergebnis' : isSet ? 'Deine Lösung(en)' : 'Deine Antwort'}
-        placeholder={isSet ? 'z. B. 3; -5' : exercise.type === 'equation' ? 'z. B. x^2 + 2x' : 'Antwort eingeben'}
+        label={isHandwriting ? 'Dein Endergebnis' : isSet ? 'Deine Lösung(en)' : kind === 'linear' ? 'Funktionsgleichung' : kind === 'point' ? 'Punkt bzw. Zahlenpaar' : 'Deine Antwort'}
+        placeholder={placeholder}
         preview={exercise.type === 'equation' || isSet || looksMathy(answer)}
       />
     );
@@ -266,16 +286,9 @@ export default function ExercisePage() {
         items={[
           { label: topicTitle ?? 'Thema', to: `/app/topics/${chapter.topicId}` },
           { label: chapter.title, to: chapterUrl },
-          { label: `Aufgabe ${index + 1} von ${total}` },
+          { label: `Aufgabe ${index + 1}` },
         ]}
       />
-
-      {/* Fortschritt im Kapitel: ein Segment pro Aufgabe */}
-      <div className="flex gap-1" aria-hidden="true">
-        {chapter.exercises.map((e, i) => (
-          <span key={e.id} className={`h-1.5 flex-1 rounded-full ${i < index ? 'bg-indigo-300' : i === index ? 'bg-indigo-600' : 'bg-slate-200'}`} />
-        ))}
-      </div>
 
       {pending && phase.kind === 'answering' && (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6 space-y-4 animate-slide-up" role="alert">
@@ -299,8 +312,9 @@ export default function ExercisePage() {
 
       <header className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
         <div className="flex flex-wrap items-center gap-2">
-          <Tag icon={isHandwriting ? <PenLine aria-hidden="true" size={16} /> : undefined}>{EXERCISE_TYPE_LABEL[exercise.type]}</Tag>
+          <Tag>{REQUIREMENT_LABEL[exercise.requirement]}</Tag>
           <Tag icon={<Gauge aria-hidden="true" size={16} />}>{DIFFICULTY_LABEL[exercise.difficulty]}</Tag>
+          {isHandwriting && <Tag icon={<PenLine aria-hidden="true" size={16} />}>{EXERCISE_TYPE_LABEL[exercise.type]}</Tag>}
           {previousCount > 0 && (
             <span className="text-sm text-slate-600">
               bisher {previousCount} Versuch{previousCount === 1 ? '' : 'e'}
@@ -310,7 +324,7 @@ export default function ExercisePage() {
         <h1 className="text-2xl leading-relaxed font-semibold text-slate-900">
           <MathText text={exercise.prompt} />
         </h1>
-        {exercise.figure && <p className="text-sm text-slate-600 italic">Abbildung: {exercise.figure.alt}</p>}
+        {exercise.figure && <ExerciseFigure figure={exercise.figure} />}
       </header>
 
       <section className="space-y-4" aria-label="Deine Lösung">
@@ -374,6 +388,31 @@ export default function ExercisePage() {
             mistake={shownEvaluation.mistake}
             commonMistakes={phase.kind === 'saved' ? phase.review.commonMistakes : undefined}
           />
+          {saved && next && levelBefore !== null && next.level !== levelBefore && (
+            <p className="flex items-center gap-3 rounded-2xl border border-indigo-200 bg-indigo-50 p-4 animate-slide-up" role="status">
+              {next.level > levelBefore ? (
+                <TrendingUp aria-hidden="true" size={24} className="flex-none text-indigo-700" />
+              ) : (
+                <TrendingDown aria-hidden="true" size={24} className="flex-none text-indigo-700" />
+              )}
+              <span>
+                {next.level > levelBefore
+                  ? `Super – jetzt kommen ${next.level === 3 ? 'schwere' : 'mittlere'} Aufgaben!`
+                  : 'Wir üben erst einmal mit etwas leichteren Aufgaben weiter. Das ist ganz normal.'}
+              </span>
+            </p>
+          )}
+          {saved && chapterProgress && nextChapter && chapterProgress.score >= SCORE_CONFIG.masteredMinScore && (
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 flex flex-wrap items-center gap-3">
+              <Trophy aria-hidden="true" size={24} className="flex-none text-emerald-700" />
+              <p className="flex-1 min-w-48">
+                <strong>Stark!</strong> Du beherrschst „{chapter.title}“ sicher. Bereit für „{nextChapter.title}“?
+              </p>
+              <ButtonLink to={`/app/topics/${nextChapter.topicId}/chapters/${nextChapter.id}`} variant="primary" icon={<ArrowRight aria-hidden="true" size={20} />}>
+                Nächstes Kapitel
+              </ButtonLink>
+            </div>
+          )}
           {saved && (chapterProgress || usedHints > 0 || usedSolution) && (
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-3">
               {chapterProgress && (

@@ -39,7 +39,7 @@ describe('evaluate', () => {
   });
 
   it('vergibt Teilpunkte bei unvollständiger Lösungsmenge', () => {
-    const ex = topics[2].subtopics[0].exercises[0];
+    const ex = topics.find((t) => t.id === 'quadratische-gleichungen')!.subtopics[0].exercises[0];
     expect(evaluateAnswer(ex, '-7; 7').verdict).toBe('correct');
     expect(evaluateAnswer(ex, '7')).toMatchObject({ verdict: 'partial', points: 0.5 });
     expect(evaluateAnswer(ex, 'sieben').verdict).toBe('unclear');

@@ -99,3 +99,17 @@ export const EXERCISE_TYPE_LABEL: Record<Exercise['type'], string> = {
 };
 
 export const DIFFICULTY_LABEL: Record<Exercise['difficulty'], string> = { 1: 'leicht', 2: 'mittel', 3: 'schwer' };
+
+export const REQUIREMENT_LABEL: Record<Exercise['requirement'], string> = {
+  knowledge: 'Wissen',
+  calculation: 'Rechnen',
+  application: 'Sachaufgabe',
+  reasoning: 'Begründen',
+  construction: 'Zeichnen & Ablesen',
+};
+
+/** Nächstes Kapitel nach `order`, z. B. für die Empfehlung „Weiter mit …“ ab einem hohen Score. */
+export function followingChapter<S extends { id: string; order: number }>(subtopics: S[], currentId: string): S | undefined {
+  const sorted = [...subtopics].sort((a, b) => a.order - b.order);
+  return sorted[sorted.findIndex((s) => s.id === currentId) + 1];
+}

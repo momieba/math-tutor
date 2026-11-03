@@ -3,6 +3,7 @@
  * Der Katalog ist klein (wenige hundert Aufgaben) und wird einmal pro Sitzung geladen und im Speicher gehalten.
  * Quelle: lokal die gebündelte Wissensbasis, im Supabase-Modus die Inhaltstabellen.
  */
+import { DEFAULT_LEARNER_CONTEXT, topicsForContext, type LearnerContext } from '../../domain/levels';
 import type { Curriculum, Exercise, Subtopic, Topic } from '../../types';
 import type { ContentRepository } from '../types';
 
@@ -16,15 +17,21 @@ interface Indexed extends Catalog {
   exercises: Map<string, Exercise>;
 }
 
-export function createCatalogContentRepository(load: () => Promise<Catalog>): ContentRepository {
+export function createCatalogContentRepository(load: () => Promise<Catalog>, context: LearnerContext = DEFAULT_LEARNER_CONTEXT): ContentRepository {
   let cached: Promise<Indexed> | null = null;
   const catalog = () => {
     cached ??= load().then(
-      (c) => ({
-        ...c,
-        subtopics: new Map(c.topics.flatMap((t) => t.subtopics.map((s) => [s.id, s] as const))),
-        exercises: new Map(c.topics.flatMap((t) => t.subtopics.flatMap((s) => s.exercises.map((e) => [e.id, e] as const)))),
-      }),
+      (loaded) => {
+        const c = {
+          ...loaded,
+          topics: topicsForContext(loaded.topics, context),
+        };
+        return {
+          ...c,
+          subtopics: new Map(c.topics.flatMap((t) => t.subtopics.map((s) => [s.id, s] as const))),
+          exercises: new Map(c.topics.flatMap((t) => t.subtopics.flatMap((s) => s.exercises.map((e) => [e.id, e] as const)))),
+        };
+      },
       (e: unknown) => {
         cached = null; // nächster Aufruf versucht es erneut (z. B. nach Verbindungsabbruch)
         throw e;

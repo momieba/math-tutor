@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { topics } from './index';
-import { evaluateAnswer } from '../domain/evaluate';
+import { POOL_TOPIC_IDS, topics } from './index';
+import { canonicalAnswer, evaluateAnswer } from '../domain/evaluate';
 
 /** Struktur-Prüfung der Wissensbasis: verhindert unvollständige oder inkonsistente Inhalte. */
 describe('Wissensbasis', () => {
@@ -49,6 +49,52 @@ describe('Wissensbasis', () => {
         for (const a of m.answers ?? []) {
           expect(evaluateAnswer(e, a).verdict, `${e.id}: "${a}"`).not.toBe('correct');
         }
+      }
+    }
+  });
+});
+
+/** Kapitel mit Aufgabenpool (adaptives Üben): Mindestumfang und Mischung, siehe ARCHITECTURE.md „Aufgabenpools“. */
+describe('Aufgabenpools', () => {
+  const poolTopics = topics.filter((t) => POOL_TOPIC_IDS.includes(t.id));
+
+  it('alle Pool-Themen sind vorhanden', () => {
+    expect(poolTopics.map((t) => t.id).sort()).toEqual([...POOL_TOPIC_IDS].sort());
+  });
+
+  for (const t of poolTopics) {
+    for (const s of t.subtopics) {
+      it(`${s.id}: mindestens 50 Aufgaben, alle Stufen, gemischte Anforderungen`, () => {
+        const ex = s.exercises;
+        expect(ex.length).toBeGreaterThanOrEqual(50);
+        expect(new Set(ex.map((e) => e.difficulty))).toEqual(new Set([1, 2, 3]));
+        for (const d of [1, 2, 3]) expect(ex.filter((e) => e.difficulty === d).length, `Stufe ${d}`).toBeGreaterThanOrEqual(8);
+        expect(new Set(ex.map((e) => e.requirement)).size).toBeGreaterThanOrEqual(3);
+        expect(ex.filter((e) => e.requirement === 'application').length / ex.length).toBeGreaterThanOrEqual(0.2);
+        expect(new Set(ex.map((e) => e.prompt)).size, 'doppelte Aufgabentexte').toBe(ex.length);
+      });
+    }
+  }
+
+  it('LaTeX-Befehle haben ihren Backslash (in Template-Strings braucht es \\\\)', () => {
+    // Ein einfacher Backslash geht in Template-Strings verloren: `\,` wird zu „,“, `\frac` zu Seitenvorschub + „rac“.
+    const broken = /(?<![\\\p{L}])(?:cdot|frac|Rightarrow|sqrt|neq|approx|quad)(?!\p{L})|,\|,|\f/u;
+    const texts = (v: unknown): string[] => (typeof v === 'string' ? [v] : v && typeof v === 'object' ? Object.values(v).flatMap(texts) : []);
+    for (const s of poolTopics.flatMap((t) => t.subtopics)) {
+      for (const e of s.exercises) {
+        const bad = texts({ ...e, id: '', subtopicId: '' }).find((t) => broken.test(t));
+        expect(bad, e.id).toBeUndefined();
+      }
+    }
+  });
+
+  it('jede Aufgabe wird mit ihrer eigenen Soll-Antwort als richtig gewertet', () => {
+    for (const e of poolTopics.flatMap((t) => t.subtopics.flatMap((s) => s.exercises))) {
+      expect(evaluateAnswer(e, canonicalAnswer(e.answer)).verdict, `${e.id}: ${canonicalAnswer(e.answer)}`).toBe('correct');
+      if (e.choices) expect(new Set(e.choices.map((c) => c.label)).size, `${e.id}: doppelte Optionen`).toBe(e.choices.length);
+      if (e.figure?.kind === 'coordinate-plane') {
+        expect(e.figure.x[0]).toBeLessThan(e.figure.x[1]);
+        expect(e.figure.y[0]).toBeLessThan(e.figure.y[1]);
       }
     }
   });

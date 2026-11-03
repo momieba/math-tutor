@@ -126,7 +126,7 @@ test.describe('DoD 2+3 – Thema über Texteingabe finden und zuordnen', () => {
     await box.getByRole('button', { name: 'Alle Themen zeigen' }).click();
     await expect(page.getByText('Alle Themen aus dem Lehrplan:')).toBeVisible();
     const all = page.locator('[aria-live="polite"]').filter({ hasText: 'Alle Themen aus dem Lehrplan:' });
-    await expect(all.getByRole('button', { name: 'Thema hinzufügen' })).toHaveCount(3);
+    await expect(all.getByRole('button', { name: 'Thema hinzufügen' })).toHaveCount(6);
     // Es wurde nichts ungefragt angelegt
     expect((await learnerData(page)).activeTopics).toHaveLength(0);
   });
@@ -190,10 +190,10 @@ test('D-11: neuer Nutzer erreicht vom Dashboard die erste Aufgabe in ≤ 3 Tipps
     taps++;
   };
   // 1) Vorschlags-Chip, 2) Thema bestätigen, 3) „Direkt üben“ in der Karte „Dein nächster Schritt“
-  await tap(page.getByRole('button', { name: 'Satz des Pythagoras' }));
-  await tap(page.locator('li').filter({ hasText: 'Satz des Pythagoras' }).getByRole('button', { name: 'Thema hinzufügen' }));
+  await tap(page.getByRole('button', { name: 'Lineare Funktionen' }));
+  await tap(page.locator('li').filter({ hasText: 'Lineare Funktionen' }).getByRole('button', { name: 'Thema hinzufügen' }));
   await tap(page.locator('section[aria-labelledby="next-heading"]').getByRole('link', { name: 'Direkt üben' }));
-  await expect(page).toHaveURL(/\/app\/exercises\/pyth-grundlagen-1$/);
+  await expect(page).toHaveURL(/\/app\/exercises\/lf-fb-/); // adaptive Auswahl: eine leichte Aufgabe aus Kapitel 1
   await expect(page.getByRole('button', { name: 'Abgeben' })).toBeVisible();
   expect(taps).toBeLessThanOrEqual(3);
   // Hauptaktion je Bildschirm ist markiert (D-09-Vorbereitung): auf der Aufgabe genau eine
@@ -212,7 +212,7 @@ test('DoD 4 – Themen-Dashboard zeigt 8 Kapitel mit Status, Fortschritt, gelös
     await expect(c.getByRole('heading', { level: 2 })).toBeVisible();
     await expect(c.getByText('Nicht begonnen')).toBeVisible();
     await expect(c.getByRole('progressbar')).toBeVisible();
-    await expect(c).toContainText(/0 gelöst · \d+ offen · \d+ Aufgaben/);
+    await expect(c).toContainText(/0 bearbeitet · 0 gelöst · \d+ Aufgaben zum Üben/);
     await expect(scoreBadges(c)).toHaveCount(1);
   }
   await expect(page.getByText('Als Nächstes empfohlen')).toHaveCount(1);
@@ -232,10 +232,12 @@ test('DoD 5 – Kapitel: Lernziel, Einführung, Regeln (KaTeX), Video-Platzhalte
   expect(await page.locator('.katex').count()).toBeGreaterThan(0);
   expect(await page.locator('.katex-error').count()).toBe(0); // kein fehlerhaftes LaTeX
   await expect(page.getByText(/Video folgt/).first()).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Üben starten' })).toBeVisible();
+  // Die vollständige Aufgabenliste ist aufklappbar
+  await page.getByText(/Alle Aufgaben ansehen \(\d+\)/).click();
   const tasks = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Übungsaufgaben' }) }).getByRole('listitem');
   expect(await tasks.count()).toBeGreaterThanOrEqual(3);
   await expect(tasks.first()).toContainText('Offen');
-  await expect(page.getByRole('link', { name: 'Üben starten' })).toBeVisible();
 });
 
 test('DoD 5 – kein KaTeX-Renderfehler in irgendeinem Kapitel', async ({ page }) => {
@@ -497,8 +499,9 @@ test('DoD 7 – 3 gestufte Hinweise, Rückfrage vor „Lösung anzeigen“, Feed
 
   // Navigation nach Abgabe
   await expect(page.getByRole('button', { name: 'Nochmal versuchen' })).toBeVisible();
+  // „Nächste Aufgabe“ wählt adaptiv eine andere Aufgabe aus demselben Kapitel
   await page.getByRole('link', { name: 'Nächste Aufgabe →' }).click();
-  await expect(page).toHaveURL(/pyth-hypotenuse-2$/);
+  await expect(page).toHaveURL(/\/app\/exercises\/pyth-hypotenuse-(?!1$)\d+$/);
   await page.getByRole('link', { name: 'Zurück zum Kapitel' }).click();
   await expect(page).toHaveURL(/chapters\/pyth-hypotenuse$/);
 });
@@ -574,9 +577,9 @@ test('DoD 9 – Aufgaben in 2 Kapiteln: Themenfortschritt und Empfehlung ändern
   await page.goto('/app/topics/pythagoras');
   const chapters = page.locator('main ol > li');
   await expect(chapters.nth(0)).toContainText('Sicher beherrscht');
-  await expect(chapters.nth(0)).toContainText('4 gelöst · 0 offen');
+  await expect(chapters.nth(0)).toContainText('4 bearbeitet · 4 gelöst');
   await expect(chapters.nth(1)).toContainText('In Bearbeitung');
-  await expect(chapters.nth(1)).toContainText('1 gelöst · 3 offen');
+  await expect(chapters.nth(1)).toContainText('1 bearbeitet · 1 gelöst');
   await expect(chapters.nth(1)).toContainText('Als Nächstes empfohlen');
   const topicBar = page.locator('header').getByRole('progressbar');
   expect(Number(await topicBar.getAttribute('aria-valuenow'))).toBeGreaterThan(0);
@@ -607,7 +610,7 @@ test('DoD 10 – Score-Erklärung zeigt greifende Deckel; ohne Typabdeckung höc
   expect(score).toBeLessThanOrEqual(79);
   expect(score).toBe(79); // Deckel greift tatsächlich (nicht nur zufällig darunter)
   await stand.getByText('Wie entsteht mein Score?').click();
-  await expect(stand).toContainText('Löse jeden Aufgabentyp dieses Kapitels mindestens einmal (max. 79 bis dahin).');
+  await expect(stand).toContainText('Löse jede Aufgabenart dieses Kapitels (z. B. Wissen, Rechnen, Sachaufgabe) mindestens einmal (max. 79 bis dahin).');
   await expect(stand).toContainText('Löse eine Aufgabe an einem späteren Tag erneut richtig (max. 94 bis dahin).');
   await expect(stand).not.toContainText('höchsten Schwierigkeitsstufe'); // schwere Gleichung ist gelöst
   await expect(stand).toContainText('In Bearbeitung'); // nicht „Sicher beherrscht“ ohne Typabdeckung

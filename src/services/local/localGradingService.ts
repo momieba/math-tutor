@@ -3,7 +3,6 @@
  * + Edge Function grade-attempt): Hinweise nur der Reihe nach, Hilfen werden pro Aufgabe protokolliert und
  * beim nächsten bewerteten Versuch angerechnet, unklare Eingaben werden nicht gespeichert.
  */
-import { topics } from '../../content';
 import { evaluateAnswer, evaluateHandwriting } from '../../domain/evaluate';
 import type { AuthoredExercise, ExerciseReview } from '../../types';
 import type { GradingService } from '../types';
@@ -16,11 +15,13 @@ interface ExerciseSession {
   startedAt: string;
 }
 
-const exercises = new Map(topics.flatMap((t) => t.subtopics.flatMap((s) => s.exercises.map((e) => [e.id, { e, topicId: t.id }] as const))));
 const sessionKey = (userId: string, exerciseId: string) => `exsession:${userId}:${exerciseId}`;
 
-function exerciseOf(exerciseId: string): { e: AuthoredExercise; topicId: string } {
-  const found = exercises.get(exerciseId);
+/** Wissensbasis erst bei Bedarf laden: eigener Chunk, im Supabase-Modus nie geladen (Vorlagen rechnen beim Import). */
+let exercises: Promise<Map<string, { e: AuthoredExercise; topicId: string }>> | null = null;
+async function exerciseOf(exerciseId: string): Promise<{ e: AuthoredExercise; topicId: string }> {
+  exercises ??= import('../../content').then(({ topics }) => new Map(topics.flatMap((t) => t.subtopics.flatMap((s) => s.exercises.map((e) => [e.id, { e, topicId: t.id }] as const)))));
+  const found = (await exercises).get(exerciseId);
   if (!found) throw new Error('Diese Aufgabe gibt es nicht.');
   return found;
 }
@@ -38,12 +39,12 @@ export function createLocalGradingService(learner: LocalLearnerRepository): Grad
 
   return {
     async getSession(userId, exerciseId) {
-      const { e } = exerciseOf(exerciseId);
+      const { e } = await exerciseOf(exerciseId);
       const s = load(userId, exerciseId);
       return { hints: e.hints.slice(0, s?.hintsUsed ?? 0), solution: s?.solutionViewed ? e.solution : null };
     },
     async revealHint(userId, exerciseId, level) {
-      const { e } = exerciseOf(exerciseId);
+      const { e } = await exerciseOf(exerciseId);
       const s = update(userId, exerciseId, (cur) => {
         if (level > cur.hintsUsed + 1) throw new Error('Hinweise werden der Reihe nach freigeschaltet.');
         return { ...cur, hintsUsed: Math.max(cur.hintsUsed, level) as ExerciseSession['hintsUsed'] };
@@ -51,17 +52,17 @@ export function createLocalGradingService(learner: LocalLearnerRepository): Grad
       return e.hints.slice(0, s.hintsUsed);
     },
     async revealSolution(userId, exerciseId) {
-      const { e } = exerciseOf(exerciseId);
+      const { e } = await exerciseOf(exerciseId);
       update(userId, exerciseId, (cur) => ({ ...cur, solutionViewed: true }));
       return e.solution;
     },
     async getReview(userId, exerciseId) {
-      const { e } = exerciseOf(exerciseId);
+      const { e } = await exerciseOf(exerciseId);
       const attempts = await learner.listAttempts(userId, { exerciseId, limit: 1 });
       return attempts.length ? reviewOf(e) : null;
     },
     async grade(input) {
-      const { e, topicId } = exerciseOf(input.exerciseId);
+      const { e, topicId } = await exerciseOf(input.exerciseId);
       const evaluation =
         e.type === 'handwriting' ? evaluateHandwriting(e, input.answerRaw, input.submission !== undefined) : evaluateAnswer(e, input.answerRaw);
       if (evaluation.verdict === 'unclear') return { status: 'unclear', evaluation };

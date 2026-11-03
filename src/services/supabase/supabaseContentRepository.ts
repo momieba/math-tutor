@@ -3,7 +3,7 @@
  * die Quelle der Inhalte; befüllt wird sie aus der geprüften Wissensbasis per `npm run seed:sql`.
  * Lösungsschlüssel (exercise_keys, hints, solutions) sind für Clients nicht lesbar und werden hier nicht abgefragt.
  */
-import type { AnswerFormat, Choice, Curriculum, Exercise, LearningMaterial, ReviewStatus, Rule, Subtopic, Topic, WorkedExample } from '../../types';
+import type { AnswerFormat, Choice, Curriculum, Exercise, ExerciseLevel, LearningMaterial, ReviewStatus, Rule, Subtopic, Topic, WorkedExample } from '../../types';
 import { createCatalogContentRepository } from '../shared/catalogContentRepository';
 import type { ContentRepository } from '../types';
 import { getSupabase } from './client';
@@ -30,7 +30,9 @@ interface ExerciseRow {
   subtopic_id: string;
   position: number;
   type: Exercise['type'];
+  requirement: Exercise['requirement'];
   difficulty: Exercise['difficulty'];
+  levels: ExerciseLevel[] | null;
   prompt: string;
   choices: Choice[] | null;
   answer_format: AnswerFormat;
@@ -64,7 +66,7 @@ interface TopicRow {
   subtopics: SubtopicRow[];
 }
 
-const EXERCISE_COLUMNS = 'id, subtopic_id, position, type, difficulty, prompt, choices, answer_format, objectives, figure';
+const EXERCISE_COLUMNS = 'id, subtopic_id, position, type, requirement, difficulty, levels, prompt, choices, answer_format, objectives, figure';
 const TOPIC_SELECT = `*, subtopics(*, learning_materials(*), exercises(${EXERCISE_COLUMNS}))`;
 
 const byPosition = <T extends { position: number }>(rows: T[]) => [...rows].sort((a, b) => a.position - b.position);
@@ -74,7 +76,9 @@ function mapExercise(r: ExerciseRow): Exercise {
     id: r.id,
     subtopicId: r.subtopic_id,
     type: r.type,
+    requirement: r.requirement,
     difficulty: r.difficulty,
+    levels: r.levels ?? undefined,
     prompt: r.prompt,
     choices: r.choices ?? undefined,
     answerFormat: r.answer_format,

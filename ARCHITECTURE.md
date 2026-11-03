@@ -88,16 +88,26 @@ Lokal setzt `localGradingService` dieselben Regeln im Browser um.
 ## 7. Score-Formel (`domain/score.ts`, Konstanten in `SCORE_CONFIG`)
 Pro Versuch: `credit = points × f`, mit `f = 0,25`, wenn die Musterlösung vor der Abgabe angesehen wurde, sonst `f = 1 − 0,15 × hintsUsed` (0–3 Hinweise ⇒ 1 / 0,85 / 0,70 / 0,55).
 Pro Aufgabe e (Stabilität): `q_e = 0,7 × credit(letzter) + 0,3 × credit(vorletzter)`. Bei nur einem Versuch ist `q_e = credit`, ohne Versuch `q_e = 0`.
-Pro Kapitel:
-- `M = Σ w_e·q_e / Σ w_e` über **alle** Aufgaben des Kapitels, mit `w = {1: 1, 2: 1,5, 3: 2}` je Schwierigkeit
-- `T = |Typen mit q_e ≥ 0,6| / |Typen im Kapitel|`
+Pro Kapitel (Aufgabenpool, niemand muss alle Aufgaben bearbeiten):
+- `M = Σ w_e·q_e / max(Σ w_e, Z)` über die **zuletzt bearbeiteten 15 Aufgaben** (Fenster), mit `w = {1: 1, 2: 1,5, 3: 2}` je Schwierigkeit und Zielgewicht `Z = min(12, Gewicht aller Aufgaben)` (≈ 8 gemischte Aufgaben; kleine Kapitel: alle Aufgaben). Alte Fehler fallen so aus dem Fenster.
+- `T = |Anforderungsarten mit q_e ≥ 0,6| / |Anforderungsarten im Kapitel|` (Wissen, Rechnen, Sachaufgabe, Begründen, Zeichnen & Ablesen)
 - `roh = 100 × (0,8·M + 0,2·T)`
 - **Deckel** (es gilt das Minimum): `T < 1` ⇒ **max. 79** · keine Aufgabe höchster Schwierigkeit mit q ≥ 0,8 gelöst ⇒ **max. 89** · keine Bestätigung (gleiche Aufgabe zweimal mit credit ≥ 0,8 im Abstand von ≥ 20 h) ⇒ **max. 94**
-- `score = round(min(roh, Deckel))`
-- Status: kein Versuch ⇒ `not_started` · score ≥ 80 und T = 1 ⇒ `mastered` · ≥ 2 Aufgaben bearbeitet und Ø q < 0,5 ⇒ `needs_practice` · sonst `in_progress`
+- `score = round(min(roh, Deckel))`, `completion = min(1, Gewicht der bearbeiteten Aufgaben / Z)`
+- Status: kein Versuch ⇒ `not_started` · score ≥ 80 und T = 1 ⇒ `mastered` · ≥ 2 Aufgaben bearbeitet und Ø q im Fenster < 0,5 ⇒ `needs_practice` · sonst `in_progress`
 
-Thema: `score = round(Ø Kapitel-Scores)` (ungewichtet), `completion = bearbeitete / alle Aufgaben`. Status: alle `not_started` ⇒ `not_started`, alle `mastered` ⇒ `mastered`, eins `needs_practice` ⇒ `needs_practice`, sonst `in_progress`.
+Thema: `score = round(Ø Kapitel-Scores)` (ungewichtet), `completion = Ø Kapitel-completion`. Status: alle `not_started` ⇒ `not_started`, alle `mastered` ⇒ `mastered`, eins `needs_practice` ⇒ `needs_practice`, sonst `in_progress`.
 Die aktiven Deckel erklärt `CAP_EXPLANATION` dem Schüler.
+
+### Aufgabenpools und adaptives Üben (`domain/exerciseSelection.ts`)
+Kapitel haben 50–100 Aufgaben. Geübt wird mit „Nächste Aufgabe“; `nextExercise` wählt:
+- **Stufe**: Start bei Schwierigkeit 1; 3 gelöste Aufgaben in Folge (credit ≥ 0,8) ⇒ eine Stufe höher, 2 Fehlschläge in Folge (credit < 0,5) ⇒ eine Stufe tiefer.
+- **Reihenfolge**: neue Aufgaben der Stufe → nicht gelöste der Stufe nach ≥ 20 h → neue der leichteren Stufe → nicht gelöste der Stufe → neue der schwereren Stufe → am längsten nicht gesehene. Innerhalb einer Gruppe wird eine zuletzt seltene Anforderungsart bevorzugt; Gleichstand per Zufall mit Seed „Nutzer + Tag“.
+- Ab Score 80 empfiehlt die App das nächste Kapitel.
+
+**Inhalte**: Handgeschriebene Aufgaben (Wissen, Begründen, Sachaufgaben) plus **Aufgabenvorlagen** (`src/content/templates.ts`), die beim Build viele Varianten mit gerechneten Antworten und Lösungsschritten erzeugen. Deterministisch (Seed = Vorlagen-ID), IDs stabil (`lf-st-graph-01`). Eine Vorlage nachträglich inhaltlich zu ändern, ändert alle ihre Aufgaben – dann lieber eine neue Vorlage anlegen. `content.test.ts` prüft je Pool-Kapitel: ≥ 50 Aufgaben, alle Stufen (je ≥ 8), ≥ 3 Anforderungsarten, ≥ 20 % Sachaufgaben, keine doppelten Texte, jede Soll-Antwort wird als richtig gewertet, LaTeX-Backslashes vollständig.
+
+**Schweregrad je Land/Schulart** (`domain/levels.ts`): `difficulty` gilt für NRW-Gymnasium; `levels` enthält Abweichungen `{ state?, schoolType, difficulty | null }` (`null` = dort nicht anbieten). Das Content-Repository löst den Wert für den Lernenden auf (vorerst fest NRW-Gymnasium; `profiles.state`/`school_type` sind angelegt).
 
 ## 8. Topic-Matching (`domain/topicMatcher.ts`, deterministisch)
 1. Normalisieren (Kleinschreibung, ä→ae, ß→ss, `%`→„prozent“, Satzzeichen und Stoppwörter entfernen).

@@ -2,7 +2,7 @@
  * Deterministische Antwortprüfung (Phase 1). Reine Funktion, ohne I/O.
  * Phase 2: Handschrift/Foto-Auswertung per KI liefert zusätzlich Schritt-Markierungen (Correction.marks).
  */
-import type { AuthoredExercise, CorrectionMark, Verdict } from '../types';
+import type { AuthoredExercise, CorrectionMark, ExpectedAnswer, Verdict } from '../types';
 
 /** Was die Prüfung von einer Aufgabe braucht: nur der Lösungsschlüssel (läuft lokal und in der Edge Function). */
 export type GradableExercise = Pick<AuthoredExercise, 'answer' | 'commonMistakes'>;
@@ -141,6 +141,7 @@ export function parseNumber(raw: string): number | null {
   s = s.replace(/[.!]+$/, '').trim(); // Satzpunkt am Ende (BUG-06)
   if (/√|sqrt|wurzel/i.test(s)) return null;
   s = s.replace(APPROX_WORDS, ' ');
+  if (PI_TOKEN.test(s)) return parsePiMultiple(s);
   if (VARIABLE_AT_DIGIT.test(s)) return null;
   s = s
     .replace(/,\s*-+(?!\s*\d)/g, '') // Preisschreibweise „70,–“ (BUG-06)
@@ -156,6 +157,98 @@ export function parseNumber(raw: string): number | null {
     return den === 0 ? null : Number(frac[1]) / den;
   }
   return toNumber(s);
+}
+
+/** „π“ oder „pi“ als eigenes Wort (nicht in „Spirale“). */
+const PI_TOKEN = /π|(?<!\p{L})pi(?!\p{L})/iu;
+
+/**
+ * Vielfaches von π: „25π“, „25 pi“, „25·π cm²“, „π·25“, „-π“, „π“. Genau ein Faktor neben π, sonst `null`
+ * („2π·3“, „π/2“ ⇒ Rückfrage). Eine Einheit nach π („π cm²“) wird ignoriert.
+ */
+function parsePiMultiple(s: string): number | null {
+  const parts = s.split(PI_TOKEN);
+  if (parts.length !== 2) return null;
+  const strip = (t: string) => t.replace(/^\s*[*·⋅]\s*|\s*[*·⋅]\s*$/g, '').trim();
+  const before = strip(parts[0]);
+  const after = strip(parts[1]);
+  const afterHasNumber = /\d/.test(after.replace(/\p{L}+(\^-?\d+)?/gu, '')); // „cm²“ ist keine Zahl
+  if (before && afterHasNumber) return null;
+  if (/[/:]/.test(before) || /^[/:]/.test(after)) return null;
+  const coefText = afterHasNumber ? after : before;
+  if (coefText === '' || coefText === '+') return Math.PI;
+  if (coefText === '-') return -Math.PI;
+  const coef = parseNumber(coefText);
+  return coef === null ? null : coef * Math.PI;
+}
+
+/**
+ * Parst einen Punkt bzw. ein geordnetes Zahlenpaar: „(2|3)“, „S(2|-3)“, „P = (2,5 | 1)“, „(2; 3)“, „(2, 3)“ (Komma mit
+ * Leerzeichen), „x = 2, y = 3“, „y = 3 und x = 2“, „L = {(2|3)}“. Ohne Trenner bzw. bei „(2,3)“ (Dezimalkomma?) ⇒ `null`.
+ */
+export function parsePoint(raw: string): { x: number; y: number } | null {
+  const s = preprocess(raw)
+    .trim()
+    .replace(/^l\s*=\s*/i, '')
+    .replace(/[{}]/g, '')
+    .trim();
+  const named = /^(?:.*?)\b([xy])\s*=\s*(.+?)\s*(?:[;,|]|\bund\b|\s)\s*([xy])\s*=\s*(.+)$/iu.exec(s);
+  if (named) {
+    const [, n1, v1, n2, v2] = named;
+    if (n1.toLowerCase() === n2.toLowerCase()) return null;
+    const a = parseNumber(v1);
+    const b = parseNumber(v2);
+    if (a === null || b === null) return null;
+    return n1.toLowerCase() === 'x' ? { x: a, y: b } : { x: b, y: a };
+  }
+  const inner = /^(?:\p{L}[\p{L}\d_]*\s*=?\s*)?\(\s*(.*?)\s*\)\s*$/su.exec(s)?.[1] ?? s;
+  let parts = inner.split(/[|;]/);
+  if (parts.length === 1) parts = inner.split(/,\s+/);
+  if (parts.length !== 2) return null;
+  const x = parseNumber(parts[0]);
+  const y = parseNumber(parts[1]);
+  return x === null || y === null ? null : { x, y };
+}
+
+/**
+ * Parst eine lineare Funktionsgleichung in Steigung m und y-Achsenabschnitt b:
+ * „y = 2x - 3“, „f(x) = -3 + 2x“, „y = 0,5x“, „y = 1/2x + 1“, „y = x/2“, „y = -x“, „y = 4“, „2x - 3“.
+ * Klammern, Potenzen oder andere Variablen ⇒ `null` (Rückfrage).
+ */
+export function parseLinear(raw: string): { m: number; b: number } | null {
+  let s = preprocess(raw)
+    .toLowerCase()
+    .replace(/[\s*·⋅]/g, '')
+    .replace(/\.$/, '');
+  s = s.replace(/^(?:y|[a-z]\(x\))=/, '');
+  if (!s || /[=^]/.test(s)) return null;
+  s = s.replace(/\((\d+(?:[.,]\d+)?\/\d+(?:[.,]\d+)?)\)/g, '$1').replace(/,/g, '.');
+  if (/[^\dx.+\-/]/.test(s)) return null;
+  const terms = s.match(/[+-]?[^+-]+/g);
+  if (!terms) return null;
+  let m = 0;
+  let b = 0;
+  for (const term of terms) {
+    const t = /^([+-]?)(\d+(?:\.\d+)?(?:\/\d+(?:\.\d+)?)?)?(x)?(?:\/(\d+(?:\.\d+)?))?$/.exec(term);
+    if (!t) return null;
+    const [, sign, coefText, x, divisor] = t;
+    if (!coefText && !x) return null;
+    if (divisor && !x) return null;
+    let coef = 1;
+    if (coefText) {
+      const [num, den] = coefText.split('/').map(Number);
+      if (den === 0) return null;
+      coef = den === undefined ? num : num / den;
+    }
+    if (divisor) {
+      if (Number(divisor) === 0) return null;
+      coef /= Number(divisor);
+    }
+    const value = (sign === '-' ? -1 : 1) * coef;
+    if (x) m += value;
+    else b += value;
+  }
+  return { m, b };
 }
 
 /** Ein Element einer Lösungsmenge; „±a“ bzw. „b ± a“ ergibt zwei Werte (BUG-02). */
@@ -201,12 +294,57 @@ export function parseNumberSet(raw: string): number[] | null {
   return nums;
 }
 
+const close = (a: number, b: number, tolerance: number) => Math.abs(a - b) <= tolerance + 1e-9;
+
+/** Bedeuten zwei Eingaben für das Antwortformat dasselbe? (Für typische Fehler, z. B. „(3|2)“ = „x = 3; y = 2“.) */
+function sameInput(kind: ExpectedAnswer['kind'], a: string, b: string): boolean {
+  if (normalizeText(a) === normalizeText(b)) return true;
+  if (kind === 'numeric') {
+    const [x, y] = [parseNumber(a), parseNumber(b)];
+    return x !== null && x === y;
+  }
+  if (kind === 'point') {
+    const [p, q] = [parsePoint(a), parsePoint(b)];
+    return p !== null && q !== null && close(p.x, q.x, 0) && close(p.y, q.y, 0);
+  }
+  if (kind === 'linear') {
+    const [f, g] = [parseLinear(a), parseLinear(b)];
+    return f !== null && g !== null && close(f.m, g.m, 0) && close(f.b, g.b, 0);
+  }
+  return false;
+}
+
 function matchMistake(ex: GradableExercise, raw: string) {
-  const n = normalizeText(raw);
-  const num = parseNumber(raw);
-  return ex.commonMistakes.find((m) =>
-    (m.answers ?? []).some((a) => normalizeText(a) === n || (num !== null && parseNumber(a) === num && ex.answer.kind === 'numeric')),
-  );
+  return ex.commonMistakes.find((m) => (m.answers ?? []).some((a) => sameInput(ex.answer.kind, a, raw)));
+}
+
+/** Formatiert eine Zahl für Eingaben im Deutschen: 2.5 → „2,5“ (höchstens 6 Nachkommastellen, ohne Nullen am Ende). */
+export function formatInputNumber(n: number): string {
+  return String(Math.round(n * 1e6) / 1e6).replace('.', ',');
+}
+
+/**
+ * Eine Eingabe, die die Prüfung als richtig werten muss (für Inhaltstests und als technische Referenz).
+ * Nicht für die Anzeige gedacht: dafür gibt es `ModelSolution.finalAnswer`.
+ */
+export function canonicalAnswer(a: ExpectedAnswer): string {
+  const f = formatInputNumber;
+  switch (a.kind) {
+    case 'choice':
+      return a.correct;
+    case 'numeric':
+      return f(a.value);
+    case 'numeric-set':
+      return a.values.length ? a.values.map(f).join('; ') : 'keine Lösung';
+    case 'text':
+      return a.accepted[0];
+    case 'point':
+      return `(${f(a.x)}|${f(a.y)})`;
+    case 'linear': {
+      const b = a.b === 0 ? '' : a.b > 0 ? ` + ${f(a.b)}` : ` - ${f(-a.b)}`;
+      return `y = ${f(a.m)}x${b}`;
+    }
+  }
 }
 
 export function evaluateAnswer(ex: GradableExercise, raw: string): EvaluationResult {
@@ -244,6 +382,18 @@ export function evaluateAnswer(ex: GradableExercise, raw: string): EvaluationRes
     case 'text':
       points = a.accepted.map(normalizeText).includes(normalizeText(raw)) ? 1 : 0;
       break;
+    case 'point': {
+      const p = parsePoint(raw);
+      if (p === null) return unclear('Bitte gib den Punkt bzw. die Lösung als Zahlenpaar ein, z. B. (2|-3) oder x = 2; y = -3.');
+      points = (Number(close(p.x, a.x, a.tolerance)) + Number(close(p.y, a.y, a.tolerance))) / 2;
+      break;
+    }
+    case 'linear': {
+      const g = parseLinear(raw);
+      if (g === null) return unclear('Bitte gib die Funktionsgleichung in der Form y = mx + b ein, z. B. y = 2x - 3.');
+      points = (Number(close(g.m, a.m, a.tolerance)) + Number(close(g.b, a.b, a.tolerance))) / 2;
+      break;
+    }
   }
 
   if (points === 1) return { verdict: 'correct', points, feedback: 'Richtig!', marks: [{ color: 'green', message: 'Ergebnis korrekt.' }] };

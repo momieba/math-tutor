@@ -1,6 +1,6 @@
 /** Entwickler-Tests für den Antwort-Parser (BUG-01 … BUG-06, BUG-10 … BUG-14, Entscheidung 1.125). Ergänzen evaluate.qa.test.ts (Tester). */
 import { describe, expect, it } from 'vitest';
-import { normalizeText, parseNumber, parseNumberSet } from './evaluate';
+import { canonicalAnswer, evaluateAnswer, normalizeText, parseLinear, parseNumber, parseNumberSet, parsePoint } from './evaluate';
 
 describe('normalizeText: Hochzahlen und Striche (BUG-01, BUG-05)', () => {
   it.each([
@@ -242,4 +242,72 @@ describe('BUG-14: Beschriftung mit Doppelpunkt vor der Antwort', () => {
   it.each(['Lösung:', 'Lösung: ;', 'Lösung: x = 7 / x = -7'])('parseNumberSet(%j) → null', (raw) =>
     expect(parseNumberSet(raw)).toBeNull(),
   );
+});
+
+describe('parseNumber: Vielfache von π', () => {
+  it.each<[string, number]>([
+    ['25π', 25 * Math.PI],
+    ['25 pi', 25 * Math.PI],
+    ['25·π cm²', 25 * Math.PI],
+    ['π·25', 25 * Math.PI],
+    ['A = 8π', 8 * Math.PI],
+    ['-π', -Math.PI],
+    ['π', Math.PI],
+  ])('%j → %d', (raw, expected) => expect(parseNumber(raw)).toBeCloseTo(expected, 9));
+
+  it.each(['2π·3', 'π/2', '3/π'])('%j → null (Rückfrage)', (raw) => expect(parseNumber(raw)).toBeNull());
+
+  it('„pi“ nur als eigenes Wort: „Spirale 3“ bleibt 3', () => expect(parseNumber('Spirale 3')).toBe(3));
+});
+
+describe('parsePoint: geordnete Zahlenpaare', () => {
+  it.each<[string, { x: number; y: number }]>([
+    ['(2|3)', { x: 2, y: 3 }],
+    ['S(2|-3)', { x: 2, y: -3 }],
+    ['P = (2,5 | 1)', { x: 2.5, y: 1 }],
+    ['(2; 3)', { x: 2, y: 3 }],
+    ['(2, 3)', { x: 2, y: 3 }],
+    ['x = 2, y = 3', { x: 2, y: 3 }],
+    ['y = 3 und x = 2', { x: 2, y: 3 }],
+    ['x=2 y=−3', { x: 2, y: -3 }],
+    ['x = 2,5; y = 3', { x: 2.5, y: 3 }],
+    ['L = {(2|3)}', { x: 2, y: 3 }],
+  ])('%j', (raw, expected) => expect(parsePoint(raw)).toEqual(expected));
+
+  it.each(['(2,3)', 'x = 1; x = 2', '(1|2|3)', '2'])('%j → null (Rückfrage)', (raw) => expect(parsePoint(raw)).toBeNull());
+});
+
+describe('parseLinear: Funktionsgleichungen y = mx + b', () => {
+  it.each<[string, { m: number; b: number }]>([
+    ['y = 2x - 3', { m: 2, b: -3 }],
+    ['f(x) = -3 + 2x', { m: 2, b: -3 }],
+    ['y = 0,5x', { m: 0.5, b: 0 }],
+    ['y = 1/2x + 1', { m: 0.5, b: 1 }],
+    ['y = (1/2)x + 1', { m: 0.5, b: 1 }],
+    ['y = x/2', { m: 0.5, b: 0 }],
+    ['y = -x', { m: -1, b: 0 }],
+    ['y = 4', { m: 0, b: 4 }],
+    ['2x − 3', { m: 2, b: -3 }],
+    ['y = 2·x + 3.', { m: 2, b: 3 }],
+  ])('%j', (raw, expected) => expect(parseLinear(raw)).toEqual(expected));
+
+  it.each(['y = 2(x-1)', 'y = x^2', 'y = 2a + 1', 'y = 2x = 3', ''])('%j → null (Rückfrage)', (raw) => expect(parseLinear(raw)).toBeNull());
+});
+
+describe('evaluateAnswer: Punkt und Funktionsgleichung', () => {
+  const point = { answer: { kind: 'point' as const, x: 2, y: -1, tolerance: 0 }, commonMistakes: [{ description: 'vertauscht', feedback: 'x und y vertauscht.', answers: ['(-1|2)'] }] };
+  const linear = { answer: { kind: 'linear' as const, m: 0.5, b: -2, tolerance: 0.001 }, commonMistakes: [] };
+
+  it('richtig, halb richtig, typischer Fehler', () => {
+    expect(evaluateAnswer(point, 'x = 2; y = -1').verdict).toBe('correct');
+    expect(evaluateAnswer(point, '(2|5)')).toMatchObject({ verdict: 'partial', points: 0.5 });
+    expect(evaluateAnswer(point, 'x = -1, y = 2')).toMatchObject({ verdict: 'incorrect', mistake: 'vertauscht' });
+    expect(evaluateAnswer(linear, 'y = x/2 - 2').verdict).toBe('correct');
+    expect(evaluateAnswer(linear, 'y = 0,5x + 2')).toMatchObject({ verdict: 'partial', points: 0.5 });
+    expect(evaluateAnswer(linear, 'y = 2(x-1)').verdict).toBe('unclear');
+  });
+
+  it('canonicalAnswer wird als richtig gewertet', () => {
+    for (const ex of [point, linear]) expect(evaluateAnswer(ex, canonicalAnswer(ex.answer)).verdict).toBe('correct');
+  });
 });
