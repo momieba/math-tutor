@@ -171,8 +171,20 @@ const erkennen: AuthoredExercise[] = [
     build: ({ a, b }) => ({
       prompt: `In einem Dreieck sind $\\alpha = ${a}^\\circ$ und $\\beta = ${b}^\\circ$. Wie groß ist $\\gamma$ (in Grad)?`,
       answer: { kind: 'numeric', value: 180 - a - b, tolerance: 0.001, unit: '°' },
-      hints: ['Die Winkelsumme im Dreieck beträgt $180^\\circ$.', `$\\gamma = 180^\\circ - ${a}^\\circ - ${b}^\\circ$`, `$${a} + ${b} = ${a + b}$`],
-      solution: { steps: [{ text: 'Winkelsumme:', math: `\\gamma = 180^\\circ - ${a}^\\circ - ${b}^\\circ = ${180 - a - b}^\\circ` }], finalAnswer: `$\\gamma = ${180 - a - b}^\\circ$` },
+      hints: [
+        'In jedem Dreieck ergeben die drei Winkel zusammen immer genau $180^\\circ$.',
+        `Rechne zuerst aus, wie groß die beiden bekannten Winkel zusammen sind: $${a}^\\circ + ${b}^\\circ$.`,
+        `Die beiden Winkel sind zusammen $${a + b}^\\circ$. Was fehlt noch bis $180^\\circ$?`,
+      ],
+      solution: {
+        steps: [
+          { text: 'Die drei Winkel eines Dreiecks ergeben zusammen immer $180^\\circ$:', math: '\\alpha + \\beta + \\gamma = 180^\\circ' },
+          { text: `Zwei Winkel kennen wir schon: $\\alpha = ${a}^\\circ$ und $\\beta = ${b}^\\circ$. Zusammen sind das:`, math: `${a}^\\circ + ${b}^\\circ = ${a + b}^\\circ` },
+          { text: `Bis $180^\\circ$ fehlen noch:`, math: `180^\\circ - ${a + b}^\\circ = ${180 - a - b}^\\circ` },
+          { text: `Dieser fehlende Winkel ist $\\gamma$. Also ist $\\gamma = ${180 - a - b}^\\circ$.` },
+        ],
+        finalAnswer: `$\\gamma = ${180 - a - b}^\\circ$`,
+      },
       commonMistakes: [{ description: 'Mit 360° gerechnet', feedback: 'Im Dreieck ist die Winkelsumme $180^\\circ$ (360° gilt im Viereck).', answers: [String(360 - a - b)] }],
     }),
   }),
