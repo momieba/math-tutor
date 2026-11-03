@@ -38,7 +38,7 @@ Entwürfe für Impressum, Datenschutzerklärung, Nutzungsbedingungen und Kontakt
 
 ## 3. Vor dem Start mit echten Schülern
 
-- [ ] 🟡 Abnahme auf der Produktions-URL: Registrieren (Bestätigungs-Mail), Google-Login, Aufgabe mit Hinweis + Handschrift abgeben, Verlauf mit Bild, Passwort zurücksetzen, Datenexport, Konto löschen; außerdem prüfen, dass die Pool-Kapitel alle Aufgaben laden (≈ 1500 Aufgaben, „Alle Aufgaben ansehen“ zeigt 60–90 pro Kapitel) und jedes neue Antwortformat (Punkt, Funktionsgleichung, π) einmal abgeben
+- [ ] 🟡 Abnahme auf der Produktions-URL: Registrieren (Bestätigungs-Mail), Google-Login, Aufgabe mit Hinweis + Handschrift abgeben, Verlauf mit Bild, Passwort zurücksetzen, Datenexport, Konto löschen; außerdem prüfen, dass die Pool-Kapitel alle Aufgaben laden (≈ 2500 Aufgaben; unter „Mehr zu diesem Kapitel“ stehen 60–90 Aufgaben pro Kapitel) und jedes neue Antwortformat (Punkt, Funktionsgleichung, π) einmal abgeben
 - [ ] 🟡 Getrenntes Staging: zweites Supabase-Projekt nur für *Preview*; das jetzige Projekt nur noch für *Production* (heute teilen sich Preview und Production eine Datenbank)
 - [ ] 🟡 Supabase Pro (tägliche Backups, kein Pausieren nach Inaktivität)
 - [ ] 🟡 Vercel Pro oder Cloudflare Pages, sobald das Produkt kommerziell ist (Hobby ist nur nichtkommerziell erlaubt)
@@ -52,6 +52,8 @@ Entwürfe für Impressum, Datenschutzerklärung, Nutzungsbedingungen und Kontakt
 
 - [ ] 🟡 Wer gibt Inhalte fachlich frei? Alle sechs Themen stehen auf `internal-review`, nicht `approved`. Für die Aufgabenpools reicht es, je Kapitel die handgeschriebenen Aufgaben und je Vorlage zwei, drei erzeugte Aufgaben zu prüfen (Vorlagen rechnen die Lösungen selbst)
 - [ ] 🟡 Endgültiger Produktname (`src/config/brand.ts`) – „MatheMentor“ ist ein Platzhalter
+- [ ] 🟡 Lernpfad mit echten Schülern beobachten: Werden Einstieg/Erklärung oft übersprungen? Greift der Zurück-Vorschlag zu früh oder zu spät (`PATH_CONFIG` in `src/domain/learningPath.ts`)?
+- [ ] ⚪ Gesehen/übersprungen im Lernpfad liegt nur im Browser; bei Bedarf (Gerätewechsel) serverseitig speichern
 - [ ] 🟡 Score-Grenzen pädagogisch validieren (`SCORE_CONFIG` in `src/domain/score.ts`: u. a. Fenster 15 Aufgaben, Zielgewicht 12) und die Stufenwechsel beim adaptiven Üben (`SELECTION_CONFIG` in `src/domain/exerciseSelection.ts`: 3 Treffer hoch, 2 Fehler runter) mit echten Schülern beobachten
 - [ ] 🟡 Schweregrade der Aufgaben später mit echten Daten nachjustieren (Lösungsquote je Aufgabe/Vorlage)
 - [ ] ⚪ Bewertung: Soll `1.125` eine Rückfrage auslösen (`SINGLE_THOUSANDS_DOT_IS_AMBIGUOUS`)?
@@ -68,7 +70,6 @@ Entwürfe für Impressum, Datenschutzerklärung, Nutzungsbedingungen und Kontakt
 ## 5. Später (Weiterentwicklung und Aufräumen)
 
 - [ ] 🟡 Restlicher Lehrplan NRW Gymnasium G9 als Aufgabenpools (Muster: `src/content/lineare-funktionen/`, ein Ordner je Thema, eine Datei je Kapitel, Vorlagen + handgeschriebene Sach- und Wissensaufgaben). Offen laut schulinternem G9-Curriculum (KLP 2019): Kl. 8 Terme mit Klammern, Zufall und mehrstufige Zufallsexperimente, Ähnlichkeit/Strahlensätze; Kl. 9 Quadratwurzeln und reelle Zahlen, quadratische Funktionen, Potenzen; Kl. 10 Trigonometrie, Exponentialfunktionen, Pyramide/Kegel/Kugel, bedingte Wahrscheinlichkeit; Kl. 5–7 komplett. Thema für Thema mit fachlicher Freigabe
-- [ ] ⚪ Die ersten drei Themen (Prozentrechnung, Pythagoras, quadratische Gleichungen) auf Aufgabenpools ausbauen (≥ 50 Aufgaben je Kapitel) und in die Ordnerstruktur umziehen; dann in `POOL_TOPIC_IDS` (`src/content/index.ts`) aufnehmen
 - [ ] ⚪ Auswahl von Bundesland und Schulart in Registrierung/Konto, sobald es Inhalte für ein zweites Land bzw. eine zweite Schulart gibt (`profiles.state`/`school_type` sind angelegt; `DEFAULT_LEARNER_CONTEXT` in `src/domain/levels.ts` durch den Profilwert ersetzen; Datenschutzerklärung ergänzen)
 - [ ] ⚪ Reine Zeichen-/Konstruktionsaufgaben ohne prüfbares Endergebnis (brauchen die KI-Korrektur aus Phase 2)
 - [ ] ⚪ Block-Modell für Kapitelseiten (`0003_content_blocks`, Ansatz in ARCHITECTURE.md §10)

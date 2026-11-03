@@ -105,9 +105,16 @@ Kapitel haben 50–100 Aufgaben. Geübt wird mit „Nächste Aufgabe“; `nextEx
 - **Reihenfolge**: neue Aufgaben der Stufe → nicht gelöste der Stufe nach ≥ 20 h → neue der leichteren Stufe → nicht gelöste der Stufe → neue der schwereren Stufe → am längsten nicht gesehene. Innerhalb einer Gruppe wird eine zuletzt seltene Anforderungsart bevorzugt; Gleichstand per Zufall mit Seed „Nutzer + Tag“.
 - Ab Score 80 empfiehlt die App das nächste Kapitel.
 
-**Inhalte**: Handgeschriebene Aufgaben (Wissen, Begründen, Sachaufgaben) plus **Aufgabenvorlagen** (`src/content/templates.ts`), die beim Build viele Varianten mit gerechneten Antworten und Lösungsschritten erzeugen. Deterministisch (Seed = Vorlagen-ID), IDs stabil (`lf-st-graph-01`). Eine Vorlage nachträglich inhaltlich zu ändern, ändert alle ihre Aufgaben – dann lieber eine neue Vorlage anlegen. `content.test.ts` prüft je Pool-Kapitel: ≥ 50 Aufgaben, alle Stufen (je ≥ 8), ≥ 3 Anforderungsarten, ≥ 20 % Sachaufgaben, keine doppelten Texte, jede Soll-Antwort wird als richtig gewertet, LaTeX-Backslashes vollständig.
+**Inhalte** (je Thema ein Ordner: `basis.ts` bzw. Kapiteldateien, `pool.ts`, `checks.ts`): Handgeschriebene Aufgaben (Wissen, Begründen, Sachaufgaben) plus **Aufgabenvorlagen** (`src/content/templates.ts`), die beim Build viele Varianten mit gerechneten Antworten und Lösungsschritten erzeugen. Deterministisch (Seed = Vorlagen-ID), IDs stabil (`lf-st-graph-01`). Eine Vorlage nachträglich inhaltlich zu ändern, ändert alle ihre Aufgaben – dann lieber eine neue Vorlage anlegen. `content.test.ts` prüft je Pool-Kapitel: ≥ 50 Aufgaben, alle Stufen (je ≥ 8), ≥ 3 Anforderungsarten, ≥ 20 % Sachaufgaben, keine doppelten Texte, jede Soll-Antwort wird als richtig gewertet, LaTeX-Backslashes vollständig.
 
 **Schweregrad je Land/Schulart** (`domain/levels.ts`): `difficulty` gilt für NRW-Gymnasium; `levels` enthält Abweichungen `{ state?, schoolType, difficulty | null }` (`null` = dort nicht anbieten). Das Content-Repository löst den Wert für den Lernenden auf (vorerst fest NRW-Gymnasium; `profiles.state`/`school_type` sind angelegt).
+
+### Lernpfad (`domain/learningPath.ts`)
+Jedes Kapitel folgt demselben Schema mit einem Hauptbutton je Bildschirm: **1. Einstieg** (Lernziel, Video) · **2. Erklärung** (Regeln, Beispiel schrittweise) · **3. Formel-Check** (3 Aufgaben mit `checkpoint`, Formel vor Begriff) · **4. Erste Übungen** (3 leichte Rechenaufgaben) · **5. Üben** (`nextExercise`) · **6. Geschafft** (Score ≥ 80, Zusammenfassung, nächstes Kapitel).
+- Der Schritt wird aus den Versuchen abgeleitet (keine eigene Tabelle). „Einstieg/Erklärung gesehen bzw. übersprungen“ merkt sich der Browser (`pages/pathStorage.ts`).
+- Zurück-Vorschlag: In Schritt 4/5 mit mindestens 3 Fehlschlägen unter den letzten 4 Versuchen empfiehlt die App Erklärung bzw. Video.
+- Formel-Check: `exercises.checkpoint` (`formula` | `concept`). Je Pool-Kapitel ≥ 3 Check-Aufgaben, ≥ 2 zur Formel, wenn das Kapitel Formeln hat (`content.test.ts`). Geschrieben werden sie je Thema in `checks.ts` mit `formulaChoice`/`formulaText` (`src/content/checkpoints.ts`).
+- Themenseite: „Weiter lernen“ ins nächste nicht beherrschte Kapitel; Kapitelliste zugeklappt mit Status-Ringen. Kapitel- und Aufgabenseite zeigen Details (Score-Erklärung, alle Aufgaben) nur unter „Mehr“.
 
 ## 8. Topic-Matching (`domain/topicMatcher.ts`, deterministisch)
 1. Normalisieren (Kleinschreibung, ä→ae, ß→ss, `%`→„prozent“, Satzzeichen und Stoppwörter entfernen).
