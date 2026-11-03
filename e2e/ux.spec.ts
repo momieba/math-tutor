@@ -247,6 +247,15 @@ test('Barrierefreiheit Grundcheck: lang=de, eine h1, Bedienelemente mit Namen, A
 
   const problems: string[] = [];
   const check = async (n: string) => {
+    // Laufende Farbübergänge (z. B. Button wird nach der Abgabe zur Hauptaktion) abwarten, sonst misst der Kontrast einen Zwischenzustand.
+    await page.evaluate(() =>
+      Promise.all(
+        document
+          .getAnimations()
+          .filter((a) => a.effect?.getTiming().iterations !== Infinity)
+          .map((a) => a.finished.catch(() => undefined)),
+      ),
+    );
     if ((await page.locator('h1').count()) !== 1) problems.push(`${n}: ${await page.locator('h1').count()} h1-Überschriften`);
     const unnamed = await page.evaluate(() =>
       [...document.querySelectorAll<HTMLElement>('a, button, input, select, textarea, [role="radio"]')]
