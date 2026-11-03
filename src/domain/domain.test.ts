@@ -69,7 +69,7 @@ describe('score', () => {
   });
 
   it('wenige leichte Aufgaben ergeben keinen hohen Score', () => {
-    const easy = sub.exercises.filter((e) => e.difficulty === 1);
+    const easy = sub.exercises.filter((e) => e.difficulty === 1).slice(0, 3);
     const p = computeSubtopicProgress(sub.id, sub.exercises, easy.map((e) => mk(e, 1, '2026-01-01T10:00:00Z')));
     expect(p.score).toBeLessThan(60);
   });

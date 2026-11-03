@@ -28,4 +28,4 @@ export const curricula: Curriculum[] = [
 export const topics: AuthoredTopic[] = [prozentrechnung, lineareFunktionen, gleichungssysteme, pythagoras, quadratischeGleichungen, kreisZylinder];
 
 /** Themen mit Aufgabenpool (≥ 50 Aufgaben je Kapitel, adaptives Üben). Die ersten drei Themen werden später nachgezogen. */
-export const POOL_TOPIC_IDS = ['lineare-funktionen', 'lineare-gleichungssysteme', 'kreis-zylinder', 'prozentrechnung', 'quadratische-gleichungen'];
+export const POOL_TOPIC_IDS = ['lineare-funktionen', 'lineare-gleichungssysteme', 'kreis-zylinder', 'prozentrechnung', 'quadratische-gleichungen', 'pythagoras'];

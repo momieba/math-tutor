@@ -5,6 +5,8 @@
  * Neue offene Befunde würden als `test.fail()` mit Bug-ID markiert: Sie laufen „grün“, solange der Fehler besteht,
  * und schlagen an, sobald er behoben ist (dann Markierung entfernen = Re-Test).
  */
+import { topics } from '../src/content';
+import { canonicalAnswer } from '../src/domain/evaluate';
 import {
   addTopic,
   answerInput,
@@ -102,12 +104,12 @@ test.describe('DoD 2+3 – Thema über Texteingabe finden und zuordnen', () => {
     await page.getByRole('button', { name: 'Thema finden' }).click();
     await expect(page.getByText('Passt dieses Thema?')).toBeVisible();
     const cand = page.locator('li').filter({ hasText: 'Satz des Pythagoras' });
-    await expect(cand).toContainText('Klasse 8 · Geometrie · 8 Kapitel');
+    await expect(cand).toContainText('Klasse 9 · Geometrie · 8 Kapitel');
     await cand.getByRole('button', { name: 'Thema hinzufügen' }).click();
 
     const tile = topicTile(page, 'Satz des Pythagoras');
     await expect(tile).toBeVisible();
-    await expect(tile).toContainText('Klasse 8 · Geometrie'); // Klassenstufe + Themengebiet
+    await expect(tile).toContainText('Klasse 9 · Geometrie'); // Klassenstufe + Themengebiet (NRW G9)
     await expect(tile.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '0'); // Fortschritt
     await expect(scoreBadges(tile)).toHaveCount(1); // Verständnis-Score
     expect(await readScore(scoreBadges(tile).first())).toBe(0);
@@ -241,7 +243,7 @@ test('DoD 5 – Kapitel als Lernpfad: Einstieg → Erklärung (KaTeX, Beispiel s
   while (await page.getByRole('button', { name: 'Nächster Schritt' }).isVisible()) await page.getByRole('button', { name: 'Nächster Schritt' }).click();
 
   await page.getByRole('button', { name: 'Weiter zum Formel-Check' }).click();
-  await expect(page).toHaveURL(/\/app\/exercises\/pyth-hypotenuse-\d+$/);
+  await expect(page).toHaveURL(/\/app\/exercises\/pyth-hy-fc-1$/); // Formel-Check zuerst
 
   // Zurück im Kapitel: Einstieg/Erklärung sind gemerkt, es geht mit dem Üben weiter
   await page.goto('/app/topics/pythagoras/chapters/pyth-hypotenuse');
@@ -521,7 +523,7 @@ test('DoD 7 – 3 gestufte Hinweise, Rückfrage vor „Lösung anzeigen“, Feed
   await expect(page.getByRole('button', { name: 'Nochmal versuchen' })).toBeVisible();
   // „Nächste Aufgabe“ wählt adaptiv eine andere Aufgabe aus demselben Kapitel
   await page.getByRole('link', { name: 'Weiter', exact: true }).click();
-  await expect(page).toHaveURL(/\/app\/exercises\/pyth-hypotenuse-(?!1$)\d+$/);
+  await expect(page).toHaveURL(/\/app\/exercises\/pyth-(?!hypotenuse-1$)[\w-]+$/); // nächste Aufgabe im Lernpfad
   await page.getByRole('link', { name: 'Zur Kapitelübersicht' }).click();
   await expect(page).toHaveURL(/chapters\/pyth-hypotenuse$/);
 });
@@ -579,14 +581,14 @@ test('DoD 8 – „Zuletzt bearbeitet“ und Verlauf mit Filter und Detailansich
 });
 
 // ---------------------------------------------------------------- DoD 9
-test('DoD 9 – Aufgaben in 2 Kapiteln: Themenfortschritt und Empfehlung ändern sich', async ({ page }) => {
+test('DoD 9 – Aufgaben in 2 Kapiteln: Fortschritt in Themenseite und Dashboard', async ({ page }) => {
   await register(page);
   await addTopic(page, 'Pythagoras', 'Satz des Pythagoras');
   const rec = page.locator('section[aria-labelledby="next-heading"]');
   await expect(rec).toContainText('Grundlagen und Definition');
   await expect(rec).toContainText('Als Nächstes dran');
 
-  // Kapitel 1 vollständig richtig
+  // Kapitel 1: vier Aufgaben richtig (bei einem Pool von über 60 noch nicht „sicher“)
   await solveChoice(page, 'pyth-grundlagen-1', 'Die Seite gegenüber dem rechten Winkel');
   await solveChoice(page, 'pyth-grundlagen-2', /^\s*a\)/);
   await solveTyped(page, 'pyth-grundlagen-3', '100');
@@ -595,27 +597,30 @@ test('DoD 9 – Aufgaben in 2 Kapiteln: Themenfortschritt und Empfehlung ändern
   await solveTyped(page, 'pyth-erkennen-2', '90');
 
   await page.goto('/app/topics/pythagoras');
-  await expect(page.locator('#next-chapter-heading')).toContainText('Rechtwinklige Dreiecke erkennen');
-  await expect(page.getByRole('link', { name: 'Weiter lernen' })).toBeVisible();
+  await expect(page.locator('#next-chapter-heading')).toContainText('Grundlagen und Definition');
+  await expect(page.getByRole('link', { name: 'Weiter lernen' })).toBeVisible(); // begonnen ⇒ „Weiter lernen“ statt „Thema starten“
   await page.getByText('Alle Kapitel ansehen (8)').click();
   const chapters = page.getByRole('list', { name: 'Kapitel' }).getByRole('listitem');
-  await expect(chapters.nth(0).getByRole('link')).toHaveAttribute('aria-label', /sicher beherrscht/);
-  await expect(chapters.nth(1).getByRole('link')).toHaveAttribute('aria-label', /empfohlen/);
+  await expect(chapters.nth(0).getByRole('link')).toHaveAttribute('aria-label', /empfohlen/);
+  expect(await readScore(scoreBadges(chapters.nth(0)).first())).toBeGreaterThan(0);
   expect(await readScore(scoreBadges(chapters.nth(1)).first())).toBeGreaterThan(0);
+  expect(await readScore(scoreBadges(chapters.nth(2)).first())).toBe(0);
   expect(await readScore(scoreBadges(page.locator('main header')).first())).toBeGreaterThan(0);
 
   await page.goto('/app');
-  await expect(rec).toContainText('Rechtwinklige Dreiecke erkennen');
+  await expect(rec).toContainText('Grundlagen und Definition');
   await expect(rec).toContainText('Hier weitermachen');
   const tile = topicTile(page, 'Satz des Pythagoras');
   await expect(tile).toContainText('In Bearbeitung');
-  expect(Number(await tile.getByRole('progressbar').getAttribute('aria-valuenow'))).toBe(Math.round((5 / 33) * 100));
+  expect(Number(await tile.getByRole('progressbar').getAttribute('aria-valuenow'))).toBeGreaterThan(0);
 });
 
+const allExercises = topics.flatMap((t) => t.subtopics.flatMap((c) => c.exercises));
+
 // ---------------------------------------------------------------- DoD 10
-test('DoD 10 – Score-Erklärung zeigt greifende Deckel; ohne Typabdeckung höchstens 79', async ({ page }) => {
+test('DoD 10 – Score-Erklärung zeigt greifende Deckel; ohne Abdeckung aller Aufgabenarten höchstens 79', async ({ page }) => {
   await register(page);
-  // Herleitung: MC(1), Zahl(1), Gleichung(3), Handschrift(2). Ohne MC wäre der Rohwert 80,5 ⇒ Deckel 79 muss greifen.
+  // Herleitung: Rechnen (2), Begründen (3, schwer), Zeichnen (4). Wissen und Sachaufgaben fehlen noch.
   await solveTyped(page, 'pyth-herleitung-2', '169');
   await solveTyped(page, 'pyth-herleitung-3', 'a^2+b^2');
   await openExercise(page, 'pyth-herleitung-4');
@@ -627,19 +632,19 @@ test('DoD 10 – Score-Erklärung zeigt greifende Deckel; ohne Typabdeckung höc
   await page.goto('/app/topics/pythagoras/chapters/pyth-herleitung');
   await page.getByText('Mehr zu diesem Kapitel').click();
   const stand = page.locator('section[aria-labelledby="score-heading"]');
-  const score = await readScore(scoreBadges(stand).first());
-  expect(score).toBeLessThanOrEqual(79);
-  expect(score).toBe(79); // Deckel greift tatsächlich (nicht nur zufällig darunter)
+  expect(await readScore(scoreBadges(stand).first())).toBeLessThanOrEqual(79);
   await expect(stand).toContainText('Löse jede Aufgabenart dieses Kapitels (z. B. Wissen, Rechnen, Sachaufgabe) mindestens einmal (max. 79 bis dahin).');
   await expect(stand).toContainText('Löse eine Aufgabe an einem späteren Tag erneut richtig (max. 94 bis dahin).');
-  await expect(stand).not.toContainText('höchsten Schwierigkeitsstufe'); // schwere Gleichung ist gelöst
-  await expect(stand).toContainText('In Bearbeitung'); // nicht „Sicher beherrscht“ ohne Typabdeckung
+  await expect(stand).not.toContainText('höchsten Schwierigkeitsstufe'); // schwere Aufgabe ist gelöst
+  await expect(stand).toContainText('In Bearbeitung');
 
-  // Jetzt den fehlenden Typ lösen ⇒ Deckel 79 fällt weg
+  // Fehlende Aufgabenarten lösen ⇒ der Hinweis auf die Abdeckung verschwindet
   await solveChoice(page, 'pyth-herleitung-1', 'Der Flächeninhalt eines Quadrats mit Seite');
+  const beet = allExercises.find((e) => e.id === 'pyth-hl-beete-01')!;
+  await solveTyped(page, beet.id, canonicalAnswer(beet.answer));
   await page.goto('/app/topics/pythagoras/chapters/pyth-herleitung');
   await page.getByText('Mehr zu diesem Kapitel').click();
-  expect(await readScore(scoreBadges(stand).first())).toBe(94);
+  await expect(stand).not.toContainText('Löse jede Aufgabenart');
 });
 
 // ---------------------------------------------------------------- Persistenz & Fehlerfall

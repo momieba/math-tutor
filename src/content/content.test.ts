@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { POOL_TOPIC_IDS, topics } from './index';
 import { canonicalAnswer, evaluateAnswer } from '../domain/evaluate';
+import { exerciseKey } from './templates';
 
 /** Struktur-Prüfung der Wissensbasis: verhindert unvollständige oder inkonsistente Inhalte. */
 describe('Wissensbasis', () => {
@@ -71,7 +72,7 @@ describe('Aufgabenpools', () => {
         for (const d of [1, 2, 3]) expect(ex.filter((e) => e.difficulty === d).length, `Stufe ${d}`).toBeGreaterThanOrEqual(8);
         expect(new Set(ex.map((e) => e.requirement)).size).toBeGreaterThanOrEqual(3);
         expect(ex.filter((e) => e.requirement === 'application').length / ex.length).toBeGreaterThanOrEqual(0.2);
-        expect(new Set(ex.map((e) => e.prompt)).size, 'doppelte Aufgabentexte').toBe(ex.length);
+        expect(new Set(ex.map(exerciseKey)).size, 'doppelte Aufgaben').toBe(ex.length);
       });
     }
   }
@@ -93,7 +94,9 @@ describe('Aufgabenpools', () => {
     const texts = (v: unknown): string[] => (typeof v === 'string' ? [v] : v && typeof v === 'object' ? Object.values(v).flatMap(texts) : []);
     for (const s of poolTopics.flatMap((t) => t.subtopics)) {
       for (const e of s.exercises) {
-        const bad = texts({ ...e, id: '', subtopicId: '' }).find((t) => broken.test(t));
+        // Nur Anzeigetexte prüfen: akzeptierte Eingaben dürfen „sqrt(…)“ o. Ä. enthalten.
+        const shown = { ...e, id: '', subtopicId: '', answer: null, commonMistakes: e.commonMistakes.map((m) => ({ ...m, answers: [] })) };
+        const bad = texts(shown).find((t) => broken.test(t));
         expect(bad, e.id).toBeUndefined();
       }
     }

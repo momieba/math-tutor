@@ -71,12 +71,14 @@ export interface ExerciseTemplate<P> {
 export function fromTemplate<P>(t: ExerciseTemplate<P>): AuthoredExercise[] {
   const rng = createRng(t.id);
   const out: AuthoredExercise[] = [];
-  const prompts = new Set<string>();
+  // Gleiche Frage mit anderen Antwortoptionen bzw. anderer Abbildung ist eine andere Aufgabe.
+  const seen = new Set<string>();
   for (let draw = 0; out.length < t.count; draw++) {
     if (draw > t.count * 50) throw new Error(`Vorlage ${t.id}: nur ${out.length} von ${t.count} verschiedenen Varianten gefunden.`);
     const built = t.build(t.params(rng, out.length), rng);
-    if (prompts.has(built.prompt)) continue;
-    prompts.add(built.prompt);
+    const key = exerciseKey(built);
+    if (seen.has(key)) continue;
+    seen.add(key);
     out.push({
       ...built,
       commonMistakes: withoutCorrectAnswers(built),
@@ -91,6 +93,10 @@ export function fromTemplate<P>(t: ExerciseTemplate<P>): AuthoredExercise[] {
   }
   return out;
 }
+
+/** Woran zwei Aufgaben als gleich erkannt werden: Text, Antwortoptionen und Abbildung. */
+export const exerciseKey = (e: Pick<AuthoredExercise, 'prompt' | 'choices' | 'figure'>) =>
+  JSON.stringify([e.prompt, e.choices?.map((c) => c.label).sort(), e.figure]);
 
 /**
  * Typische Fehlantworten, die bei bestimmten Parametern zufällig die richtige Lösung ergeben (z. B. b = 0), werden entfernt –

@@ -1,0 +1,220 @@
+/** Formel-Check (Lernpfad Schritt 3) für den Satz des Pythagoras. */
+import type { AuthoredSubtopic } from '../../types';
+import { formulaChoice, formulaText, withChecks } from '../checkpoints';
+
+const CHECKS: Record<string, Parameters<typeof withChecks>[1]> = {
+  'pyth-grundlagen': {
+    mark: { 'pyth-grundlagen-1': 'concept', 'pyth-grundlagen-2': 'formula' },
+    add: [
+      formulaText({
+        id: 'pyth-gl-fc-1',
+        subtopicId: 'pyth-grundlagen',
+        prompt: 'Schreibe den Satz des Pythagoras als Formel auf. Die Hypotenuse heißt $c$, die Katheten $a$ und $b$. (Schreibweise z. B. `a^2` für $a^2$)',
+        accepted: ['a^2+b^2=c^2', 'b^2+a^2=c^2', 'c^2=a^2+b^2', 'c^2=b^2+a^2'],
+        finalAnswer: '$a^2 + b^2 = c^2$',
+        hints: ['Es geht um die Quadrate der Seiten.', 'Die beiden Kathetenquadrate zusammen …', '… ergeben das Hypotenusenquadrat.'],
+        explanation: '$a^2 + b^2 = c^2$: Die Summe der Kathetenquadrate ist gleich dem Hypotenusenquadrat.',
+        wrongAnswers: ['a+b=c', 'a^2+c^2=b^2', 'b^2+c^2=a^2'],
+        mistake: 'Auf der Seite allein steht das Quadrat der Hypotenuse $c$: $a^2 + b^2 = c^2$.',
+      }),
+    ],
+  },
+  'pyth-erkennen': {
+    mark: { 'pyth-erkennen-1': 'concept' },
+    add: [
+      formulaChoice({
+        id: 'pyth-er-fc-1',
+        subtopicId: 'pyth-erkennen',
+        prompt: 'Wie groß ist die Winkelsumme in jedem Dreieck?',
+        correct: '$\\alpha + \\beta + \\gamma = 180^\\circ$',
+        wrong: ['$\\alpha + \\beta + \\gamma = 360^\\circ$', '$\\alpha + \\beta + \\gamma = 90^\\circ$', 'Das hängt vom Dreieck ab.'],
+        hints: ['Das gilt für jedes Dreieck.', 'Im Viereck sind es $360^\\circ$.', 'Im Dreieck die Hälfte davon.'],
+        explanation: 'In jedem Dreieck gilt $\\alpha + \\beta + \\gamma = 180^\\circ$.',
+      }),
+      formulaChoice({
+        id: 'pyth-er-fc-2',
+        subtopicId: 'pyth-erkennen',
+        prompt: 'In einem rechtwinkligen Dreieck ist $\\gamma = 90^\\circ$. Was gilt für die beiden anderen Winkel?',
+        correct: '$\\alpha + \\beta = 90^\\circ$',
+        wrong: ['$\\alpha + \\beta = 180^\\circ$', '$\\alpha = \\beta$', '$\\alpha + \\beta = 45^\\circ$'],
+        hints: ['Winkelsumme $180^\\circ$.', 'Davon sind schon $90^\\circ$ vergeben.', 'Es bleiben …'],
+        explanation: '$180^\\circ - 90^\\circ = 90^\\circ$, also $\\alpha + \\beta = 90^\\circ$.',
+      }),
+    ],
+  },
+  'pyth-herleitung': {
+    mark: { 'pyth-herleitung-1': 'formula' },
+    add: [
+      formulaChoice({
+        id: 'pyth-hl-fc-1',
+        subtopicId: 'pyth-herleitung',
+        prompt: 'Was sagt der Satz des Pythagoras über die Quadrate über den Seiten aus?',
+        correct: 'Das Quadrat über der Hypotenuse ist so groß wie die beiden Kathetenquadrate zusammen.',
+        wrong: ['Alle drei Quadrate sind gleich groß.', 'Das Quadrat über der Hypotenuse ist doppelt so groß wie ein Kathetenquadrat.', 'Die Kathetenquadrate sind zusammen größer als das Hypotenusenquadrat.'],
+        hints: ['$a^2$, $b^2$, $c^2$ sind Flächen von Quadraten.', '$a^2 + b^2 = c^2$', 'In Worten …'],
+        explanation: '$a^2 + b^2 = c^2$ heißt: Die beiden kleinen Quadrate haben zusammen dieselbe Fläche wie das große.',
+      }),
+      formulaChoice({
+        id: 'pyth-hl-fc-2',
+        subtopicId: 'pyth-herleitung',
+        difficulty: 2,
+        prompt: 'Beim Ergänzungsbeweis rechnet man $(a + b)^2 - 4 \\cdot \\frac{a \\cdot b}{2}$. Was kommt heraus?',
+        correct: '$a^2 + b^2$',
+        wrong: ['$a^2 + 2ab + b^2$', '$2ab$', '$(a - b)^2$'],
+        hints: ['$(a + b)^2 = a^2 + 2ab + b^2$', '$4 \\cdot \\frac{ab}{2} = 2ab$', 'Abziehen.'],
+        explanation: '$a^2 + 2ab + b^2 - 2ab = a^2 + b^2$ – das ist genau $c^2$.',
+      }),
+    ],
+  },
+  'pyth-hypotenuse': {
+    add: [
+      formulaChoice({
+        id: 'pyth-hy-fc-1',
+        subtopicId: 'pyth-hypotenuse',
+        prompt: 'Mit welcher Formel berechnest du die Hypotenuse $c$ aus den Katheten $a$ und $b$?',
+        correct: '$c = \\sqrt{a^2 + b^2}$',
+        wrong: ['$c = a + b$', '$c = a^2 + b^2$', '$c = \\sqrt{a + b}$'],
+        hints: ['Aus $a^2 + b^2 = c^2$ folgt …', 'Für $c$ musst du die Wurzel ziehen.', 'Unter der Wurzel stehen die Quadrate.'],
+        explanation: '$c = \\sqrt{a^2 + b^2}$',
+        mistake: 'Erst quadrieren und addieren, dann die Wurzel aus der Summe ziehen.',
+      }),
+      formulaText({
+        id: 'pyth-hy-fc-2',
+        subtopicId: 'pyth-hypotenuse',
+        prompt: 'Gib die Formel für die Hypotenuse $c$ an. (Wurzel z. B. als `√(...)`)',
+        accepted: ['c=√(a^2+b^2)', 'c=√(b^2+a^2)', 'c=sqrt(a^2+b^2)', 'c=sqrt(b^2+a^2)', 'c=wurzel(a^2+b^2)', 'c=wurzel(b^2+a^2)'],
+        finalAnswer: '$c = \\sqrt{a^2 + b^2}$',
+        hints: ['Starte bei $a^2 + b^2 = c^2$.', 'Ziehe auf beiden Seiten die Wurzel.', '$c = \\sqrt{\\ldots}$'],
+        explanation: '$c = \\sqrt{a^2 + b^2}$',
+        wrongAnswers: ['c=a+b', 'c=√(a+b)', 'c=a^2+b^2'],
+      }),
+      formulaChoice({
+        id: 'pyth-hy-fc-3',
+        subtopicId: 'pyth-hypotenuse',
+        checkpoint: 'concept',
+        prompt: 'Welche Seite ist im rechtwinkligen Dreieck immer am längsten?',
+        correct: 'die Hypotenuse',
+        wrong: ['die kürzere Kathete', 'die längere Kathete', 'Das hängt vom Dreieck ab.'],
+        hints: ['Sie liegt dem größten Winkel gegenüber.', 'Der größte Winkel ist der rechte.', 'Gegenüber liegt …'],
+        explanation: 'Die Hypotenuse liegt dem rechten (größten) Winkel gegenüber und ist immer die längste Seite.',
+      }),
+    ],
+  },
+  'pyth-kathete': {
+    mark: { 'pyth-kathete-2': 'formula' },
+    add: [
+      formulaText({
+        id: 'pyth-ka-fc-1',
+        subtopicId: 'pyth-kathete',
+        prompt: 'Gib die Formel für die Kathete $b$ an, wenn die Hypotenuse $c$ und die Kathete $a$ bekannt sind. (Wurzel z. B. als `√(...)`)',
+        accepted: ['b=√(c^2-a^2)', 'b=sqrt(c^2-a^2)', 'b=wurzel(c^2-a^2)'],
+        finalAnswer: '$b = \\sqrt{c^2 - a^2}$',
+        hints: ['Starte bei $a^2 + b^2 = c^2$.', 'Ziehe $a^2$ ab: $b^2 = c^2 - a^2$.', 'Wurzel ziehen.'],
+        explanation: '$b = \\sqrt{c^2 - a^2}$',
+        wrongAnswers: ['b=√(c^2+a^2)', 'b=sqrt(c^2+a^2)', 'b=√(a^2-c^2)', 'b=c-a'],
+        mistake: 'Für eine Kathete wird subtrahiert, und zwar Hypotenuse minus Kathete: $\\sqrt{c^2 - a^2}$.',
+      }),
+      formulaChoice({
+        id: 'pyth-ka-fc-2',
+        subtopicId: 'pyth-kathete',
+        checkpoint: 'concept',
+        prompt: 'Warum wird für eine Kathete $c^2 - a^2$ gerechnet und nicht $a^2 - c^2$?',
+        correct: 'Weil die Hypotenuse $c$ die längste Seite ist – sonst käme unter der Wurzel etwas Negatives heraus.',
+        wrong: ['Weil man immer die zweite von der ersten Zahl abzieht.', 'Das ist egal, beides ergibt dasselbe.', 'Weil $a$ immer die kürzeste Seite ist.'],
+        hints: ['Welche Seite ist am längsten?', 'Ihr Quadrat ist am größten.', 'Unter der Wurzel darf nichts Negatives stehen.'],
+        explanation: '$c$ ist die längste Seite, also ist $c^2 - a^2$ positiv.',
+      }),
+    ],
+  },
+  'pyth-umkehrung': {
+    mark: { 'pyth-umkehrung-1': 'concept' },
+    add: [
+      formulaChoice({
+        id: 'pyth-uk-fc-1',
+        subtopicId: 'pyth-umkehrung',
+        prompt: 'Was besagt die Umkehrung des Satzes des Pythagoras ($c$ ist die längste Seite)?',
+        correct: 'Gilt $a^2 + b^2 = c^2$, dann ist das Dreieck rechtwinklig.',
+        wrong: ['Gilt $a + b = c$, dann ist das Dreieck rechtwinklig.', 'Jedes Dreieck erfüllt $a^2 + b^2 = c^2$.', 'Gilt $a^2 + b^2 > c^2$, dann ist das Dreieck rechtwinklig.'],
+        hints: ['Umkehrung: aus der Gleichung auf den rechten Winkel schließen.', 'Die Gleichung muss genau stimmen.', '$a^2 + b^2 = c^2$'],
+        explanation: 'Gilt für die Seiten $a^2 + b^2 = c^2$ (mit $c$ als längster Seite), dann ist das Dreieck rechtwinklig.',
+      }),
+      formulaChoice({
+        id: 'pyth-uk-fc-2',
+        subtopicId: 'pyth-umkehrung',
+        prompt: 'Welche Rechnung prüft, ob ein Dreieck mit den Seiten $9$, $12$ und $15$ rechtwinklig ist?',
+        correct: '$9^2 + 12^2 = 15^2$?',
+        wrong: ['$9^2 + 15^2 = 12^2$?', '$9 + 12 = 15$?', '$12^2 + 15^2 = 9^2$?'],
+        hints: ['Die längste Seite kommt allein auf eine Seite.', 'Die längste Seite ist $15$.', 'Die beiden kürzeren werden quadriert und addiert.'],
+        explanation: '$81 + 144 = 225 = 15^2$ ⇒ rechtwinklig.',
+      }),
+    ],
+  },
+  'pyth-anwendung': {
+    add: [
+      formulaChoice({
+        id: 'pyth-aw-fc-1',
+        subtopicId: 'pyth-anwendung',
+        prompt: 'Wie berechnest du die Diagonale $d$ eines Rechtecks mit den Seiten $a$ und $b$?',
+        correct: '$d = \\sqrt{a^2 + b^2}$',
+        wrong: ['$d = a + b$', '$d = 2a + 2b$', '$d = a \\cdot b$'],
+        hints: ['Die Diagonale teilt das Rechteck in zwei rechtwinklige Dreiecke.', 'Sie ist die Hypotenuse.', 'Pythagoras.'],
+        explanation: '$d = \\sqrt{a^2 + b^2}$ (die Diagonale ist die Hypotenuse).',
+      }),
+      formulaChoice({
+        id: 'pyth-aw-fc-2',
+        subtopicId: 'pyth-anwendung',
+        prompt: 'Eine Leiter der Länge $L$ steht mit dem Fuß im Abstand $a$ von der Wand. Wie hoch reicht sie?',
+        correct: '$h = \\sqrt{L^2 - a^2}$',
+        wrong: ['$h = \\sqrt{L^2 + a^2}$', '$h = L - a$', '$h = \\sqrt{a^2 - L^2}$'],
+        hints: ['Die Leiter ist die Hypotenuse.', 'Gesucht ist eine Kathete.', 'Hypotenusenquadrat minus Kathetenquadrat.'],
+        explanation: '$h = \\sqrt{L^2 - a^2}$',
+      }),
+      formulaChoice({
+        id: 'pyth-aw-fc-3',
+        subtopicId: 'pyth-anwendung',
+        checkpoint: 'concept',
+        prompt: 'Eine Leiter lehnt an einer senkrechten Wand. Welche Strecke ist die Hypotenuse?',
+        correct: 'die Leiter',
+        wrong: ['die Höhe an der Wand', 'der Abstand zur Wand', 'der Boden bis zur Wand'],
+        hints: ['Wo ist der rechte Winkel?', 'Zwischen Wand und Boden.', 'Gegenüber liegt …'],
+        explanation: 'Der rechte Winkel liegt zwischen Wand und Boden; gegenüber liegt die Leiter – sie ist die Hypotenuse.',
+      }),
+    ],
+  },
+  'pyth-gemischt': {
+    add: [
+      formulaChoice({
+        id: 'pyth-gm-fc-1',
+        subtopicId: 'pyth-gemischt',
+        prompt: 'Wie lang ist die Diagonale eines Quadrats mit der Seitenlänge $a$?',
+        correct: '$d = a\\sqrt{2}$',
+        wrong: ['$d = 2a$', '$d = a^2$', '$d = \\sqrt{a}$'],
+        hints: ['$d^2 = a^2 + a^2$', '$d^2 = 2a^2$', 'Wurzel ziehen.'],
+        explanation: '$d = \\sqrt{a^2 + a^2} = \\sqrt{2a^2} = a\\sqrt{2}$',
+      }),
+      formulaChoice({
+        id: 'pyth-gm-fc-2',
+        subtopicId: 'pyth-gemischt',
+        difficulty: 2,
+        prompt: 'Wie hoch ist ein gleichseitiges Dreieck mit der Seitenlänge $a$?',
+        correct: '$h = \\frac{a}{2}\\sqrt{3}$',
+        wrong: ['$h = a\\sqrt{2}$', '$h = \\frac{a}{2}$', '$h = a\\sqrt{3}$'],
+        hints: ['Die Höhe teilt das Dreieck in zwei rechtwinklige Hälften.', '$h^2 = a^2 - \\left(\\frac{a}{2}\\right)^2 = \\frac{3}{4}a^2$', 'Wurzel ziehen.'],
+        explanation: '$h = \\sqrt{a^2 - \\frac{a^2}{4}} = \\frac{a}{2}\\sqrt{3}$',
+      }),
+      formulaChoice({
+        id: 'pyth-gm-fc-3',
+        subtopicId: 'pyth-gemischt',
+        difficulty: 2,
+        prompt: 'Wie lang ist die Raumdiagonale eines Quaders mit den Kanten $a$, $b$ und $c$?',
+        correct: '$d = \\sqrt{a^2 + b^2 + c^2}$',
+        wrong: ['$d = \\sqrt{a^2 + b^2}$', '$d = a + b + c$', '$d = \\sqrt{a + b + c}$'],
+        hints: ['Erst die Diagonale der Grundfläche: $\\sqrt{a^2 + b^2}$.', 'Diese und $c$ sind die Katheten.', 'Zweimal Pythagoras.'],
+        explanation: '$d = \\sqrt{(a^2 + b^2) + c^2} = \\sqrt{a^2 + b^2 + c^2}$',
+      }),
+    ],
+  },
+};
+
+/** Ergänzt die Kapitel um ihren Formel-Check. */
+export const applyChecks = (subs: AuthoredSubtopic[]) => subs.map((s) => (CHECKS[s.id] ? withChecks(s, CHECKS[s.id]) : s));
