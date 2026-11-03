@@ -76,6 +76,17 @@ describe('Aufgabenpools', () => {
     }
   }
 
+  for (const t of poolTopics) {
+    for (const s of t.subtopics) {
+      it(`${s.id}: Formel-Check mit mindestens 3 Fragen (2 zur Formel, wenn das Kapitel Formeln hat)`, () => {
+        const checks = s.exercises.filter((e) => e.checkpoint);
+        expect(checks.length).toBeGreaterThanOrEqual(3);
+        expect(checks.every((e) => e.difficulty <= 2), 'Check-Fragen sind leicht oder mittel').toBe(true);
+        if (s.rules.some((r) => r.math)) expect(checks.filter((e) => e.checkpoint === 'formula').length).toBeGreaterThanOrEqual(2);
+      });
+    }
+  }
+
   it('LaTeX-Befehle haben ihren Backslash (in Template-Strings braucht es \\\\)', () => {
     // Ein einfacher Backslash geht in Template-Strings verloren: `\,` wird zu „,“, `\frac` zu Seitenvorschub + „rac“.
     const broken = /(?<![\\\p{L}])(?:cdot|frac|Rightarrow|sqrt|neq|approx|quad)(?!\p{L})|,\|,|\f/u;

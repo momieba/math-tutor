@@ -1,5 +1,6 @@
 import type { AuthoredTopic } from '../../types';
 import { CURRICULUM_ID } from '../helpers';
+import { applyChecks } from './checks';
 import { funktionsbegriff } from './funktionsbegriff';
 import { proportional } from './proportional';
 import { steigung } from './steigung';
@@ -18,5 +19,5 @@ export const lineareFunktionen: AuthoredTopic = {
   description: 'Funktionen verstehen, Steigung und y-Achsenabschnitt deuten, Geraden aufstellen und Sachaufgaben lösen.',
   keywords: ['lineare funktion', 'lineare funktionen', 'funktion', 'gerade', 'steigung', 'steigungsdreieck', 'y-achsenabschnitt', 'nullstelle', 'schnittpunkt', 'funktionsgleichung', 'wertetabelle', 'proportional', 'graph'],
   reviewStatus: 'internal-review',
-  subtopics: [funktionsbegriff, proportional, steigung, aufstellen, nullstellen, anwendungen],
+  subtopics: applyChecks([funktionsbegriff, proportional, steigung, aufstellen, nullstellen, anwendungen]),
 };

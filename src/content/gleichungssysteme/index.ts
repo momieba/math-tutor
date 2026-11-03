@@ -1,5 +1,6 @@
 import type { AuthoredTopic } from '../../types';
 import { CURRICULUM_ID } from '../helpers';
+import { applyChecks } from './checks';
 import { gleichungen } from './gleichungen';
 import { grafisch } from './grafisch';
 import { einsetzen } from './einsetzen';
@@ -19,5 +20,5 @@ export const gleichungssysteme: AuthoredTopic = {
   description: 'Zwei Gleichungen mit zwei Variablen grafisch und rechnerisch lösen – mit Einsetzungs-, Gleichsetzungs- und Additionsverfahren.',
   keywords: ['lineare gleichungssysteme', 'gleichungssystem', 'gleichungssysteme', 'lgs', 'einsetzungsverfahren', 'gleichsetzungsverfahren', 'additionsverfahren', 'zwei variablen', 'zwei unbekannte', 'gleichungen mit zwei variablen'],
   reviewStatus: 'internal-review',
-  subtopics: [gleichungen, grafisch, einsetzen, gleichsetzen, addition, sonderfaelle, sachaufgaben],
+  subtopics: applyChecks([gleichungen, grafisch, einsetzen, gleichsetzen, addition, sonderfaelle, sachaufgaben]),
 };

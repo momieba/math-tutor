@@ -1,5 +1,6 @@
 import type { AuthoredTopic } from '../../types';
 import { CURRICULUM_ID } from '../helpers';
+import { applyChecks } from './checks';
 import { ausschnitt } from './ausschnitt';
 import { flaeche } from './flaeche';
 import { prisma } from './prisma';
@@ -19,5 +20,5 @@ export const kreisZylinder: AuthoredTopic = {
   description: 'Umfang und Fläche von Kreisen, Kreisausschnitte und -ringe, Prismen und Zylinder berechnen.',
   keywords: ['kreis', 'kreise', 'kreisumfang', 'umfang', 'kreisfläche', 'flächeninhalt kreis', 'pi', 'π', 'kreiszahl', 'kreisausschnitt', 'kreisbogen', 'kreisring', 'zylinder', 'prisma', 'prismen', 'volumen', 'oberfläche', 'körper', 'körperberechnung'],
   reviewStatus: 'internal-review',
-  subtopics: [umfang, flaeche, ausschnitt, ring, prisma, zylinder, zusammengesetzt],
+  subtopics: applyChecks([umfang, flaeche, ausschnitt, ring, prisma, zylinder, zusammengesetzt]),
 };
