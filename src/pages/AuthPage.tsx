@@ -1,14 +1,17 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
+import { ConsentCheckbox } from '../components/ConsentCheckbox';
+import { CONSENT_VERSION } from '../config/legal';
 import { services } from '../services';
 
-/** Login und Registrierung (E-Mail + Google). */
+/** Login und Registrierung (E-Mail + Google). Registrierung nur mit Einwilligung (Version in src/config/legal.ts). */
 export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
   const navigate = useNavigate();
   const from = (useLocation().state as { from?: string } | null)?.from ?? '/app';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [consent, setConsent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -19,7 +22,7 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
     setError(null);
     try {
       if (mode === 'register') {
-        const s = await services.auth.signUpWithEmail(email, password, name);
+        const s = await services.auth.signUpWithEmail(email, password, name, CONSENT_VERSION);
         if (!s) return setInfo('Bitte bestätige deine E-Mail-Adresse über den Link in deinem Postfach.');
       } else {
         await services.auth.signInWithEmail(email, password);
@@ -53,6 +56,12 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
         )}
         <label className="block">E-Mail<input className={input} type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" /></label>
         <label className="block">Passwort<input className={input} type="password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} /></label>
+        {mode === 'login' && (
+          <p className="text-sm -mt-2">
+            <Link to="/forgot-password" className="text-indigo-700 min-h-11 inline-flex items-center">Passwort vergessen?</Link>
+          </p>
+        )}
+        {mode === 'register' && <ConsentCheckbox checked={consent} onChange={setConsent} required />}
         {error && <p role="alert" className="text-red-700 text-sm">{error}</p>}
         {info && <p role="status" className="text-green-700 text-sm">{info}</p>}
         <button disabled={busy} className="w-full rounded-lg bg-indigo-600 text-white disabled:opacity-50">{mode === 'login' ? 'Anmelden' : 'Registrieren'}</button>

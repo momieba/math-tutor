@@ -11,6 +11,8 @@ export interface Profile {
   role: Role;
   grade?: number;
   createdAt: string; // ISO
+  /** Version der akzeptierten Datenschutz-/Nutzungsbedingungen (src/config/legal.ts). Fehlt ⇒ Einwilligung einholen. */
+  consentVersion?: string;
 }
 
 export interface Session {
@@ -84,6 +86,19 @@ export interface AttemptRecord extends Attempt {
   submission?: Submission;
 }
 
+/**
+ * Abgabe aus der Oberfläche. Enthält bewusst keine Bewertung und keine Hilfen-Zähler:
+ * Beides bestimmt der Bewertungsdienst (Supabase: Edge Function `grade-attempt` + exercise_sessions).
+ */
+export interface AttemptSubmission {
+  userId: string;
+  exerciseId: string;
+  answerRaw: string;
+  startedAt: string;
+  submission?: { kind: SubmissionKind; dataUrl?: string; strokes?: unknown };
+}
+
+/** Bewerteter Versuch, wie ihn der lokale Bewertungsdienst speichert (intern, lokaler Modus). */
 export interface NewAttemptInput {
   userId: string;
   exerciseId: string;

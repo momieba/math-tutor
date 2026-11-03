@@ -11,6 +11,8 @@
     "typecheck": "tsc -b",
     "seed:sql": "tsx scripts/generate-seed.ts",
     "db:check": "node scripts/check-db.mjs",
+    "functions:sync": "node scripts/sync-functions.mjs",
+    "test:functions": "node scripts/sync-functions.mjs --check && npx -y deno@2.9.6 test supabase/functions",
     "test:e2e": "playwright test",
     "images:landing": "node scripts/capture-landing-images.mjs"
   },

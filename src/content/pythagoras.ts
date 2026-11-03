@@ -1,9 +1,9 @@
-import type { Topic } from '../types';
+import type { AuthoredTopic } from '../types';
 import { CURRICULUM_ID, videoPlaceholder } from './helpers';
 
 const T = 'pythagoras';
 
-export const pythagoras: Topic = {
+export const pythagoras: AuthoredTopic = {
   id: T,
   curriculumId: CURRICULUM_ID,
   subject: 'Mathematik',

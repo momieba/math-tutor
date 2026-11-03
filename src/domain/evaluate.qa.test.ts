@@ -16,11 +16,11 @@
  */
 import { describe, expect, it } from 'vitest';
 import { topics } from '../content';
-import type { Exercise } from '../types';
+import type { AuthoredExercise } from '../types';
 import { evaluateAnswer, evaluateHandwriting, parseNumber, parseNumberSet } from './evaluate';
 
 const all = topics.flatMap((t) => t.subtopics.flatMap((s) => s.exercises));
-const ex = (id: string): Exercise => {
+const ex = (id: string): AuthoredExercise => {
   const e = all.find((x) => x.id === id);
   if (!e) throw new Error(`Aufgabe ${id} fehlt`);
   return e;
@@ -251,7 +251,7 @@ describe('Regressionstests: behobene Befunde BUG-01 … BUG-06', () => {
 const de = (n: number) => String(n).replace('.', ',');
 
 /** Alle Eingaben, die für eine Aufgabe aus ihrer eigenen Soll-Antwort folgen (Schülersicht). */
-function ownAnswers(e: Exercise): string[] {
+function ownAnswers(e: AuthoredExercise): string[] {
   const a = e.answer;
   switch (a.kind) {
     case 'choice':

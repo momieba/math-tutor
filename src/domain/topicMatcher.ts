@@ -6,6 +6,9 @@
  */
 import type { Topic } from '../types';
 
+/** Für das Matching reichen Titel, Schlüsselwörter und Kapiteltitel. */
+export type MatchableTopic = Pick<Topic, 'id' | 'title' | 'keywords'> & { subtopics: { id: string; title: string }[] };
+
 export interface MatchCandidate {
   topicId: string;
   title: string;
@@ -52,7 +55,7 @@ function tokenMatches(q: string, k: string): boolean {
   return min >= 5 && (q.startsWith(k) || k.startsWith(q));
 }
 
-export function matchTopic(query: string, topics: Topic[]): MatchResult {
+export function matchTopic(query: string, topics: MatchableTopic[]): MatchResult {
   const nq = ` ${normalize(query)} `;
   const qTokens = tokens(query);
   const all: MatchCandidate[] = topics.map((t) => {

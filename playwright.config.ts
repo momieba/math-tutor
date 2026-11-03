@@ -35,6 +35,7 @@ export default defineConfig({
     url: `http://localhost:${PORT}`,
     reuseExistingServer: false,
     timeout: 120_000,
-    env: { VITE_SUPABASE_URL: '', VITE_SUPABASE_ANON_KEY: '' },
+    // Production-Build ohne Supabase startet nur mit ausdrücklichem lokalem Modus (sonst Konfigurationsfehler).
+    env: { VITE_SUPABASE_URL: '', VITE_SUPABASE_ANON_KEY: '', VITE_DATA_MODE: 'local' },
   },
 });

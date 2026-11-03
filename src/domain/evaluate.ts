@@ -2,7 +2,10 @@
  * Deterministische Antwortprüfung (Phase 1). Reine Funktion, ohne I/O.
  * Phase 2: Handschrift/Foto-Auswertung per KI liefert zusätzlich Schritt-Markierungen (Correction.marks).
  */
-import type { CorrectionMark, Exercise, Verdict } from '../types';
+import type { AuthoredExercise, CorrectionMark, Verdict } from '../types';
+
+/** Was die Prüfung von einer Aufgabe braucht: nur der Lösungsschlüssel (läuft lokal und in der Edge Function). */
+export type GradableExercise = Pick<AuthoredExercise, 'answer' | 'commonMistakes'>;
 
 export interface EvaluationResult {
   verdict: Verdict;
@@ -198,7 +201,7 @@ export function parseNumberSet(raw: string): number[] | null {
   return nums;
 }
 
-function matchMistake(ex: Exercise, raw: string) {
+function matchMistake(ex: GradableExercise, raw: string) {
   const n = normalizeText(raw);
   const num = parseNumber(raw);
   return ex.commonMistakes.find((m) =>
@@ -206,7 +209,7 @@ function matchMistake(ex: Exercise, raw: string) {
   );
 }
 
-export function evaluateAnswer(ex: Exercise, raw: string): EvaluationResult {
+export function evaluateAnswer(ex: GradableExercise, raw: string): EvaluationResult {
   const a = ex.answer;
   const unclear = (msg: string): EvaluationResult => ({ verdict: 'unclear', points: 0, feedback: msg, marks: [{ color: 'yellow', message: msg }] });
   if (!raw.trim()) return unclear('Keine Antwort erkannt.');
@@ -264,7 +267,7 @@ export const UNCHECKED_WORK_MESSAGE =
  * Ohne Endergebnis gibt es keine Bewertung (`unclear`), statt eine unsichere Korrektur anzuzeigen (Konzept §8/§9).
  * Phase 2: KI-Auswertung (Edge Function `grade-submission`) ersetzt die gelbe Markierung durch Schritt-Markierungen.
  */
-export function evaluateHandwriting(ex: Exercise, finalAnswer: string, hasDrawing: boolean): EvaluationResult {
+export function evaluateHandwriting(ex: GradableExercise, finalAnswer: string, hasDrawing: boolean): EvaluationResult {
   if (!finalAnswer.trim()) {
     const msg = hasDrawing
       ? 'Handschrift wird noch nicht automatisch gelesen. Bitte trage dein Endergebnis in das Feld unter der Schreibfläche ein.'

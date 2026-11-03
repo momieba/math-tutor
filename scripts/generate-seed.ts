@@ -6,6 +6,7 @@
 import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { curricula, topics } from '../src/content/index';
+import { answerFormatOf } from '../src/content/publicView';
 
 type Val = string | number | boolean | null | undefined | { json: unknown } | { arr: string[] };
 
@@ -50,10 +51,12 @@ topics.forEach((t, ti) => {
       out.push(
         upsert('exercises', ['id'], {
           id: e.id, subtopic_id: e.subtopicId, position: ei, type: e.type, difficulty: e.difficulty, prompt: e.prompt,
-          choices: { json: e.choices }, answer: { json: e.answer }, objectives: { arr: e.objectives },
-          common_mistakes: { json: e.commonMistakes }, figure: { json: e.figure },
+          choices: { json: e.choices }, answer_format: { json: answerFormatOf(e.answer) }, objectives: { arr: e.objectives },
+          figure: { json: e.figure },
         }),
       );
+      // Lösungsschlüssel getrennt: für Clients nicht lesbar (0002_production.sql)
+      out.push(upsert('exercise_keys', ['exercise_id'], { exercise_id: e.id, answer: { json: e.answer }, common_mistakes: { json: e.commonMistakes } }));
       out.push(upsert('solutions', ['exercise_id'], { exercise_id: e.id, steps: { json: e.solution.steps }, final_answer: e.solution.finalAnswer, alternative: { json: e.solution.alternative } }));
       e.hints.forEach((h, hi) => out.push(upsert('hints', ['exercise_id', 'level'], { exercise_id: e.id, level: hi + 1, text: h })));
     });

@@ -8,6 +8,7 @@
 import {
   addTopic,
   answerInput,
+  consentCheckbox,
   drawWithMouse,
   expect,
   feedbackPanel,
@@ -53,6 +54,7 @@ test.describe('DoD 1 – Konto erstellen und anmelden', () => {
     await page.getByLabel('Name').fill('Ben2');
     await page.getByLabel('E-Mail').fill(user.email.toUpperCase());
     await page.getByLabel('Passwort').fill('nochmal12345');
+    await consentCheckbox(page).check();
     await page.getByRole('button', { name: 'Registrieren' }).click();
     await expect(page.getByRole('alert')).toContainText('existiert bereits ein Konto');
   });
@@ -67,11 +69,27 @@ test.describe('DoD 1 – Konto erstellen und anmelden', () => {
     expect(tooShort).toBe(true);
   });
 
-  test('„Mit Google fortfahren“ meldet im lokalen Modus den Demo-Nutzer an', async ({ page }) => {
+  test('„Mit Google fortfahren“ meldet im lokalen Modus den Demo-Nutzer an (Einwilligung beim ersten Mal)', async ({ page }) => {
     await page.goto('/login');
     await page.getByRole('button', { name: 'Mit Google fortfahren' }).click();
     await expect(page).toHaveURL(/\/app$/);
+    // Google liefert keine Einwilligung mit ⇒ Einwilligungsseite vor dem Dashboard
+    await expect(page.getByRole('heading', { name: 'Bevor es losgeht' })).toBeVisible();
+    const accept = page.getByRole('button', { name: 'Einverstanden' });
+    await expect(accept).toBeDisabled();
+    await consentCheckbox(page).check();
+    await accept.click();
     await expect(page.getByRole('heading', { name: 'Hallo Demo (Google)!' })).toBeVisible();
+  });
+
+  test('Registrierung ohne Einwilligung ist nicht möglich', async ({ page }) => {
+    await page.goto('/register');
+    await page.getByLabel('Name').fill('Ohne');
+    await page.getByLabel('E-Mail').fill('ohne@example.test');
+    await page.getByLabel('Passwort').fill('Geheim123!');
+    await page.getByRole('button', { name: 'Registrieren' }).click();
+    await expect(page).toHaveURL(/\/register$/);
+    expect(await consentCheckbox(page).evaluate((el: HTMLInputElement) => el.validity.valueMissing)).toBe(true);
   });
 });
 

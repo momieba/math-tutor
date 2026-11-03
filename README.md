@@ -8,43 +8,54 @@ Architektur: siehe [ARCHITECTURE.md](./ARCHITECTURE.md).
 npm install
 npm run dev          # http://localhost:5173
 ```
-Ohne `.env` läuft die App automatisch im **lokalen Modus**: Konten und Lernstand liegen im `localStorage` des Browsers, die Anmeldung ist eine Mock-Auth. „Mit Google anmelden“ meldet dabei einen Demo-Nutzer an. Im Header steht dann das Badge „Lokaler Modus“. Zum Zurücksetzen die `localStorage`-Einträge mit dem Präfix `mathmvp:` löschen.
+Ohne `.env` läuft der Entwicklungsserver im **lokalen Modus**: Konten und Lernstand liegen im `localStorage` des Browsers, die Anmeldung ist eine Mock-Auth. „Mit Google anmelden“ meldet dabei einen Demo-Nutzer an. Im Header steht dann das Badge „Lokaler Modus“. Zum Zurücksetzen die `localStorage`-Einträge mit dem Präfix `mathmvp:` löschen.
+**Production-Builds** starten ohne Supabase-Konfiguration nicht, sondern zeigen einen Konfigurationsfehler. Eine reine Demo ohne Cloud braucht ausdrücklich `VITE_DATA_MODE=local`.
 
 ## Befehle
 | Befehl | Zweck |
 |---|---|
 | `npm run build` | Typecheck + Produktions-Build |
-| `npm test` | Unit-Tests (Content-Vollständigkeit, Bewertung, Score, Topic-Matching) |
+| `npm test` | Unit-Tests (Content-Vollständigkeit, Bewertung, Score, Topic-Matching, Abgabe/Hilfen) |
 | `npm run typecheck` | nur TypeScript |
 | `npm run seed:sql` | `supabase/seed.sql` aus `src/content` erzeugen (nach jeder Inhaltsänderung) |
-| `npm run db:check` | Migration + Seed + RLS-Regeln lokal gegen PGlite prüfen |
-| `npm run test:e2e` | Playwright-E2E (iPad-Profil, Touch) für DoD 1–10 und UX/A11y; einmalig `npx playwright install chromium` |
+| `npm run db:check` | alle Migrationen + Seed + RLS/RPC-Regeln lokal gegen PGlite prüfen (mit Supabase-Standardrechten) |
+| `npm run functions:sync` | Bewertungslogik (`src/domain/evaluate.ts`, Typen) in die Edge Functions kopieren (nach Änderungen daran) |
+| `npm run test:functions` | Edge Functions: Synchronität prüfen + Deno-Tests (lädt Deno per npx) |
+| `npm run test:e2e` | Playwright-E2E (iPad-Profil, Touch, lokaler Modus); einmalig `npx playwright install chromium` |
+
+CI (`.github/workflows/ci.yml`) führt all das bei jedem Push und Pull Request aus.
 
 ## Stand
-**Lokales MVP freigegeben** (Phase 1, DoD §25 Punkte 1–10, Tester-Abnahme). Teststand bei `4bd95eb`: 724 Unit-Tests (+3 Todos zu Inhaltsfragen), 44 E2E-Tests, `db:check` grün, keine offenen Bugs. Nicht getestet: Safari/WebKit, echtes iPad mit Apple Pencil, Supabase-Modus gegen eine echte Instanz. Offene Entscheidungen: [ARCHITECTURE.md §11](./ARCHITECTURE.md#11-annahmen-und-offene-punkte).
+**Produktionsreif im Code** (Supabase + Vercel), Klassen 7–9 mit den Themen Prozentrechnung, Satz des Pythagoras und quadratische Gleichungen (55 Aufgaben).
+- **Inhalte in der Datenbank:** Im Supabase-Modus liest die App Themen, Kapitel und Aufgaben aus Postgres. Gepflegt werden sie geprüft in `src/content` und per `seed.sql` eingespielt.
+- **Bewertung serverseitig:** Antworten, Hinweise, Musterlösungen und typische Fehler sind für Clients nicht lesbar. Bewertet wird in der Edge Function `grade-attempt`, Hinweise und Lösung gibt es nur über protokollierende RPCs. Der Score lässt sich nicht fälschen.
+- **Konten:** E-Mail (mit Bestätigung) und Google, Einwilligung mit Version, Passwort vergessen/ändern, Datenexport (JSON), Konto löschen inkl. Bilder.
+- **Betrieb:** Security-Header/CSP auf Vercel, lokaler Modus in Production gesperrt, CI, manueller Supabase-Deploy-Workflow.
 
-## Supabase-Modus (optional)
-1. Supabase-Projekt anlegen und `supabase/migrations/0001_init.sql` ausführen, danach `supabase/seed.sql` (SQL-Editor oder `supabase db push`).
-2. Unter Auth → Providers E-Mail und Google aktivieren, Redirect-URL `http://localhost:5173/app` eintragen.
-3. `.env.example` nach `.env` kopieren und `VITE_SUPABASE_URL` sowie `VITE_SUPABASE_ANON_KEY` eintragen. **Nur den Anon-Key verwenden, niemals den service_role-Key.**
-4. `npm run dev`. Mit `VITE_DATA_MODE=local` lässt sich der lokale Modus erzwingen.
+Nicht getestet: Safari/WebKit, echtes iPad mit Apple Pencil, der Supabase-Modus gegen eine echte Instanz (Schema/RLS/RPCs sind per PGlite, Edge Functions per Deno-Tests abgedeckt). Offene Aufgaben und Entscheidungen: [docs/TODO.md](./docs/TODO.md).
 
-## Deployment auf Vercel
-Die Einstellungen stehen in `vercel.json` und werden beim Import des GitHub-Repos automatisch übernommen:
+## Go-Live (Supabase + Vercel)
+Einmalig, je Umgebung (`staging`, `production`):
 
-| Einstellung | Wert |
-|---|---|
-| Framework | Vite |
-| Install / Build | `npm ci` / `npm run build` (Typecheck + Vite-Build) |
-| Output | `dist` |
-| SPA-Routing | Rewrite aller Pfade auf `index.html` (Deep-Links wie `/app/history` funktionieren) |
+1. **Supabase-Projekt** in der Region **EU (Frankfurt)** anlegen. Für den Livebetrieb den Pro-Tarif wählen (Free pausiert Projekte und hat keine Backups).
+2. **Datenbank, Inhalte, Functions** einspielen, entweder lokal:
+   ```bash
+   npx supabase@3.0.0 login
+   npx supabase@3.0.0 link --project-ref <ref>
+   npx supabase@3.0.0 db push --remote --include-seed
+   npx supabase@3.0.0 functions deploy grade-attempt --use-api
+   npx supabase@3.0.0 functions deploy delete-account --use-api
+   ```
+   oder über den GitHub-Workflow **Supabase deploy** (Actions → „Run workflow“). Dafür im GitHub-Environment die Secrets `SUPABASE_ACCESS_TOKEN` und `SUPABASE_DB_PASSWORD` sowie die Variable `SUPABASE_PROJECT_REF` anlegen.
+3. **Auth konfigurieren** (Dashboard → Authentication):
+   - URL Configuration: *Site URL* = Produktions-Domain; *Redirect URLs* = `https://<domain>/app`, `https://<domain>/reset-password` (Staging zusätzlich `https://*.vercel.app/**`).
+   - E-Mail: Bestätigung an, Mindestlänge Passwort 8 mit Buchstaben + Ziffern (steht auch in `supabase/config.toml`, übertragbar mit `npx supabase@3.0.0 config push`).
+   - **Eigener SMTP-Server** (z. B. ein EU-Anbieter): Der eingebaute Versand ist stark begrenzt und nur zum Testen gedacht. E-Mail-Vorlagen auf Deutsch übersetzen.
+   - Google: OAuth-Client in der Google Cloud Console anlegen, Client-ID/Secret eintragen.
+4. **Vercel:** Repo importieren (Einstellungen kommen aus `vercel.json`). Unter Settings → Environment Variables getrennt für *Preview* (→ staging) und *Production* (→ production) `VITE_SUPABASE_URL` und `VITE_SUPABASE_ANON_KEY` setzen. **Nur den Anon-Key, nie den service_role-Key.** Vercel Hobby ist nur nichtkommerziell erlaubt, für ein Abo-Produkt Pro (oder z. B. Cloudflare Pages).
+   Die CSP in `vercel.json` erlaubt Verbindungen zu `*.supabase.co`. Bei einer eigenen Supabase-Domain muss sie dort ergänzt werden.
+5. **Rechtliches (Blocker):** Impressum, Datenschutzerklärung und Nutzungsbedingungen (`src/pages/LegalPage.tsx`, derzeit Platzhalter) mit echten Angaben füllen und prüfen lassen, AV-Verträge mit Supabase und Vercel abschließen. Bei geänderten Texten `CONSENT_VERSION` in `src/config/legal.ts` hochzählen, dann werden alle Nutzer erneut gefragt.
+6. **Abnahme auf staging:** Registrieren (Bestätigungs-Mail), Google-Login, Aufgabe mit Hinweis + Handschrift abgeben, Verlauf mit Bild, Passwort zurücksetzen, Datenexport, Konto löschen.
 
-**Env-Variablen** (Vercel → Settings → Environment Variables, getrennt für *Preview* und *Production*):
-- `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` – nur den **Anon-Key**, nie den service_role-Key. Die Werte werden beim Build ins Bundle eingebettet; nach einer Änderung neu deployen.
-- Optional `VITE_DATA_MODE=local`, um den lokalen Modus zu erzwingen.
-
-**Ohne diese Variablen läuft das Deployment im lokalen Modus** (Daten nur im Browser). Für Demos ist das brauchbar, für echte Nutzer nicht.
-
-Im Supabase-Modus zusätzlich unter Supabase → Auth → URL Configuration die Vercel-Domains als Redirect-URLs eintragen (Production-Domain und `https://*.vercel.app/**` für Previews).
-
-Hinweis: Vercel *Hobby* ist nur für nicht-kommerzielle Nutzung erlaubt. Zielarchitektur und offene Fragen: [ARCHITECTURE.md §12](./ARCHITECTURE.md#12-zielarchitektur--migrationspfad-supabase--vercel).
+**Inhalte ändern:** in `src/content` bearbeiten → `npm test` → `npm run seed:sql` → Pull Request mit Review → nach dem Merge den Workflow *Supabase deploy* ausführen. Der Seed ist idempotent (UPSERT), vorhandene Versuche bleiben erhalten.
+**Bewertungslogik ändern:** `src/domain/evaluate.ts` bearbeiten → `npm run functions:sync` → `grade-attempt` neu deployen, damit Server und lokaler Modus gleich bewerten (CI prüft die Synchronität).

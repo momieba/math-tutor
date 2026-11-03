@@ -13,20 +13,19 @@ import { SolutionView } from '../components/SolutionView';
 import { StatusBadge } from '../components/StatusBadge';
 import { Button, ButtonLink, Dialog, EmptyState, Skeleton, Tag, useToast } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
-import { evaluateAnswer, evaluateHandwriting, type EvaluationResult } from '../domain/evaluate';
+import type { EvaluationResult } from '../domain/evaluate';
 import { DIFFICULTY_LABEL, EXERCISE_TYPE_LABEL } from '../domain/progressView';
 import { SCORE_CONFIG } from '../domain/score';
 import { services, type PendingAttempt } from '../services';
-import type { AttemptRecord, Exercise, NewAttemptInput, Subtopic, SubtopicProgress } from '../types';
+import type { AttemptRecord, AttemptSubmission, Exercise, ExerciseReview, ModelSolution, Subtopic, SubtopicProgress } from '../types';
 
 type Phase =
   | { kind: 'answering' }
   | { kind: 'saving' }
-  | { kind: 'saved'; record: AttemptRecord; evaluation: EvaluationResult }
-  | { kind: 'failed'; input: NewAttemptInput; evaluation: EvaluationResult; error: string; draftSaved: boolean; imageDropped: boolean };
+  | { kind: 'saved'; record: AttemptRecord; evaluation: EvaluationResult; review: ExerciseReview }
+  | { kind: 'failed'; input: AttemptSubmission; error: string; draftSaved: boolean; imageDropped: boolean };
 
-const toEvaluation = (c: NewAttemptInput['correction']): EvaluationResult => ({ verdict: c.verdict, points: c.points, feedback: c.feedback, marks: c.marks });
-const clampHints = (n: number) => Math.min(3, Math.max(0, n)) as 0 | 1 | 2 | 3;
+const errorText = (e: unknown) => (e instanceof Error && e.message ? e.message : 'Das hat nicht geklappt. Bitte versuche es erneut.');
 
 /** Freitext mit Mathe-Zeichen bekommt eine KaTeX-Vorschau (reine Wörter wie „Grundwert“ nicht). */
 const looksMathy = (s: string) => /[\d^_=+\-*/\\√²³]/.test(s);
@@ -35,7 +34,8 @@ const prefersReducedMotion = () => typeof window !== 'undefined' && window.match
 
 /**
  * Aufgabe bearbeiten (Fokus-Modus): Eingabe je Typ, gestufte Hinweise, „Lösung anzeigen“, Abgabe, Feedback, Musterlösung.
- * Abgabe: evaluate.ts (deterministisch) → services.attempts.submit (speichert, sonst Entwurf + erneuter Versuch).
+ * Die Seite kennt die Lösung nicht: Hinweise und Musterlösung kommen einzeln vom Bewertungsdienst (services.grading),
+ * die Abgabe wird dort bewertet und gespeichert (services.attempts.submit, sonst Entwurf + erneuter Versuch).
  */
 export default function ExercisePage() {
   const { exerciseId = '' } = useParams();
@@ -54,8 +54,11 @@ export default function ExercisePage() {
 
   const [answer, setAnswer] = useState('');
   const [drawing, setDrawing] = useState<CanvasHistory>(emptyHistory);
-  const [hintsUsed, setHintsUsed] = useState<0 | 1 | 2 | 3>(0);
-  const [solutionViewed, setSolutionViewed] = useState(false);
+  /** Bereits aufgedeckte Hinweise bzw. vor der Abgabe angesehene Musterlösung (vom Bewertungsdienst protokolliert). */
+  const [hints, setHints] = useState<string[]>([]);
+  const [solution, setSolution] = useState<ModelSolution | null>(null);
+  const [helpBusy, setHelpBusy] = useState(false);
+  const [helpError, setHelpError] = useState<string | null>(null);
   const [confirmSolution, setConfirmSolution] = useState(false);
   const [startedAt, setStartedAt] = useState(() => new Date().toISOString());
   const [notice, setNotice] = useState<EvaluationResult | null>(null);
@@ -67,8 +70,9 @@ export default function ExercisePage() {
   function resetForm() {
     setAnswer('');
     setDrawing(emptyHistory());
-    setHintsUsed(0);
-    setSolutionViewed(false);
+    setHints([]);
+    setSolution(null);
+    setHelpError(null);
     setConfirmSolution(false);
     setStartedAt(new Date().toISOString());
     setNotice(null);
@@ -85,26 +89,27 @@ export default function ExercisePage() {
     void (async () => {
       const e = await services.content.getExercise(exerciseId);
       const s = e ? await services.content.getSubtopic(e.subtopicId) : null;
-      const [draft, previous, topic, before] = e
+      const [draft, previous, topic, before, help] = e
         ? await Promise.all([
             services.attempts.getPending(userId, e.id),
             services.learner.listAttempts(userId, { exerciseId: e.id }).catch(() => []),
             s ? services.content.getTopic(s.topicId).catch(() => null) : null,
             s ? services.progress.getSubtopicProgress(userId, s.id).catch(() => null) : null,
+            services.grading.getSession(userId, e.id).catch(() => null),
           ])
-        : [null, [], null, null];
+        : [null, [], null, null, null];
       if (!active) return;
       setEx(e);
       setSub(s);
       setTopicTitle(topic?.title ?? null);
       setPreviousCount(previous.length);
       setScoreBefore(before?.score ?? null);
+      setHints(help?.hints ?? []);
+      setSolution(help?.solution ?? null);
       if (draft) {
         // Entwurf in das Formular übernehmen, damit nichts verloren wirkt.
         setPending(draft);
         setAnswer(draft.input.answerRaw);
-        setHintsUsed(draft.input.hintsUsed);
-        setSolutionViewed(draft.input.solutionViewed);
         setStartedAt(draft.input.startedAt);
         const strokes = draft.input.submission?.strokes;
         if (isStrokeList(strokes)) setDrawing(historyFromStrokes(strokes));
@@ -148,33 +153,61 @@ export default function ExercisePage() {
   const chapterUrl = `/app/topics/${chapter.topicId}/chapters/${chapter.id}`;
   const locked = phase.kind !== 'answering';
   const isHandwriting = exercise.type === 'handwriting';
-  const unit = exercise.answer.kind === 'numeric' ? exercise.answer.unit : undefined;
+  const unit = exercise.answerFormat.kind === 'numeric' ? exercise.answerFormat.unit : undefined;
   const saved = phase.kind === 'saved';
+  const hintsUsed = hints.length;
+  const solutionViewed = solution !== null;
 
-  async function send(input: NewAttemptInput, evaluation: EvaluationResult) {
+  async function send(input: AttemptSubmission) {
+    setNotice(null);
     setPhase({ kind: 'saving' });
     const result = await services.attempts.submit(input);
-    if (result.ok) {
-      setPending(null);
-      setPreviousCount((n) => n + 1);
-      setPhase({ kind: 'saved', record: result.record, evaluation });
-      toast('Lösung gespeichert');
-      services.progress.getSubtopicProgress(userId, chapter.id).then(setChapterProgress, () => setChapterProgress(null));
-    } else {
-      setPhase({ kind: 'failed', input, evaluation, error: result.error, draftSaved: result.draftSaved, imageDropped: result.imageDropped });
+    if (!result.ok) {
+      setPhase({ kind: 'failed', input, error: result.error, draftSaved: result.draftSaved, imageDropped: result.imageDropped });
+      return;
+    }
+    const outcome = result.outcome;
+    if (outcome.status === 'unclear') {
+      // Rückfrage statt Bewertung: unklare Eingaben werden nicht als Versuch gezählt (Konzept §8/§9).
+      setNotice(outcome.evaluation);
+      setPhase({ kind: 'answering' });
+      return;
+    }
+    setPending(null);
+    setPreviousCount((n) => n + 1);
+    setPhase({ kind: 'saved', record: outcome.record, evaluation: outcome.evaluation, review: outcome.review });
+    toast('Lösung gespeichert');
+    services.progress.getSubtopicProgress(userId, chapter.id).then(setChapterProgress, () => setChapterProgress(null));
+  }
+
+  async function revealHint() {
+    setHelpBusy(true);
+    setHelpError(null);
+    try {
+      setHints(await services.grading.revealHint(userId, exercise.id, Math.min(3, hints.length + 1) as 1 | 2 | 3));
+    } catch (e) {
+      setHelpError(errorText(e));
+    } finally {
+      setHelpBusy(false);
+    }
+  }
+
+  async function revealSolution() {
+    setConfirmSolution(false);
+    setHelpBusy(true);
+    setHelpError(null);
+    try {
+      setSolution(await services.grading.revealSolution(userId, exercise.id));
+    } catch (e) {
+      setHelpError(errorText(e));
+    } finally {
+      setHelpBusy(false);
     }
   }
 
   function submit() {
     const hasDrawing = !isBlank(drawing);
-    const evaluation = isHandwriting ? evaluateHandwriting(exercise, answer, hasDrawing) : evaluateAnswer(exercise, answer);
-    if (evaluation.verdict === 'unclear') {
-      // Rückfrage statt Bewertung: unklare Eingaben werden nicht als Versuch gezählt (Konzept §8/§9).
-      setNotice(evaluation);
-      return;
-    }
-    setNotice(null);
-    let submission: NewAttemptInput['submission'];
+    let submission: AttemptSubmission['submission'];
     if (isHandwriting && hasDrawing) {
       const strokes = compactStrokes(visibleStrokes(drawing));
       let dataUrl: string | undefined;
@@ -185,26 +218,17 @@ export default function ExercisePage() {
       }
       submission = { kind: 'canvas', dataUrl, strokes };
     }
-    const input: NewAttemptInput = {
-      userId,
-      exerciseId: exercise.id,
-      subtopicId: exercise.subtopicId,
-      topicId: chapter.topicId,
-      mode: 'practice',
-      answerRaw: answer.trim(),
-      hintsUsed,
-      solutionViewed,
-      startedAt,
-      correction: { source: 'auto', verdict: evaluation.verdict, points: evaluation.points, marks: evaluation.marks, feedback: evaluation.feedback },
-      submission,
-    };
-    void send(input, evaluation);
+    void send({ userId, exerciseId: exercise.id, answerRaw: answer.trim(), startedAt, submission });
   }
 
   async function discardDraft() {
     await services.attempts.discardPending(userId, exercise.id);
     setPending(null);
     resetForm();
+    // Bereits genutzte Hilfen bleiben serverseitig angerechnet und werden deshalb wieder angezeigt.
+    const help = await services.grading.getSession(userId, exercise.id).catch(() => null);
+    setHints(help?.hints ?? []);
+    setSolution(help?.solution ?? null);
   }
 
   const answerField = (() => {
@@ -212,8 +236,8 @@ export default function ExercisePage() {
       return <ChoiceInput choices={exercise.choices ?? []} value={answer} onChange={setAnswer} disabled={locked} />;
     }
     const id = `answer-${exercise.id}`;
-    if (exercise.answer.kind === 'numeric') return <NumericInput id={id} value={answer} onChange={setAnswer} unit={unit} disabled={locked} />;
-    const isSet = exercise.answer.kind === 'numeric-set';
+    if (exercise.answerFormat.kind === 'numeric') return <NumericInput id={id} value={answer} onChange={setAnswer} unit={unit} disabled={locked} />;
+    const isSet = exercise.answerFormat.kind === 'numeric-set';
     return (
       <MathInput
         id={id}
@@ -228,8 +252,11 @@ export default function ExercisePage() {
   })();
 
   const canSubmit = phase.kind === 'answering' && (answer.trim() !== '' || (isHandwriting && !isBlank(drawing)));
-  const shownEvaluation = phase.kind === 'saved' || phase.kind === 'failed' ? phase.evaluation : null;
-  const showSolution = solutionViewed || saved;
+  const shownEvaluation = phase.kind === 'saved' ? phase.evaluation : null;
+  const shownSolution = phase.kind === 'saved' ? phase.review.solution : solution;
+  // Für den Score zählt, was der Bewertungsdienst protokolliert hat (record), nicht der Stand der Seite.
+  const usedHints = phase.kind === 'saved' ? phase.record.hintsUsed : hintsUsed;
+  const usedSolution = phase.kind === 'saved' ? phase.record.solutionViewed : solutionViewed;
   const hintPenalty = Math.round(SCORE_CONFIG.hintPenaltyPerHint * 100);
   const solutionShare = Math.round(SCORE_CONFIG.solutionViewedFactor * 100);
 
@@ -260,7 +287,7 @@ export default function ExercisePage() {
             </span>
           </p>
           <div className="flex flex-wrap gap-2">
-            <Button variant="primary" icon={<Send aria-hidden="true" size={20} />} onClick={() => void send(pending.input, toEvaluation(pending.input.correction))}>
+            <Button variant="primary" icon={<Send aria-hidden="true" size={20} />} onClick={() => void send(pending.input)}>
               Jetzt erneut senden
             </Button>
             <Button variant="ghost" onClick={() => void discardDraft()}>
@@ -331,7 +358,7 @@ export default function ExercisePage() {
               ? `Deine Lösung ist als Entwurf auf diesem Gerät gesichert${phase.imageDropped ? ' (ohne Bild des Rechenwegs)' : ''}. Du kannst es später erneut versuchen.`
               : 'Deine Lösung konnte nicht als Entwurf gesichert werden. Bitte lass diese Seite geöffnet und versuche es erneut.'}
           </p>
-          <Button variant="danger" icon={<RotateCcw aria-hidden="true" size={20} />} onClick={() => void send(phase.input, phase.evaluation)}>
+          <Button variant="danger" icon={<RotateCcw aria-hidden="true" size={20} />} onClick={() => void send(phase.input)}>
             Erneut versuchen
           </Button>
         </div>
@@ -345,9 +372,9 @@ export default function ExercisePage() {
             feedback={shownEvaluation.feedback}
             marks={shownEvaluation.marks}
             mistake={shownEvaluation.mistake}
-            commonMistakes={exercise.commonMistakes}
+            commonMistakes={phase.kind === 'saved' ? phase.review.commonMistakes : undefined}
           />
-          {saved && (chapterProgress || hintsUsed > 0 || solutionViewed) && (
+          {saved && (chapterProgress || usedHints > 0 || usedSolution) && (
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-3">
               {chapterProgress && (
                 <div className="flex flex-wrap items-center gap-3">
@@ -361,12 +388,12 @@ export default function ExercisePage() {
                   <StatusBadge status={chapterProgress.status} />
                 </div>
               )}
-              {(hintsUsed > 0 || solutionViewed) && (
+              {(usedHints > 0 || usedSolution) && (
                 <p className="text-sm text-slate-600">
                   Für den Verständnis-Score zählt diese Abgabe{' '}
-                  {solutionViewed
+                  {usedSolution
                     ? `${solutionShare} %, weil du die Lösung vorher angesehen hast.`
-                    : `${Math.round((1 - SCORE_CONFIG.hintPenaltyPerHint * hintsUsed) * 100)} %, weil du ${hintsUsed} Hinweis${hintsUsed === 1 ? '' : 'e'} genutzt hast.`}
+                    : `${Math.round((1 - SCORE_CONFIG.hintPenaltyPerHint * usedHints) * 100)} %, weil du ${usedHints} Hinweis${usedHints === 1 ? '' : 'e'} genutzt hast.`}
                 </p>
               )}
             </div>
@@ -386,7 +413,7 @@ export default function ExercisePage() {
           </div>
           {hintsUsed > 0 && (
             <ol className="space-y-2">
-              {exercise.hints.slice(0, hintsUsed).map((h, i) => (
+              {hints.map((h, i) => (
                 <li key={i} className="rounded-lg border border-sky-200 bg-sky-50 p-4 animate-slide-up">
                   <strong className="text-sky-800">Hinweis {i + 1}:</strong> <MathText text={h} />
                 </li>
@@ -397,17 +424,23 @@ export default function ExercisePage() {
             <Button
               variant="secondary"
               icon={<Lightbulb aria-hidden="true" size={20} />}
-              onClick={() => setHintsUsed((n) => clampHints(n + 1))}
+              onClick={() => void revealHint()}
               disabled={hintsUsed >= 3 || solutionViewed || locked}
+              loading={helpBusy}
             >
               {hintsUsed >= 3 ? 'Alle Hinweise genutzt' : `Hinweis ${hintsUsed + 1} von 3`}
             </Button>
             {!solutionViewed && (
-              <Button variant="ghost" icon={<Eye aria-hidden="true" size={20} />} onClick={() => setConfirmSolution(true)} disabled={locked}>
+              <Button variant="ghost" icon={<Eye aria-hidden="true" size={20} />} onClick={() => setConfirmSolution(true)} disabled={locked || helpBusy}>
                 Lösung anzeigen
               </Button>
             )}
           </div>
+          {helpError && (
+            <p role="alert" className="text-sm text-red-700">
+              {helpError}
+            </p>
+          )}
           <p className="text-sm text-slate-600">
             Hinweise kosten ein paar Punkte ({hintPenalty} % pro Hinweis), helfen aber beim Lernen. Hauptsache, du verstehst es.
           </p>
@@ -424,13 +457,7 @@ export default function ExercisePage() {
             <Button variant="ghost" onClick={() => setConfirmSolution(false)}>
               Abbrechen
             </Button>
-            <Button
-              variant="primary"
-              onClick={() => {
-                setSolutionViewed(true);
-                setConfirmSolution(false);
-              }}
-            >
+            <Button variant="primary" onClick={() => void revealSolution()}>
               Ja, Lösung zeigen
             </Button>
           </>
@@ -441,7 +468,7 @@ export default function ExercisePage() {
         </p>
       </Dialog>
 
-      {showSolution && <SolutionView key={exercise.id} solution={exercise.solution} stepwise />}
+      {shownSolution && <SolutionView key={exercise.id} solution={shownSolution} stepwise />}
 
       <nav className="flex flex-wrap items-center gap-3 border-t border-slate-200 pt-6" aria-label="Weiter">
         {saved && (

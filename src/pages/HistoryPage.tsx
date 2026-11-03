@@ -6,7 +6,7 @@ import { SolutionView } from '../components/SolutionView';
 import { useAuth } from '../context/AuthContext';
 import { formatAnswer, VERDICT_LABEL } from '../domain/progressView';
 import { services } from '../services';
-import type { AttemptRecord, Topic, Verdict } from '../types';
+import type { AttemptRecord, ExerciseReview, Topic, Verdict } from '../types';
 import { resolveAttemptContexts, type AttemptContext } from './attemptLabels';
 
 const LIMIT = 200;
@@ -176,12 +176,19 @@ export default function HistoryPage() {
 function AttemptDetail({ attempt, context, onClose }: { attempt: AttemptRecord; context?: AttemptContext; onClose: () => void }) {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [imageError, setImageError] = useState(false);
+  /** Hinweise, Musterlösung und typische Fehler kommen vom Bewertungsdienst (nur für bereits bearbeitete Aufgaben). */
+  const [review, setReview] = useState<ExerciseReview | null>(null);
   const ex = context?.exercise ?? null;
 
   useEffect(() => {
     let active = true;
     setImageUrl(null);
     setImageError(false);
+    setReview(null);
+    services.grading.getReview(attempt.userId, attempt.exerciseId).then(
+      (r) => active && setReview(r),
+      () => active && setReview(null),
+    );
     if (attempt.submission) {
       services.learner.getSubmissionImageUrl(attempt.submission).then(
         (url) => active && setImageUrl(url),
@@ -237,16 +244,16 @@ function AttemptDetail({ attempt, context, onClose }: { attempt: AttemptRecord; 
           points={attempt.correction.points}
           feedback={attempt.correction.feedback}
           marks={attempt.correction.marks}
-          commonMistakes={ex?.commonMistakes}
+          commonMistakes={review?.commonMistakes}
         />
       )}
 
       <div>
         <h3 className="font-medium">Genutzte Hilfen</h3>
         {attempt.hintsUsed === 0 && !attempt.solutionViewed && <p className="text-slate-600">Keine – selbstständig gelöst.</p>}
-        {attempt.hintsUsed > 0 && ex && (
+        {attempt.hintsUsed > 0 && review && (
           <ol className="space-y-1 mt-1">
-            {ex.hints.slice(0, attempt.hintsUsed).map((h, i) => (
+            {review.hints.slice(0, attempt.hintsUsed).map((h, i) => (
               <li key={i} className="rounded-lg bg-sky-50 p-2 text-sm">
                 <strong>Hinweis {i + 1}:</strong> <MathText text={h} />
               </li>
@@ -256,7 +263,7 @@ function AttemptDetail({ attempt, context, onClose }: { attempt: AttemptRecord; 
         {attempt.solutionViewed && <p className="text-sm text-amber-800 mt-1">Musterlösung vor der Abgabe angesehen.</p>}
       </div>
 
-      {ex && <SolutionView solution={ex.solution} />}
+      {review && <SolutionView solution={review.solution} />}
 
       {ex && (
         <Link to={`/app/exercises/${ex.id}`} className="rounded-xl bg-indigo-600 text-white px-5 font-semibold inline-flex items-center">

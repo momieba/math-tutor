@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { topics } from '../content';
-import type { Attempt, Exercise } from '../types';
+import type { Attempt, AuthoredExercise } from '../types';
 import { matchTopic } from './topicMatcher';
 import { computeSubtopicProgress } from './score';
 import { evaluateAnswer, parseNumber, parseNumberSet } from './evaluate';
@@ -48,7 +48,7 @@ describe('evaluate', () => {
 
 describe('score', () => {
   const sub = topics.find((t) => t.id === 'pythagoras')!.subtopics.find((s) => s.id === 'pyth-hypotenuse')!;
-  const mk = (e: Exercise, points: number, iso: string, hintsUsed: 0 | 1 | 2 | 3 = 0): Attempt => ({
+  const mk = (e: AuthoredExercise, points: number, iso: string, hintsUsed: 0 | 1 | 2 | 3 = 0): Attempt => ({
     id: `${e.id}-${iso}`,
     userId: 'u',
     exerciseId: e.id,

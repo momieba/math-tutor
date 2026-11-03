@@ -21,6 +21,7 @@ const KB = 1024;
 // Lokaler Modus erzwingen: bereits gesetzte Variablen haben Vorrang vor .env-Dateien.
 process.env.VITE_SUPABASE_URL = '';
 process.env.VITE_SUPABASE_ANON_KEY = '';
+process.env.VITE_DATA_MODE = 'local';
 
 // ---------------------------------------------------------------- Handschrift (Demo-Striche)
 // Einfache Polylinien je Zeichen im Einheitsquadrat (x nach rechts, y nach unten).
@@ -103,6 +104,7 @@ async function register(page) {
   await page.getByLabel('Name').fill('Mia');
   await page.getByLabel('E-Mail').fill(`mia.${Date.now()}@example.test`);
   await page.getByLabel('Passwort').fill('Demo-Passwort-123');
+  await page.getByRole('checkbox', { name: /Datenschutzerklärung/ }).check();
   await page.getByRole('button', { name: 'Registrieren' }).click();
   await page.waitForURL(/\/app$/);
 }

@@ -76,7 +76,7 @@ describe('localAuthService ohne Secure Context (BUG-08)', () => {
   it('Registrierung und Anmeldung funktionieren mit crypto ohne randomUUID/subtle', async () => {
     vi.stubGlobal('crypto', insecureCrypto);
     const auth = createLocalAuthService();
-    const s = await auth.signUpWithEmail('lan@example.test', 'Geheim123!', 'LAN');
+    const s = await auth.signUpWithEmail('lan@example.test', 'Geheim123!', 'LAN', 'test');
     expect(s?.user.id).toMatch(UUID_V4);
     await auth.signOut();
     await expect(auth.signInWithEmail('lan@example.test', 'Geheim123!')).resolves.toMatchObject({ user: { email: 'lan@example.test' } });
@@ -86,7 +86,7 @@ describe('localAuthService ohne Secure Context (BUG-08)', () => {
   it('ein mit WebCrypto angelegtes Konto bleibt im Fallback anmeldbar (gleicher Hash)', async () => {
     vi.stubGlobal('crypto', webcrypto);
     const auth = createLocalAuthService();
-    await auth.signUpWithEmail('alt@example.test', 'Geheim123!', 'Alt');
+    await auth.signUpWithEmail('alt@example.test', 'Geheim123!', 'Alt', 'test');
     await auth.signOut();
     vi.stubGlobal('crypto', insecureCrypto);
     await expect(createLocalAuthService().signInWithEmail('alt@example.test', 'Geheim123!')).resolves.toBeTruthy();

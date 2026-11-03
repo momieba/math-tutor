@@ -1,6 +1,8 @@
 /**
- * LearnerRepository auf Supabase/Postgres. Zugriffsschutz serverseitig per RLS (supabase/migrations/0001_init.sql).
- * Bilder liegen im privaten Bucket `submissions/<userId>/<attemptId>.png` und werden über signierte URLs angezeigt.
+ * LearnerRepository auf Supabase/Postgres. Zugriffsschutz serverseitig per RLS (supabase/migrations).
+ * Nur lesend für Versuche: Geschrieben werden attempts/corrections/submissions ausschließlich von der Edge Function
+ * `grade-attempt` (siehe supabaseGradingService). Bilder liegen im privaten Bucket `submissions/<userId>/<attemptId>.png`
+ * und werden über signierte URLs angezeigt.
  */
 import type { AttemptRecord, Correction, StudentTopic, Submission } from '../../types';
 import type { LearnerRepository } from '../types';
@@ -79,10 +81,6 @@ function fail(error: { message: string } | null): void {
   if (error) throw new Error(error.message);
 }
 
-async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
-  return (await fetch(dataUrl)).blob();
-}
-
 export function createSupabaseLearnerRepository(): LearnerRepository {
   const sb = getSupabase();
   return {
@@ -104,52 +102,6 @@ export function createSupabaseLearnerRepository(): LearnerRepository {
       const { error } = await sb.from('student_topics').delete().eq('user_id', userId).eq('topic_id', topicId);
       fail(error);
     },
-    async saveAttempt(input) {
-      const { data: attempt, error } = await sb
-        .from('attempts')
-        .insert({
-          user_id: input.userId,
-          exercise_id: input.exerciseId,
-          subtopic_id: input.subtopicId,
-          topic_id: input.topicId,
-          mode: input.mode,
-          answer_raw: input.answerRaw,
-          points: input.correction.points,
-          is_correct: input.correction.verdict === 'correct',
-          hints_used: input.hintsUsed,
-          solution_viewed: input.solutionViewed,
-          started_at: input.startedAt,
-        })
-        .select('id')
-        .single();
-      fail(error);
-      const attemptId = attempt!.id as string;
-
-      const { error: cErr } = await sb.from('corrections').insert({ attempt_id: attemptId, ...input.correction });
-      fail(cErr);
-
-      if (input.submission) {
-        let storagePath: string | null = null;
-        if (input.submission.dataUrl) {
-          storagePath = `${input.userId}/${attemptId}.png`;
-          const { error: upErr } = await sb.storage
-            .from(SUBMISSIONS_BUCKET)
-            .upload(storagePath, await dataUrlToBlob(input.submission.dataUrl), { contentType: 'image/png', upsert: false });
-          fail(upErr);
-        }
-        const { error: sErr } = await sb.from('submissions').insert({
-          attempt_id: attemptId,
-          user_id: input.userId,
-          kind: input.submission.kind,
-          storage_path: storagePath,
-          strokes: input.submission.strokes ?? null,
-        });
-        fail(sErr);
-      }
-      const { data: full, error: rErr } = await sb.from('attempts').select(SELECT).eq('id', attemptId).single<AttemptRow>();
-      fail(rErr);
-      return mapAttempt(full!);
-    },
     async listAttempts(userId, filter = {}) {
       let q = sb.from('attempts').select(SELECT).eq('user_id', userId).order('submitted_at', { ascending: false });
       if (filter.topicId) q = q.eq('topic_id', filter.topicId);
@@ -170,6 +122,15 @@ export function createSupabaseLearnerRepository(): LearnerRepository {
       const { data, error } = await sb.storage.from(SUBMISSIONS_BUCKET).createSignedUrl(submission.imageRef, 60 * 10);
       fail(error);
       return data?.signedUrl ?? null;
+    },
+    async exportData(userId) {
+      const [profile, topics, attempts] = await Promise.all([
+        sb.from('profiles').select('display_name, role, grade, curriculum_id, consent_version, consented_at, created_at').eq('id', userId).maybeSingle(),
+        sb.from('student_topics').select('topic_id, added_at').eq('user_id', userId),
+        sb.from('attempts').select(SELECT).eq('user_id', userId).order('submitted_at').returns<AttemptRow[]>(),
+      ]);
+      fail(profile.error ?? topics.error ?? attempts.error);
+      return { profile: profile.data, activeTopics: topics.data ?? [], attempts: (attempts.data ?? []).map(mapAttempt) };
     },
   };
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { pythagoras } from '../content/pythagoras';
-import type { Attempt, Exercise, SubtopicProgress, TopicProgress } from '../types';
+import type { Attempt, AuthoredExercise, SubtopicProgress, TopicProgress } from '../types';
 import { evaluateHandwriting, UNCHECKED_WORK_MESSAGE } from './evaluate';
 import { exerciseState, formatAnswer, nextChapterId, recommendNext } from './progressView';
 
@@ -92,12 +92,12 @@ describe('formatAnswer', () => {
   it('zeigt bei Multiple Choice den Text der Option', () => {
     const ex = pythagoras.subtopics[0].exercises[0];
     expect(formatAnswer(ex, 'b')).toBe('Die Seite gegenüber dem rechten Winkel');
-    expect(formatAnswer({ answer: { kind: 'numeric', value: 1, tolerance: 0 } }, '1,5')).toBe('1,5');
+    expect(formatAnswer({ type: 'numeric' }, '1,5')).toBe('1,5');
   });
 });
 
 describe('evaluateHandwriting', () => {
-  const ex = pythagoras.subtopics.flatMap((s) => s.exercises).find((e): e is Exercise => e.type === 'handwriting' && e.answer.kind === 'numeric')!;
+  const ex = pythagoras.subtopics.flatMap((s) => s.exercises).find((e): e is AuthoredExercise => e.type === 'handwriting' && e.answer.kind === 'numeric')!;
   const value = ex.answer.kind === 'numeric' ? ex.answer.value : 0;
 
   it('ohne Endergebnis: unklar statt Bewertung', () => {

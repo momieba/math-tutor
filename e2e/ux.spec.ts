@@ -3,8 +3,9 @@
  * Mindestschriftgröße, Screenshots der Hauptseiten unter e2e/screenshots.
  * Konsolen-/Seitenfehler werden über die Auto-Fixture in helpers.ts in jedem Test geprüft.
  */
+import { readdirSync, readFileSync, statSync } from 'node:fs';
 import type { Page } from '@playwright/test';
-import { addTopic, answerInput, drawWithMouse, expect, feedbackPanel, openExercise, register, solveChoice, submitButton, test } from './helpers';
+import { addTopic, answerInput, consentCheckbox, drawWithMouse, expect, feedbackPanel, openExercise, register, solveChoice, submitButton, test } from './helpers';
 
 /** Mindestmaß für Touch-Ziele (Auftrag/Konzept §23, Apple HIG): 44 × 44 px. */
 const MIN_TARGET = 44;
@@ -347,6 +348,7 @@ test('BUG-08 (Regression): Registrieren, Abmelden, Anmelden ohne crypto.randomUU
   await page.getByLabel('Name').fill('Lan');
   await page.getByLabel('E-Mail').fill('lan@example.test');
   await page.getByLabel('Passwort').fill('Geheim123!');
+  await consentCheckbox(page).check();
   await page.getByRole('button', { name: 'Registrieren' }).click();
   await expect(page).toHaveURL(/\/app$/, { timeout: 3000 });
   await expect(page.getByRole('alert')).toHaveCount(0);
@@ -375,6 +377,7 @@ test('BUG-08 (Regression): Konto mit WebCrypto angelegt (localhost) → Anmeldun
   await page.getByLabel('Name').fill('Mira');
   await page.getByLabel('E-Mail').fill('mira@example.test');
   await page.getByLabel('Passwort').fill('Geheim123!');
+  await consentCheckbox(page).check();
   await page.getByRole('button', { name: 'Registrieren' }).click();
   await expect(page).toHaveURL(/\/app$/);
   const hashBefore = (await localUsers(page))[0].passwordHash;
@@ -388,4 +391,145 @@ test('BUG-08 (Regression): Konto mit WebCrypto angelegt (localhost) → Anmeldun
   await expect(page).toHaveURL(/\/app$/);
   await expect(page.getByRole('heading', { name: 'Hallo Mira!' })).toBeVisible();
   expect((await localUsers(page))[0].passwordHash).toBe(hashBefore);
+});
+
+// ---------------------------------------------------------------- Landingpage (Abnahme-Checkliste C6)
+/** Scrollt die Seite schrittweise bis zum Ende, damit alle lazy geladenen Bilder/Chunks geladen werden. */
+async function scrollThrough(page: Page) {
+  const height = await page.evaluate(() => document.documentElement.scrollHeight);
+  for (let y = 0; y <= height; y += 600) {
+    await page.evaluate((top) => window.scrollTo(0, top), y);
+    await page.waitForTimeout(40);
+  }
+  await page.waitForLoadState('networkidle');
+}
+
+test.describe('Landingpage', () => {
+  test('D-17: alle Abschnitte aus C4 vorhanden, eine h1, ehrliche Kennzeichnung, keine Werbeaussage vor Erfüllung', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.locator('h1')).toHaveCount(1);
+    await expect(page.locator('h1')).toContainText('Mathe verstehen');
+    const sections: [string, RegExp][] = [
+      ['start', /Mathe verstehen/],
+      ['funktionen', /Alles, was du zum Üben brauchst/],
+      ['so-gehts', /In drei Schritten/],
+      ['tablet', /Rechnen wie auf Papier/],
+      ['korrektur', /Sieh genau, wo es hakt/],
+      ['eltern', /Gemeinsam im Blick/],
+      ['preise', /Preise folgen/],
+      ['faq', /Häufige Fragen/],
+    ];
+    for (const [id, title] of sections) {
+      await expect(page.locator(`section#${id}`).getByRole('heading', { name: title })).toBeAttached();
+    }
+    // Kopfzeile: Hauptaktion + Anmelden, Ankerlinks
+    const header = page.locator('header').first();
+    await expect(header.locator('[data-variant="primary"]')).toHaveCount(1);
+    await expect(header.getByRole('link', { name: 'Anmelden' })).toHaveAttribute('href', '/login');
+    // Vertrauensleiste, 6 Funktionen, 3 Schritte, 8 FAQ-Fragen
+    await expect(page.getByRole('list', { name: 'Auf einen Blick' }).getByRole('listitem')).toHaveCount(3);
+    await expect(page.locator('section#funktionen li h3')).toHaveCount(6);
+    await expect(page.locator('section#so-gehts ol > li')).toHaveCount(3);
+    await expect(page.locator('section#faq button[aria-expanded]')).toHaveCount(8);
+    // Eltern/Lehrkräfte und Foto-Upload ehrlich gekennzeichnet
+    await expect(page.locator('section#eltern').getByText('Kommt bald')).toBeVisible();
+    await expect(page.locator('#lehrkraefte').getByText('Später')).toBeVisible();
+    await expect(page.locator('section#tablet').getByText('Bald', { exact: true })).toBeVisible();
+    // Preise: kein Bezahl-Button, Hinweis auf kostenlose Testphase
+    await expect(page.locator('section#preise').getByText('Während der Testphase kostenlos.')).toBeVisible();
+    await expect(page.locator('section#preise').getByRole('button', { name: /kaufen|bezahlen|abonnieren/i })).toHaveCount(0);
+    // Korrektur-Demo ist echte UI: drei Zustände mit Icon UND Text, Formeln per KaTeX
+    const demo = page.locator('section#korrektur figure');
+    await expect(demo.locator('.katex').first()).toBeVisible();
+    for (const label of ['Richtig', 'Fehler', 'Unsicher']) await expect(demo.getByText(label, { exact: true }).first()).toBeVisible();
+    await expect(page.locator('section#korrektur')).toContainText('Heute prüft die App dein Ergebnis.');
+    // Briefing R5: keine Aussage zur EU-Speicherung, solange die Bedingung (F1) nicht erfüllt ist
+    await expect(page.locator('body')).not.toContainText(/in der EU/);
+    // Footer
+    const footer = page.locator('footer');
+    for (const l of ['Impressum', 'Datenschutz', 'Nutzungsbedingungen', 'Kontakt']) await expect(footer.getByRole('link', { name: l })).toBeVisible();
+    await footer.getByRole('link', { name: 'Kontakt' }).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Kontakt' })).toBeVisible();
+  });
+
+  test('D-18: Bilder lokal, mit width/height und alt, geladen, Größenlimits, in CREDITS.md', async ({ page }) => {
+    await page.goto('/');
+    await scrollThrough(page);
+    const imgs = await page.locator('img').evaluateAll((els) =>
+      (els as HTMLImageElement[]).map((i) => ({
+        src: i.currentSrc || i.src,
+        srcset: i.getAttribute('srcset') ?? '',
+        width: i.getAttribute('width'),
+        height: i.getAttribute('height'),
+        alt: i.getAttribute('alt'),
+        loading: i.getAttribute('loading'),
+        priority: i.getAttribute('fetchpriority'),
+        loaded: i.complete && i.naturalWidth > 0,
+      })),
+    );
+    expect(imgs.length).toBeGreaterThanOrEqual(4);
+    const origin = new URL(page.url()).origin;
+    for (const i of imgs) {
+      expect(new URL(i.src).origin, i.src).toBe(origin);
+      expect(new URL(i.src).pathname, i.src).toMatch(/^\/images\/landing\/[a-z-]+-\d+\.webp$/);
+      for (const part of i.srcset.split(',')) expect(part.trim(), i.srcset).toMatch(/^\/images\/landing\/[a-z-]+-\d+\.webp \d+w$/);
+      expect(Number(i.width), i.src).toBeGreaterThan(0);
+      expect(Number(i.height), i.src).toBeGreaterThan(0);
+      expect(i.alt, `${i.src} ohne alt`).not.toBeNull();
+      expect(i.loaded, `${i.src} nicht geladen`).toBe(true);
+    }
+    // Genau ein Hero-Bild mit hoher Priorität, alle anderen lazy
+    expect(imgs.filter((i) => i.priority === 'high')).toHaveLength(1);
+    expect(imgs.filter((i) => i.priority !== 'high').every((i) => i.loading === 'lazy')).toBe(true);
+    // Größenlimits (C3): Hero ≤ 200 kB, alle anderen ≤ 120 kB; jede Datei in CREDITS.md
+    const dir = new URL('../public/images/landing/', import.meta.url);
+    const credits = readFileSync(new URL('../CREDITS.md', import.meta.url), 'utf8');
+    for (const f of readdirSync(dir)) {
+      const kb = statSync(new URL(f, dir)).size / 1024;
+      expect(kb, `${f}: ${kb.toFixed(0)} kB`).toBeLessThanOrEqual(f.startsWith('hero-') ? 200 : 120);
+      expect(credits, `${f} fehlt in CREDITS.md`).toContain(f.replace(/-\d+\.webp$/, ''));
+    }
+  });
+
+  test('D-03/D-19: keine Anfragen an fremde Hosts (Fonts, Bilder, Videos) auf der Landingpage', async ({ page }) => {
+    const foreign: string[] = [];
+    page.on('request', (r) => {
+      const u = new URL(r.url());
+      if (!['http:', 'https:'].includes(u.protocol)) return; // data:, blob:
+      if (u.hostname !== 'localhost' && u.hostname !== '127.0.0.1') foreign.push(r.url());
+    });
+    await page.goto('/');
+    await scrollThrough(page);
+    for (const q of await page.locator('section#faq button[aria-expanded]').all()) await q.click();
+    await page.waitForLoadState('networkidle');
+    expect(foreign).toEqual([]);
+  });
+
+  test('FAQ-Akkordeon: per Tipp öffnen und schließen, zugänglich, Touch-Ziel ≥ 44 px', async ({ page }) => {
+    await page.goto('/');
+    const q = page.getByRole('button', { name: 'Gibt es Werbung in der App?' });
+    await q.scrollIntoViewIfNeeded();
+    expect((await q.boundingBox())!.height).toBeGreaterThanOrEqual(MIN_TARGET);
+    await expect(q).toHaveAttribute('aria-expanded', 'false');
+    const panel = page.locator(`#${await q.getAttribute('aria-controls')}`);
+    await expect(panel).toBeHidden();
+    await q.tap();
+    await expect(q).toHaveAttribute('aria-expanded', 'true');
+    await expect(panel).toBeVisible();
+    await expect(panel).toHaveAttribute('role', 'region');
+    await expect(panel).toContainText('Nein.');
+    // Nur eine Antwort gleichzeitig offen
+    const other = page.getByRole('button', { name: 'Kann ich jederzeit kündigen?' });
+    await other.tap();
+    await expect(other).toHaveAttribute('aria-expanded', 'true');
+    await expect(q).toHaveAttribute('aria-expanded', 'false');
+    await other.tap();
+    await expect(other).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  test('Hauptaktion der Landingpage führt zur Registrierung', async ({ page }) => {
+    await page.goto('/');
+    await page.locator('section#start [data-variant="primary"]').tap();
+    await expect(page).toHaveURL(/\/register$/);
+  });
 });

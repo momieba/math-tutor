@@ -21,7 +21,8 @@ export function hashPassword(salt: string, password: string): Promise<string> {
   return sha256Hex(`${salt}:${password}`);
 }
 
-export function createLocalAuthService(): AuthService {
+/** `onDelete` entfernt beim Löschen des Kontos die Lerndaten (liegen im LearnerRepository). */
+export function createLocalAuthService(onDelete: (userId: string) => void = () => {}): AuthService {
   const listeners = new Set<(s: Session | null) => void>();
   const users = () => readJson<LocalUser[]>(USERS, []);
   const current = (): Session | null => {
@@ -45,12 +46,19 @@ export function createLocalAuthService(): AuthService {
       listeners.add(cb);
       return () => listeners.delete(cb);
     },
-    async signUpWithEmail(email, password, displayName) {
+    async signUpWithEmail(email, password, displayName, consentVersion) {
       const e = email.trim().toLowerCase();
       if (users().some((u) => u.profile.email === e)) throw new Error('Für diese E-Mail-Adresse existiert bereits ein Konto.');
       if (password.length < 8) throw new Error('Das Passwort muss mindestens 8 Zeichen lang sein.');
       const salt = newId();
-      const profile: Profile = { id: newId(), email: e, displayName: displayName.trim() || e.split('@')[0], role: 'student', createdAt: new Date().toISOString() };
+      const profile: Profile = {
+        id: newId(),
+        email: e,
+        displayName: displayName.trim() || e.split('@')[0],
+        role: 'student',
+        createdAt: new Date().toISOString(),
+        consentVersion,
+      };
       writeJson(USERS, [...users(), { profile, salt, passwordHash: await hashPassword(salt, password) }]);
       return login(profile.id);
     },
@@ -69,6 +77,31 @@ export function createLocalAuthService(): AuthService {
       login(u.profile.id);
     },
     async signOut() {
+      removeKey(SESSION);
+      emit();
+    },
+    async requestPasswordReset() {
+      throw new Error('Im lokalen Modus gibt es keinen E-Mail-Versand. Lege einfach ein neues Konto an.');
+    },
+    async updatePassword(password) {
+      const s = current();
+      if (!s) throw new Error('Nicht angemeldet.');
+      if (password.length < 8) throw new Error('Das Passwort muss mindestens 8 Zeichen lang sein.');
+      const salt = newId();
+      const passwordHash = await hashPassword(salt, password);
+      writeJson(USERS, users().map((u) => (u.profile.id === s.user.id ? { ...u, salt, passwordHash } : u)));
+    },
+    async acceptTerms(version) {
+      const s = current();
+      if (!s) throw new Error('Nicht angemeldet.');
+      writeJson(USERS, users().map((u) => (u.profile.id === s.user.id ? { ...u, profile: { ...u.profile, consentVersion: version } } : u)));
+      return login(s.user.id);
+    },
+    async deleteAccount() {
+      const s = current();
+      if (!s) return;
+      onDelete(s.user.id);
+      writeJson(USERS, users().filter((u) => u.profile.id !== s.user.id));
       removeKey(SESSION);
       emit();
     },

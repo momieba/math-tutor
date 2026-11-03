@@ -40,6 +40,9 @@ export function uniqueEmail(prefix = 'qa'): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.test`;
 }
 
+/** Einwilligung (Datenschutz/Nutzungsbedingungen) bei Registrierung und auf der Einwilligungsseite. */
+export const consentCheckbox = (page: Page) => page.getByRole('checkbox', { name: /Datenschutzerklärung/ });
+
 /** Registriert einen frischen Nutzer (jeder Test hat einen eigenen Browser-Kontext ⇒ leerer localStorage). */
 export async function register(page: Page, name = 'Tessa'): Promise<TestUser> {
   const user = { name, email: uniqueEmail(), password: PASSWORD };
@@ -47,6 +50,7 @@ export async function register(page: Page, name = 'Tessa'): Promise<TestUser> {
   await page.getByLabel('Name').fill(user.name);
   await page.getByLabel('E-Mail').fill(user.email);
   await page.getByLabel('Passwort').fill(user.password);
+  await consentCheckbox(page).check();
   await page.getByRole('button', { name: 'Registrieren' }).click();
   await expect(page).toHaveURL(/\/app$/);
   await expect(page.getByRole('heading', { name: `Hallo ${name}!` })).toBeVisible();

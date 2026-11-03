@@ -3,9 +3,9 @@
  * Hinweis: localStorage ist auf ~5 MB begrenzt; Canvas-Bilder als data-URL füllen das schnell.
  * Bei Bedarf auf IndexedDB umstellen (gleiches Interface).
  */
-import type { AttemptRecord, Correction, StudentTopic, Submission } from '../../types';
+import type { AttemptRecord, Correction, NewAttemptInput, StudentTopic, Submission } from '../../types';
 import type { LearnerRepository } from '../types';
-import { newId, readJson, writeJson } from './storage';
+import { newId, readJson, removeKey, writeJson } from './storage';
 
 interface LearnerData {
   activeTopics: StudentTopic[];
@@ -16,7 +16,13 @@ const key = (userId: string) => `learner:${userId}`;
 const load = (userId: string) => readJson<LearnerData>(key(userId), { activeTopics: [], attempts: [] });
 const save = (userId: string, d: LearnerData) => writeJson(key(userId), d);
 
-export function createLocalLearnerRepository(): LearnerRepository {
+/** Lokal schreibt der Bewertungsdienst die Versuche direkt; im Supabase-Modus macht das nur der Server. */
+export interface LocalLearnerRepository extends LearnerRepository {
+  saveAttempt(input: NewAttemptInput): Promise<AttemptRecord>;
+  deleteUserData(userId: string): void;
+}
+
+export function createLocalLearnerRepository(): LocalLearnerRepository {
   return {
     async listActiveTopics(userId) {
       return load(userId).activeTopics;
@@ -76,6 +82,13 @@ export function createLocalLearnerRepository(): LearnerRepository {
     },
     async getSubmissionImageUrl(submission) {
       return submission.imageRef ?? null;
+    },
+    async exportData(userId) {
+      const d = load(userId);
+      return { activeTopics: d.activeTopics, attempts: d.attempts };
+    },
+    deleteUserData(userId) {
+      removeKey(key(userId));
     },
   };
 }

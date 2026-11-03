@@ -4,7 +4,7 @@
  * - Für Supabase per `npm run seed:sql` nach supabase/seed.sql exportiert.
  * Änderungen an Inhalten: hier pflegen, Tests (content.test.ts) laufen lassen, Seed neu erzeugen.
  */
-import type { Curriculum, Topic } from '../types';
+import type { AuthoredTopic, Curriculum } from '../types';
 import { CURRICULUM_ID } from './helpers';
 import { pythagoras } from './pythagoras';
 import { prozentrechnung } from './prozent';
@@ -22,4 +22,4 @@ export const curricula: Curriculum[] = [
   },
 ];
 
-export const topics: Topic[] = [prozentrechnung, pythagoras, quadratischeGleichungen];
+export const topics: AuthoredTopic[] = [prozentrechnung, pythagoras, quadratischeGleichungen];

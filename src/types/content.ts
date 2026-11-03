@@ -80,6 +80,16 @@ export interface ModelSolution {
   alternative?: SolutionStep[];
 }
 
+/** Eingabeformat einer Aufgabe – ohne die Lösung (für das Antwortfeld: Zahl mit Einheit, Lösungsmenge, …). */
+export interface AnswerFormat {
+  kind: ExpectedAnswer['kind'];
+  unit?: string;
+}
+
+/**
+ * Aufgabe, wie der Client sie sieht. Enthält bewusst KEINE Lösung: Antwort, Hinweise, Musterlösung und
+ * typische Fehler liegen im `ExerciseKey` und kommen nur über den Bewertungsdienst (services.grading).
+ */
 export interface Exercise {
   id: string;
   subtopicId: string;
@@ -87,14 +97,35 @@ export interface Exercise {
   difficulty: Difficulty;
   prompt: string;
   choices?: Choice[];
+  answerFormat: AnswerFormat;
+  objectives: string[];
+  /** Optional: Abbildung (später SVG/Bild). */
+  figure?: { alt: string; src?: string };
+}
+
+/** Lösungsschlüssel einer Aufgabe. Supabase: Tabellen exercise_keys/hints/solutions ohne Leserecht für Clients. */
+export interface ExerciseKey {
   answer: ExpectedAnswer;
   /** Genau 3 gestufte Hinweise (allgemein → konkret). Danach: Lösung anzeigen. */
   hints: [string, string, string];
   solution: ModelSolution;
-  objectives: string[];
   commonMistakes: CommonMistake[];
-  /** Optional: Abbildung (später SVG/Bild). */
-  figure?: { alt: string; src?: string };
+}
+
+/** Aufgabe in der Wissensbasis (src/content): öffentliche Felder + Lösungsschlüssel. `answerFormat` wird abgeleitet. */
+export type AuthoredExercise = Omit<Exercise, 'answerFormat'> & ExerciseKey;
+
+/** Was der Schüler nach einer Abgabe (oder im Verlauf) zu einer Aufgabe sehen darf. */
+export interface ExerciseReview {
+  hints: string[];
+  solution: ModelSolution;
+  commonMistakes: CommonMistake[];
+}
+
+/** Bereits aufgedeckte Hilfen der laufenden Bearbeitung (überlebt Neuladen und Gerätewechsel). */
+export interface ExerciseSessionState {
+  hints: string[];
+  solution: ModelSolution | null;
 }
 
 export interface Subtopic {
@@ -128,3 +159,7 @@ export interface Topic {
 
 /** Leichtgewichtige Sicht ohne Kapitelinhalte (für Listen / Dashboard). */
 export type TopicSummary = Omit<Topic, 'subtopics'> & { subtopicCount: number; exerciseCount: number };
+
+/** Kapitel bzw. Thema in der Wissensbasis, mit Lösungsschlüsseln. */
+export type AuthoredSubtopic = Omit<Subtopic, 'exercises'> & { exercises: AuthoredExercise[] };
+export type AuthoredTopic = Omit<Topic, 'subtopics'> & { subtopics: AuthoredSubtopic[] };

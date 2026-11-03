@@ -1,14 +1,31 @@
+# Abhängigkeiten und Build
 node_modules
 dist
+.vite
+coverage
+*.tsbuildinfo
+
+# Umgebungsvariablen (Schlüssel!) – nur die Vorlage gehört ins Repo
 *.local
 .env
 .env.*
 !.env.example
-.vite
-coverage
-*.tsbuildinfo
-.DS_Store
+
+# Vercel/Supabase-CLI: lokale Verknüpfung und Zwischenstände (entstehen bei `vercel link`, `supabase link`)
+.vercel
 supabase/.temp
+supabase/.branches
+supabase/functions/**/.env
+deno.lock
+
+# Temporäre Skripte und Logs
+tmp-*
+*.log
+
+# Editor und Betriebssystem
+.DS_Store
+Thumbs.db
+.idea/
 
 # Playwright
 test-results/

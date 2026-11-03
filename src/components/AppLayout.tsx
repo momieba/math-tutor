@@ -13,7 +13,7 @@ const navCls = ({ isActive }: { isActive: boolean }) =>
   }`;
 
 /**
- * Rahmen der geschützten App: einheitliche Kopfzeile (Logo, Start, Verlauf, Profil) und Inhaltsbereich.
+ * Rahmen der geschützten App: einheitliche Kopfzeile (Logo, Start, Verlauf, Profil → Konto) und Inhaltsbereich.
  * „Abmelden“ ist bewusst direkt sichtbar statt in einem Aufklappmenü: ein Tipp weniger auf dem Tablet,
  * und der Profilbereich bleibt ohne verstecktes Menü verständlich.
  */
@@ -47,13 +47,12 @@ export function AppLayout() {
                 <span>Lokaler Modus</span>
               </span>
             )}
-            <span className="flex items-center gap-2">
-              <span className="sr-only">Angemeldet als {name}</span>
+            <NavLink to="/app/account" className={navCls} aria-label={`Dein Konto (angemeldet als ${name})`}>
               <span className="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-100 font-semibold text-indigo-800" aria-hidden="true">
                 {name.trim().charAt(0).toUpperCase() || '?'}
               </span>
               <span className="hidden lg:inline max-w-40 truncate text-sm font-medium text-slate-700">{name}</span>
-            </span>
+            </NavLink>
             <button
               type="button"
               onClick={() => void services.auth.signOut()}

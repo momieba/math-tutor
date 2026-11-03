@@ -1,12 +1,16 @@
 /**
  * Service-Schnittstellen. UI/Hooks kennen NUR diese Interfaces – nie Supabase oder localStorage direkt.
  */
+import type { EvaluationResult } from '../domain/evaluate';
 import type { MatchResult } from '../domain/topicMatcher';
 import type {
   AttemptRecord,
+  AttemptSubmission,
   Curriculum,
   Exercise,
-  NewAttemptInput,
+  ExerciseReview,
+  ExerciseSessionState,
+  ModelSolution,
   Session,
   StudentTopic,
   Subtopic,
@@ -25,16 +29,26 @@ export interface AuthService {
   /** Liefert eine Abmelde-Funktion. */
   onAuthChange(cb: (session: Session | null) => void): () => void;
   /** Gibt `null` zurück, wenn eine E-Mail-Bestätigung nötig ist (Supabase). */
-  signUpWithEmail(email: string, password: string, displayName: string): Promise<Session | null>;
+  signUpWithEmail(email: string, password: string, displayName: string, consentVersion: string): Promise<Session | null>;
   signInWithEmail(email: string, password: string): Promise<Session>;
   /** Supabase: Redirect zu Google. Lokal: Demo-Login „Google (Demo)“. */
   signInWithGoogle(): Promise<void>;
   signOut(): Promise<void>;
+  /** Schickt einen Link zum Zurücksetzen des Passworts (Supabase). Lokal nicht verfügbar. */
+  requestPasswordReset(email: string): Promise<void>;
+  /** Neues Passwort für die aktuelle Sitzung (auch die Wiederherstellungs-Sitzung aus dem E-Mail-Link). */
+  updatePassword(password: string): Promise<void>;
+  /** Speichert die Einwilligung (Version aus src/config/legal.ts) und meldet die aktualisierte Sitzung. */
+  acceptTerms(version: string): Promise<Session>;
+  /** Löscht Konto, Lerndaten und Bilder endgültig und meldet ab. */
+  deleteAccount(): Promise<void>;
 }
 
 /** Lesender Zugriff auf die Wissensbasis (Lehrplan, Themen, Kapitel, Aufgaben). */
 export interface ContentRepository {
   listCurricula(): Promise<Curriculum[]>;
+  /** Alle Themen mit Kapiteln und Aufgaben (ohne Lösungen), z. B. für das Topic-Matching. */
+  listCatalog(): Promise<Topic[]>;
   listTopics(): Promise<TopicSummary[]>;
   getTopic(topicId: string): Promise<Topic | null>;
   getSubtopic(subtopicId: string): Promise<Subtopic | null>;
@@ -53,12 +67,34 @@ export interface LearnerRepository {
   listActiveTopics(userId: string): Promise<StudentTopic[]>;
   addActiveTopic(userId: string, topicId: string): Promise<StudentTopic>;
   removeActiveTopic(userId: string, topicId: string): Promise<void>;
-  /** Speichert Attempt + Correction (+ optional Submission/Bild) atomar aus Sicht der UI. */
-  saveAttempt(input: NewAttemptInput): Promise<AttemptRecord>;
   listAttempts(userId: string, filter?: AttemptFilter): Promise<AttemptRecord[]>;
   getAttempt(userId: string, attemptId: string): Promise<AttemptRecord | null>;
   /** Anzeigbare URL für Handschrift/Foto (lokal: data-URL, Supabase: signierte URL). */
   getSubmissionImageUrl(submission: Submission): Promise<string | null>;
+  /** Alle gespeicherten Lerndaten des Nutzers als JSON-taugliches Objekt (DSGVO Art. 15/20). */
+  exportData(userId: string): Promise<Record<string, unknown>>;
+}
+
+/** Ergebnis einer Bewertung: Rückfrage (nichts gespeichert) oder gespeicherter Versuch mit Lösung zum Nachlesen. */
+export type GradeOutcome =
+  | { status: 'unclear'; evaluation: EvaluationResult }
+  | { status: 'saved'; record: AttemptRecord; evaluation: EvaluationResult; review: ExerciseReview };
+
+/**
+ * Bewertung und Hilfen. Der Client kennt die Lösung nicht; Hinweise und Musterlösung werden einzeln angefordert
+ * und dabei protokolliert, damit der Score die genutzten Hilfen fälschungssicher berücksichtigt.
+ * Lokal: gleiche Regeln im Browser. Supabase: RPCs + Edge Function `grade-attempt`.
+ */
+export interface GradingService {
+  /** Bereits aufgedeckte Hilfen der laufenden Bearbeitung. */
+  getSession(userId: string, exerciseId: string): Promise<ExerciseSessionState>;
+  /** Deckt Hinweis `level` auf (nur der Reihe nach) und liefert die Hinweise 1…level. */
+  revealHint(userId: string, exerciseId: string, level: 1 | 2 | 3): Promise<string[]>;
+  /** Musterlösung VOR der Abgabe: zählt als „Lösung angesehen“. */
+  revealSolution(userId: string, exerciseId: string): Promise<ModelSolution>;
+  /** Hinweise, Lösung und typische Fehler zum Nachlesen – nur, wenn es schon einen Versuch gibt. */
+  getReview(userId: string, exerciseId: string): Promise<ExerciseReview | null>;
+  grade(input: AttemptSubmission): Promise<GradeOutcome>;
 }
 
 /** Berechnet Fortschritt/Score aus Content + Attempts (backend-unabhängig). */
@@ -69,7 +105,7 @@ export interface ProgressService {
 
 /** Nicht gespeicherte Abgabe (z. B. Netzwerkfehler, Speicher voll). Immer lokal im Browser, unabhängig vom Modus. */
 export interface PendingAttempt {
-  input: NewAttemptInput;
+  input: AttemptSubmission;
   savedAt: string;
   lastError?: string;
   /** true, wenn der Entwurf wegen Speicherplatz ohne Bild/Striche gesichert werden musste. */
@@ -83,11 +119,11 @@ export interface DraftRepository {
   remove(userId: string, exerciseId: string): Promise<void>;
 }
 
-export type SubmitResult = { ok: true; record: AttemptRecord } | { ok: false; error: string; draftSaved: boolean; imageDropped: boolean };
+export type SubmitResult = { ok: true; outcome: GradeOutcome } | { ok: false; error: string; draftSaved: boolean; imageDropped: boolean };
 
 /** Abgabe mit Ausfallsicherung: Schlägt das Speichern fehl, bleibt die Eingabe als Entwurf erhalten. */
 export interface AttemptSubmissionService {
-  submit(input: NewAttemptInput): Promise<SubmitResult>;
+  submit(input: AttemptSubmission): Promise<SubmitResult>;
   getPending(userId: string, exerciseId: string): Promise<PendingAttempt | null>;
   discardPending(userId: string, exerciseId: string): Promise<void>;
 }
@@ -102,6 +138,7 @@ export interface Services {
   content: ContentRepository;
   learner: LearnerRepository;
   progress: ProgressService;
+  grading: GradingService;
   topicMatcher: TopicMatcherService;
   attempts: AttemptSubmissionService;
 }

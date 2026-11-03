@@ -1,0 +1,120 @@
+// deno test supabase/functions   (npm run test:functions)
+import assert from 'node:assert/strict';
+import { createGradeHandler, type GradeDeps, type GradedAttempt, type GradingContext } from './handler.ts';
+
+const USER = '11111111-1111-4111-8111-111111111111';
+const ATTEMPT = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+
+const context = (type: GradingContext['exercise']['type'] = 'numeric'): GradingContext => ({
+  exercise: { id: 'pyth-1', type },
+  key: { answer: { kind: 'numeric', value: 15, tolerance: 0 }, commonMistakes: [{ description: 'Addiert statt quadriert', feedback: 'Quadriere zuerst.', answers: ['21'] }] },
+  review: { hints: ['h1', 'h2', 'h3'], solution: { steps: [{ text: 'a² + b² = c²' }], finalAnswer: '15' }, commonMistakes: [] },
+});
+
+function setup(over: Partial<GradeDeps> = {}) {
+  const calls = { uploads: [] as string[], removed: [] as string[], recorded: [] as GradedAttempt[] };
+  const deps: GradeDeps = {
+    resolveUser: async (token) => (token === 'gueltig' ? USER : null),
+    loadContext: async (id) => (id === 'pyth-1' ? context() : null),
+    uploadImage: async (path) => void calls.uploads.push(path),
+    removeImage: async (path) => void calls.removed.push(path),
+    recordAttempt: async (a) => void calls.recorded.push(a),
+    newId: () => ATTEMPT,
+    ...over,
+  };
+  return { handler: createGradeHandler(deps), calls };
+}
+
+const PNG = 'data:image/png;base64,' + btoa(String.fromCharCode(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3));
+
+function post(body: unknown, token = 'gueltig') {
+  return new Request('http://localhost/grade-attempt', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+Deno.test('richtige Antwort: speichert und liefert Lösung zum Nachlesen', async () => {
+  const { handler, calls } = setup();
+  const res = await handler(post({ exerciseId: 'pyth-1', answerRaw: ' 15 ', startedAt: '2026-11-02T10:00:00Z' }));
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.status, 'saved');
+  assert.equal(body.attemptId, ATTEMPT);
+  assert.equal(body.evaluation.verdict, 'correct');
+  assert.deepEqual(body.review.hints, ['h1', 'h2', 'h3']);
+  assert.equal(calls.recorded.length, 1);
+  assert.equal(calls.recorded[0].answerRaw, '15');
+  assert.equal(calls.recorded[0].userId, USER);
+  assert.equal(calls.recorded[0].submission, null);
+});
+
+Deno.test('typischer Fehler wird erkannt (gleiche evaluate.ts wie lokal)', async () => {
+  const { handler } = setup();
+  const body = await (await handler(post({ exerciseId: 'pyth-1', answerRaw: '21' }))).json();
+  assert.equal(body.evaluation.verdict, 'incorrect');
+  assert.equal(body.evaluation.feedback, 'Quadriere zuerst.');
+});
+
+Deno.test('unklare Eingabe: Rückfrage, nichts gespeichert', async () => {
+  const { handler, calls } = setup();
+  const body = await (await handler(post({ exerciseId: 'pyth-1', answerRaw: 'keine Ahnung' }))).json();
+  assert.equal(body.status, 'unclear');
+  assert.equal(calls.recorded.length, 0);
+});
+
+Deno.test('ohne gültige Anmeldung: 401', async () => {
+  const { handler, calls } = setup();
+  const res = await handler(post({ exerciseId: 'pyth-1', answerRaw: '15' }, 'abgelaufen'));
+  assert.equal(res.status, 401);
+  assert.match((await res.json()).error, /Anmeldung/);
+  assert.equal(calls.recorded.length, 0);
+});
+
+Deno.test('unbekannte Aufgabe: 404; kaputte Eingaben: 400', async () => {
+  const { handler } = setup();
+  assert.equal((await handler(post({ exerciseId: 'gibt-es-nicht', answerRaw: '15' }))).status, 404);
+  assert.equal((await handler(post({ answerRaw: '15' }))).status, 400);
+  assert.equal((await handler(post({ exerciseId: 'pyth-1', answerRaw: 'x'.repeat(501) }))).status, 400);
+  assert.equal((await handler(post({ exerciseId: 'pyth-1', answerRaw: '15', submission: { kind: 'video' } }))).status, 400);
+  assert.equal((await handler(post({ exerciseId: 'pyth-1', answerRaw: '15', submission: { kind: 'canvas', dataUrl: 'data:image/png;base64,AAAA' } }))).status, 400);
+  assert.equal((await handler(post({ exerciseId: 'pyth-1', answerRaw: '15', submission: { kind: 'canvas', dataUrl: 'data:text/html;base64,AAAA' } }))).status, 400);
+});
+
+Deno.test('Handschrift: Bild unter <uid>/<attemptId>.png, Striche gespeichert', async () => {
+  const { handler, calls } = setup({ loadContext: async () => context('handwriting') });
+  const strokes = [{ points: [{ x: 1, y: 2 }] }];
+  const body = await (await handler(post({ exerciseId: 'pyth-1', answerRaw: '15', submission: { kind: 'canvas', dataUrl: PNG, strokes } }))).json();
+  assert.equal(body.status, 'saved');
+  assert.deepEqual(calls.uploads, [`${USER}/${ATTEMPT}.png`]);
+  assert.deepEqual(calls.recorded[0].submission, { kind: 'canvas', storagePath: `${USER}/${ATTEMPT}.png`, strokes });
+  assert.equal(body.evaluation.marks.at(-1).color, 'yellow'); // Rechenweg wird (noch) nicht automatisch geprüft
+});
+
+Deno.test('Speichern schlägt fehl: Bild wird wieder entfernt, 500 ohne interne Details', async () => {
+  const { handler, calls } = setup({
+    loadContext: async () => context('handwriting'),
+    recordAttempt: async () => {
+      throw new Error('duplicate key value violates unique constraint');
+    },
+  });
+  const orig = console.error;
+  console.error = () => {};
+  try {
+    const res = await handler(post({ exerciseId: 'pyth-1', answerRaw: '15', submission: { kind: 'canvas', dataUrl: PNG } }));
+    assert.equal(res.status, 500);
+    assert.doesNotMatch((await res.json()).error, /duplicate/);
+  } finally {
+    console.error = orig;
+  }
+  assert.deepEqual(calls.removed, [`${USER}/${ATTEMPT}.png`]);
+});
+
+Deno.test('CORS-Preflight und nur POST', async () => {
+  const { handler } = setup();
+  const pre = await handler(new Request('http://localhost/grade-attempt', { method: 'OPTIONS' }));
+  assert.equal(pre.status, 200);
+  assert.equal(pre.headers.get('Access-Control-Allow-Origin'), '*');
+  assert.equal((await handler(new Request('http://localhost/grade-attempt', { method: 'GET' }))).status, 405);
+});

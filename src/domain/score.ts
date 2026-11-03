@@ -38,7 +38,10 @@ export function exerciseCredit(attempts: Attempt[]): number {
   return w * last + (1 - w) * prev;
 }
 
-export function computeSubtopicProgress(subtopicId: string, exercises: Exercise[], attempts: Attempt[]): SubtopicProgress {
+/** Für den Score zählen nur Kennung, Typ und Schwierigkeit einer Aufgabe. */
+export type ScoredExercise = Pick<Exercise, 'id' | 'type' | 'difficulty'>;
+
+export function computeSubtopicProgress(subtopicId: string, exercises: ScoredExercise[], attempts: Attempt[]): SubtopicProgress {
   const c = SCORE_CONFIG;
   const own = attempts.filter((a) => a.subtopicId === subtopicId);
   const byExercise = groupBy(own, (a) => a.exerciseId);
@@ -113,7 +116,7 @@ function hasConfirmation(attempts: Attempt[]): boolean {
 
 export function computeTopicProgress(
   topicId: string,
-  subtopics: { id: string; exercises: Exercise[] }[],
+  subtopics: { id: string; exercises: ScoredExercise[] }[],
   attempts: Attempt[],
 ): TopicProgress {
   const subs = subtopics.map((s) => computeSubtopicProgress(s.id, s.exercises, attempts));

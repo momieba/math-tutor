@@ -78,8 +78,8 @@ export function recommendNext(
 }
 
 /** Lesbare Darstellung einer eingereichten Antwort (Multiple Choice: Text der Option statt Kennung). */
-export function formatAnswer(ex: Pick<Exercise, 'choices' | 'answer'>, raw: string): string {
-  if (ex.answer.kind === 'choice') return ex.choices?.find((c) => c.id === raw)?.label ?? raw;
+export function formatAnswer(ex: Pick<Exercise, 'choices' | 'type'>, raw: string): string {
+  if (ex.type === 'multiple-choice') return ex.choices?.find((c) => c.id === raw)?.label ?? raw;
   return raw;
 }
 
