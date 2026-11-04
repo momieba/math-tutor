@@ -113,3 +113,22 @@ export function followingChapter<S extends { id: string; order: number }>(subtop
   const sorted = [...subtopics].sort((a, b) => a.order - b.order);
   return sorted[sorted.findIndex((s) => s.id === currentId) + 1];
 }
+
+const RELATIVE = new Intl.RelativeTimeFormat('de', { numeric: 'auto' });
+const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
+  ['year', 365 * 24 * 3600],
+  ['month', 30 * 24 * 3600],
+  ['week', 7 * 24 * 3600],
+  ['day', 24 * 3600],
+  ['hour', 3600],
+  ['minute', 60],
+];
+
+/** „gerade eben“, „vor 5 Minuten“, „gestern“, „vor 3 Wochen“ … */
+export function timeAgo(iso: string, now = new Date()): string {
+  const seconds = Math.max(0, (now.getTime() - new Date(iso).getTime()) / 1000);
+  for (const [unit, size] of UNITS) {
+    if (seconds >= size) return RELATIVE.format(-Math.floor(seconds / size), unit);
+  }
+  return 'gerade eben';
+}

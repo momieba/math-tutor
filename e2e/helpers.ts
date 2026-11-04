@@ -57,13 +57,23 @@ export async function register(page: Page, name = 'Tessa'): Promise<TestUser> {
   return user;
 }
 
-/** Thema über das Eingabefeld suchen und (falls eindeutig) hinzufügen. */
+/** Suchfeld auf dem Dashboard (Combobox mit Trefferliste). */
+export function searchBox(page: Page): Locator {
+  return page.getByRole('combobox', { name: 'Was möchtest du heute lernen?' });
+}
+
+/** Treffer in der Liste unter dem Suchfeld. */
+export function searchOption(page: Page, text: string): Locator {
+  return page.getByRole('option').filter({ hasText: text }).first();
+}
+
+/** Thema über das Suchfeld finden und hinzufügen (öffnet das Thema), danach zurück zum Dashboard. */
 export async function addTopic(page: Page, query: string, expectedTitle: string) {
   await page.goto('/app');
-  await page.getByRole('textbox', { name: 'Was möchtest du heute lernen?' }).fill(query);
-  await page.getByRole('button', { name: 'Thema finden' }).click();
-  const candidate = page.locator('li').filter({ hasText: expectedTitle }).first();
-  await candidate.getByRole('button', { name: 'Thema hinzufügen' }).click();
+  await searchBox(page).fill(query);
+  await searchOption(page, expectedTitle).click();
+  await expect(page).toHaveURL(/\/app\/topics\//);
+  await page.goto('/app');
   await expect(topicTile(page, expectedTitle)).toBeVisible();
 }
 

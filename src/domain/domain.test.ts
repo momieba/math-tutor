@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { topics } from '../content';
 import type { Attempt, AuthoredExercise } from '../types';
-import { matchTopic } from './topicMatcher';
+import { matchTopic, searchTopics } from './topicMatcher';
 import { computeSubtopicProgress } from './score';
 import { evaluateAnswer, parseNumber, parseNumberSet } from './evaluate';
 
@@ -26,6 +26,20 @@ describe('matchTopic', () => {
   it('erkennt ein konkretes Kapitel', () => {
     const r = matchTopic('Kathete berechnen beim Pythagoras', topics);
     expect(r.kind === 'match' && r.best.subtopicId).toBe('pyth-kathete');
+  });
+});
+
+describe('searchTopics', () => {
+  const search = (q: string) => searchTopics(q, matchTopic(q, topics), topics).map((c) => c.topicId);
+  it('findet Themen schon beim Tippen des Wortanfangs', () => {
+    expect(search('pyth')).toEqual(['pythagoras']);
+    expect(search('Proz')).toEqual(['prozentrechnung']);
+  });
+  it('übernimmt das Kapitel aus dem Matching', () => {
+    expect(searchTopics('Kathete berechnen', matchTopic('Kathete berechnen', topics), topics)[0]).toMatchObject({ topicId: 'pythagoras', subtopicId: 'pyth-kathete' });
+  });
+  it('liefert nichts für Fremdes', () => {
+    expect(search('Gitarre spielen')).toEqual([]);
   });
 });
 

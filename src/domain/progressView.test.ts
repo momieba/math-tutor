@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { pythagoras } from '../content/pythagoras';
 import type { Attempt, AuthoredExercise, SubtopicProgress, TopicProgress } from '../types';
 import { evaluateHandwriting, UNCHECKED_WORK_MESSAGE } from './evaluate';
-import { exerciseState, formatAnswer, nextChapterId, recommendNext } from './progressView';
+import { exerciseState, formatAnswer, nextChapterId, recommendNext, timeAgo } from './progressView';
 
 const attempt = (over: Partial<Attempt>): Attempt => ({
   id: Math.random().toString(36),
@@ -118,5 +118,18 @@ describe('evaluateHandwriting', () => {
   });
   it('unlesbare Zahl bleibt unklar', () => {
     expect(evaluateHandwriting(ex, 'etwa zwölf', true).verdict).toBe('unclear');
+  });
+});
+
+describe('timeAgo', () => {
+  const now = new Date('2026-11-04T12:00:00Z');
+  const ago = (s: number) => new Date(now.getTime() - s * 1000).toISOString();
+  it('schreibt Zeitabstände in Worten', () => {
+    expect(timeAgo(ago(20), now)).toBe('gerade eben');
+    expect(timeAgo(ago(5 * 60), now)).toBe('vor 5 Minuten');
+    expect(timeAgo(ago(2 * 3600), now)).toBe('vor 2 Stunden');
+    expect(timeAgo(ago(26 * 3600), now)).toBe('gestern');
+    expect(timeAgo(ago(3 * 86400), now)).toBe('vor 3 Tagen');
+    expect(timeAgo(ago(15 * 86400), now)).toBe('vor 2 Wochen');
   });
 });

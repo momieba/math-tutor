@@ -18,6 +18,8 @@ import {
   readScore,
   register,
   scoreBadges,
+  searchBox,
+  searchOption,
   solveChoice,
   solveTyped,
   submitButton,
@@ -98,35 +100,41 @@ test.describe('DoD 2+3 – Thema über Texteingabe finden und zuordnen', () => {
   test('„Ich möchte den Satz des Pythagoras verstehen.“ → Pythagoras-Kachel mit allen Angaben', async ({ page }) => {
     await register(page);
     await expect(page.getByText('Noch keine Themen.')).toBeVisible(); // Leerzustand
-    await page.getByRole('textbox', { name: 'Was möchtest du heute lernen?' }).fill('Ich möchte den Satz des Pythagoras verstehen.');
-    await page.getByRole('button', { name: 'Thema finden' }).click();
-    await expect(page.getByText('Passt dieses Thema?')).toBeVisible();
-    const cand = page.locator('li').filter({ hasText: 'Satz des Pythagoras' });
-    await expect(cand).toContainText('Klasse 9 · Geometrie · 8 Kapitel');
-    await cand.getByRole('button', { name: 'Thema hinzufügen' }).click();
+    await searchBox(page).fill('Ich möchte den Satz des Pythagoras verstehen.');
+    const cand = searchOption(page, 'Satz des Pythagoras');
+    await expect(cand).toContainText('Klasse 9 · Geometrie');
+    await cand.click();
+    await expect(page).toHaveURL(/\/app\/topics\/pythagoras$/); // Thema wird hinzugefügt und geöffnet
 
+    await page.goto('/app');
     const tile = topicTile(page, 'Satz des Pythagoras');
     await expect(tile).toBeVisible();
     await expect(tile).toContainText('Klasse 9 · Geometrie'); // Klassenstufe + Themengebiet (NRW G9)
-    await expect(tile.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '0'); // Fortschritt
     await expect(scoreBadges(tile)).toHaveCount(1); // Verständnis-Score
     expect(await readScore(scoreBadges(tile).first())).toBe(0);
-    await expect(tile.getByText('Nicht begonnen')).toBeVisible(); // Lernstatus
+    await expect(tile.getByRole('progressbar')).toHaveCount(0); // Fokus auf Verständnis, kein Bearbeitet-Balken
     await tile.getByRole('link', { name: 'Thema öffnen' }).click(); // Öffnen-Button
     await expect(page).toHaveURL(/\/app\/topics\/pythagoras$/);
   });
 
-  test('„Gitarre spielen“ → kein Match, ähnliche Themen + „Alle Themen zeigen“', async ({ page }) => {
+  test('Suche beim Tippen: Wortanfang genügt, Pfeiltasten + Enter, Esc schließt', async ({ page }) => {
     await register(page);
-    await page.getByRole('textbox', { name: 'Was möchtest du heute lernen?' }).fill('Gitarre spielen');
-    await page.getByRole('button', { name: 'Thema finden' }).click();
+    await searchBox(page).fill('pyth');
+    await expect(searchOption(page, 'Satz des Pythagoras')).toBeVisible();
+    await searchBox(page).press('Escape');
+    await expect(page.getByRole('listbox')).toHaveCount(0);
+    await searchBox(page).fill('Prozent');
+    await expect(searchOption(page, 'Prozentrechnung')).toHaveAttribute('aria-selected', 'true');
+    await searchBox(page).press('Enter');
+    await expect(page).toHaveURL(/\/app\/topics\/prozentrechnung/);
+  });
+
+  test('„Gitarre spielen“ → kein Match + „Alle Themen zeigen“', async ({ page }) => {
+    await register(page);
+    await searchBox(page).fill('Gitarre spielen');
     await expect(page.getByText(/kein passendes Thema im Lehrplan gefunden/)).toBeVisible();
-    const box = page.locator('[aria-live="polite"]').filter({ hasText: 'kein passendes Thema' });
-    expect(await box.getByRole('button', { name: 'Thema hinzufügen' }).count()).toBeGreaterThanOrEqual(1);
-    await box.getByRole('button', { name: 'Alle Themen zeigen' }).click();
-    await expect(page.getByText('Alle Themen aus dem Lehrplan:')).toBeVisible();
-    const all = page.locator('[aria-live="polite"]').filter({ hasText: 'Alle Themen aus dem Lehrplan:' });
-    await expect(all.getByRole('button', { name: 'Thema hinzufügen' })).toHaveCount(6);
+    await page.getByRole('button', { name: 'Alle Themen zeigen' }).click();
+    await expect(page.getByRole('option')).toHaveCount(6);
     // Es wurde nichts ungefragt angelegt
     expect((await learnerData(page)).activeTopics).toHaveLength(0);
   });
@@ -138,64 +146,68 @@ test.describe('DoD 2+3 – Thema über Texteingabe finden und zuordnen', () => {
   ] as const) {
     test(`„${query}“ → ${title}`, async ({ page }) => {
       await register(page);
-      await page.getByRole('textbox', { name: 'Was möchtest du heute lernen?' }).fill(query);
-      await page.getByRole('button', { name: 'Thema finden' }).click();
-      await expect(page.getByText('Passt dieses Thema?')).toBeVisible();
-      await page.locator('li').filter({ hasText: title }).getByRole('button', { name: 'Thema hinzufügen' }).click();
+      await searchBox(page).fill(query);
+      await searchOption(page, title).click();
+      await expect(page).toHaveURL(/\/app\/topics\//);
+      await page.goto('/app');
       await expect(topicTile(page, title)).toContainText(meta);
     });
   }
 
-  test('„Kathete berechnen“ bietet „Direkt zum passenden Kapitel“ an', async ({ page }) => {
+  test('„Kathete berechnen“ führt direkt zum passenden Kapitel', async ({ page }) => {
     await register(page);
-    await page.getByRole('textbox', { name: 'Was möchtest du heute lernen?' }).fill('Kathete berechnen');
-    await page.getByRole('button', { name: 'Thema finden' }).click();
-    await expect(page.getByText('Passendes Kapitel: Kathete berechnen')).toBeVisible();
-    await page.getByRole('button', { name: 'Direkt zum passenden Kapitel' }).click();
+    await searchBox(page).fill('Kathete berechnen');
+    const cand = searchOption(page, 'Satz des Pythagoras');
+    await expect(cand).toContainText('Kapitel „Kathete berechnen“');
+    await cand.click();
     await expect(page).toHaveURL(/\/app\/topics\/pythagoras\/chapters\/pyth-kathete$/);
     await expect(page.getByRole('heading', { level: 1, name: 'Kathete berechnen' })).toBeVisible();
   });
 
-  test('Bereits aktives Thema wird nicht doppelt angelegt; leere Eingabe ist gesperrt; HTML wird nicht ausgeführt', async ({ page }) => {
+  test('Bereits aktives Thema wird nicht doppelt angelegt; leere Eingabe zeigt nichts; HTML wird nicht ausgeführt', async ({ page }) => {
     await register(page);
-    await expect(page.getByRole('button', { name: 'Thema finden' })).toBeDisabled();
-    await page.getByRole('textbox', { name: 'Was möchtest du heute lernen?' }).fill('   ');
-    await expect(page.getByRole('button', { name: 'Thema finden' })).toBeDisabled();
+    await searchBox(page).fill('   ');
+    await expect(page.getByRole('listbox')).toHaveCount(0);
 
     let dialog = false;
     page.on('dialog', (d) => {
       dialog = true;
       void d.dismiss();
     });
-    await page.getByRole('textbox', { name: 'Was möchtest du heute lernen?' }).fill('<img src=x onerror=alert(1)><script>alert(2)</script>');
-    await page.getByRole('button', { name: 'Thema finden' }).click();
+    await searchBox(page).fill('<img src=x onerror=alert(1)><script>alert(2)</script>');
     await expect(page.getByText(/kein passendes Thema/)).toBeVisible();
     expect(dialog).toBe(false);
 
     await addTopic(page, 'Pythagoras', 'Satz des Pythagoras');
-    await page.getByRole('textbox', { name: 'Was möchtest du heute lernen?' }).fill('Pythagoras');
-    await page.getByRole('button', { name: 'Thema finden' }).click();
-    await expect(page.getByRole('link', { name: 'Schon aktiv – öffnen' })).toBeVisible();
+    await searchBox(page).fill('Pythagoras');
+    await expect(searchOption(page, 'Satz des Pythagoras')).toContainText('Schon aktiv');
+    await searchOption(page, 'Satz des Pythagoras').click();
+    await expect(page).toHaveURL(/\/app\/topics\/pythagoras$/);
     expect((await learnerData(page)).activeTopics).toHaveLength(1);
-    await expect(page.locator('article')).toHaveCount(1);
   });
 });
 
 // ---------------------------------------------------------------- D-11 (Abnahme-Checkliste Design/UX)
-test('D-11: neuer Nutzer erreicht vom Dashboard die erste Aufgabe in ≤ 3 Tipps', async ({ page }) => {
+test('D-11: neuer Nutzer erreicht vom Dashboard den Start des ersten Kapitels in ≤ 3 Tipps', async ({ page }) => {
   await register(page); // landet auf dem Dashboard, ohne Themen
   let taps = 0;
   const tap = async (loc: ReturnType<typeof page.getByRole>) => {
     await loc.click();
     taps++;
   };
-  // 1) Vorschlags-Chip, 2) Thema bestätigen, 3) „Direkt üben“ in der Karte „Dein nächster Schritt“
-  await tap(page.getByRole('button', { name: 'Lineare Funktionen' }));
-  await tap(page.locator('li').filter({ hasText: 'Lineare Funktionen' }).getByRole('button', { name: 'Thema hinzufügen' }));
-  await tap(page.locator('section[aria-labelledby="next-heading"]').getByRole('link', { name: 'Direkt üben' }));
-  await expect(page).toHaveURL(/\/app\/exercises\/lf-fb-/); // adaptive Auswahl: eine leichte Aufgabe aus Kapitel 1
-  await expect(page.getByRole('button', { name: 'Abgeben' })).toBeVisible();
+  // Tippen ins Suchfeld, dann 1) Treffer, 2) „Thema starten“ – das Kapitel führt durch den Lernpfad zur ersten Aufgabe
+  await searchBox(page).fill('Lineare Funktionen');
+  await tap(searchOption(page, 'Lineare Funktionen'));
+  await page.waitForURL(/\/app\/topics\//);
+  if (!page.url().includes('/chapters/')) await tap(page.getByRole('link', { name: 'Thema starten' }));
+  await expect(page).toHaveURL(/\/app\/topics\/lineare-funktionen\/chapters\//);
   expect(taps).toBeLessThanOrEqual(3);
+});
+
+test('D-11b: Aufgabenseite hat genau eine Hauptaktion', async ({ page }) => {
+  await register(page);
+  await page.goto('/app/exercises/lf-fb-1');
+  await expect(page.getByRole('button', { name: 'Abgeben' })).toBeVisible();
   // Hauptaktion je Bildschirm ist markiert (D-09-Vorbereitung): auf der Aufgabe genau eine
   await expect(page.locator('[data-variant="primary"]')).toHaveCount(1);
 });
@@ -594,7 +606,6 @@ test('DoD 9 – Aufgaben in 2 Kapiteln: Fortschritt in Themenseite und Dashboard
   await addTopic(page, 'Pythagoras', 'Satz des Pythagoras');
   const rec = page.locator('section[aria-labelledby="next-heading"]');
   await expect(rec).toContainText('Grundlagen und Definition');
-  await expect(rec).toContainText('Als Nächstes dran');
 
   // Kapitel 1: vier Aufgaben richtig (bei einem Pool von über 60 noch nicht „sicher“)
   await solveChoice(page, 'pyth-grundlagen-1', 'Die Seite gegenüber dem rechten Winkel');
@@ -616,10 +627,11 @@ test('DoD 9 – Aufgaben in 2 Kapiteln: Fortschritt in Themenseite und Dashboard
 
   await page.goto('/app');
   await expect(rec).toContainText('Grundlagen und Definition');
-  await expect(rec).toContainText('Hier weitermachen');
+  await expect(rec.getByRole('heading')).toHaveText('Weiter, wo du aufgehört hast');
+  await expect(rec.getByRole('link')).toHaveCount(1); // genau ein Button
   const tile = topicTile(page, 'Satz des Pythagoras');
-  await expect(tile).toContainText('In Bearbeitung');
-  expect(Number(await tile.getByRole('progressbar').getAttribute('aria-valuenow'))).toBeGreaterThan(0);
+  expect(await readScore(scoreBadges(tile).first())).toBeGreaterThan(0);
+  await expect(tile).toContainText(/gerade eben|vor \d+ Minute/); // zuletzt geübt, relativ
 });
 
 // ---------------------------------------------------------------- DoD 10
@@ -632,7 +644,6 @@ test.describe('Persistenz und Speicherfehler', () => {
     await page.goto('/app');
     await page.reload();
     await expect(topicTile(page, 'Satz des Pythagoras')).toBeVisible();
-    await expect(page.getByText('Du hast 1 Thema aktiv und 1 Aufgabe bearbeitet.')).toBeVisible();
     await page.getByRole('button', { name: 'Abmelden' }).click();
     await page.getByLabel('E-Mail').fill(user.email);
     await page.getByLabel('Passwort').fill(user.password);

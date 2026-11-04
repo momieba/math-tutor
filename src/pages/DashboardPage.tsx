@@ -1,18 +1,15 @@
-import { ArrowRight, BookOpen, CircleCheck, CircleHelp, CircleX, Clock, History, PenLine, Search, Sparkles, TriangleAlert } from 'lucide-react';
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { ArrowRight, BookOpen, CircleCheck, CircleHelp, CircleX, Clock, History, Search, TriangleAlert } from 'lucide-react';
+import { useCallback, useEffect, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { ProgressBar } from '../components/ProgressBar';
 import { ScoreBadge } from '../components/ScoreBadge';
-import { StatusBadge } from '../components/StatusBadge';
 import { areaVisual } from '../components/topicVisuals';
-import { Button, ButtonLink, Chip, EmptyState, SkeletonCard, useToast } from '../components/ui';
+import { ButtonLink, EmptyState, SkeletonCard, useToast } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
-import { recommendNext, VERDICT_LABEL, type Recommendation } from '../domain/progressView';
-import type { MatchCandidate, MatchResult } from '../domain/topicMatcher';
+import { recommendNext, timeAgo, VERDICT_LABEL, type Recommendation } from '../domain/progressView';
+import { searchTopics, type MatchCandidate } from '../domain/topicMatcher';
 import { services } from '../services';
 import type { AttemptRecord, TopicProgress, TopicSummary, Verdict } from '../types';
 import { resolveAttemptContexts, type AttemptContext } from './attemptLabels';
-import { pickNext } from './practice';
 
 interface Tile {
   topic: TopicSummary;
@@ -36,8 +33,8 @@ const VERDICT_ICON: Record<Verdict, { Icon: typeof CircleCheck; cls: string }> =
 };
 
 /**
- * Schüler-Dashboard: Begrüßung, „Weiter, wo du aufgehört hast“, Themensuche mit Vorschlägen,
- * Themenkacheln (Stufe in Worten, Kapitel begonnen) und zuletzt bearbeitete Aufgaben.
+ * Schüler-Dashboard: Begrüßung, „Weiter, wo du aufgehört hast“, Themensuche mit Trefferliste beim Tippen,
+ * Themenkacheln (Verständnis in Worten, Kapitel begonnen) und zuletzt bearbeitete Aufgaben.
  */
 export default function DashboardPage() {
   const { session } = useAuth();
@@ -50,14 +47,15 @@ export default function DashboardPage() {
   const [recent, setRecent] = useState<AttemptRecord[]>([]);
   const [recentCtx, setRecentCtx] = useState<Map<string, AttemptContext>>(new Map());
   const [recommendation, setRecommendation] = useState<Recommendation | undefined>();
-  /** Nächste Aufgabe der Übungsfolge im empfohlenen Kapitel („Direkt üben“, kurzer Einstieg D-11). */
-  const [practiceExerciseId, setPracticeExerciseId] = useState<string | undefined>();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const [query, setQuery] = useState('');
-  const [match, setMatch] = useState<MatchResult | null>(null);
+  /** Treffer zur aktuellen Eingabe; null = noch keine Suche. */
+  const [results, setResults] = useState<MatchCandidate[] | null>(null);
+  const [listOpen, setListOpen] = useState(false);
   const [showAll, setShowAll] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
   const [chapterTitles, setChapterTitles] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
@@ -81,15 +79,7 @@ export default function DashboardPage() {
           return summary ? [{ topic: summary, progress }] : [];
         }),
       );
-      const rec = recommendNext(valid.map(({ topic, progress }) => ({ topicId: topic.id, topicTitle: topic.title, subtopics: topic.subtopics, progress })));
-      setRecommendation(rec);
-      if (rec) {
-        const chapter = valid.find((v) => v.topic.id === rec.topicId)?.topic.subtopics.find((s) => s.id === rec.subtopicId);
-        const attempts = await services.learner.listAttempts(userId, { subtopicId: rec.subtopicId }).catch(() => []);
-        setPracticeExerciseId(chapter ? pickNext(userId, chapter, attempts)?.exercise.id : undefined);
-      } else {
-        setPracticeExerciseId(undefined);
-      }
+      setRecommendation(recommendNext(valid.map(({ topic, progress }) => ({ topicId: topic.id, topicTitle: topic.title, subtopics: topic.subtopics, progress }))));
       setRecent(last);
       setRecentCtx(await resolveAttemptContexts(last));
       setError(null);
@@ -104,74 +94,69 @@ export default function DashboardPage() {
     void load();
   }, [load]);
 
-  async function runMatch(text: string) {
-    if (!text.trim()) return;
-    setShowAll(false);
-    const result = await services.topicMatcher.match(text);
-    const withChapter = result.kind === 'match' ? [result.best] : result.kind === 'ambiguous' ? result.candidates : [];
-    const titles = await Promise.all(
-      withChapter.filter((c) => c.subtopicId).map(async (c) => [c.subtopicId!, (await services.content.getSubtopic(c.subtopicId!))?.title ?? ''] as const),
-    );
-    setChapterTitles(Object.fromEntries(titles));
-    setMatch(result);
-  }
+  // Suche beim Tippen (kurz entprellt); veraltete Antworten werden verworfen.
+  useEffect(() => {
+    const text = query.trim();
+    if (!text) {
+      setResults(null);
+      return;
+    }
+    let current = true;
+    const timer = setTimeout(async () => {
+      const found = searchTopics(text, await services.topicMatcher.match(text), allTopics);
+      const titles = await Promise.all(
+        found.filter((c) => c.subtopicId).map(async (c) => [c.subtopicId!, (await services.content.getSubtopic(c.subtopicId!))?.title ?? ''] as const),
+      );
+      if (!current) return;
+      setChapterTitles(Object.fromEntries(titles));
+      setResults(found);
+      setShowAll(false);
+      setActiveIndex(0);
+    }, 150);
+    return () => {
+      current = false;
+      clearTimeout(timer);
+    };
+  }, [query, allTopics]);
 
-  function ask(e: FormEvent) {
-    e.preventDefault();
-    void runMatch(query);
-  }
+  const activeIds = new Set(tiles.map((t) => t.topic.id));
+  const options: MatchCandidate[] = showAll ? allTopics.map((t) => ({ topicId: t.id, title: t.title, score: 0 })) : (results ?? []);
+  const listVisible = listOpen && results !== null;
 
-  function suggest(title: string) {
-    setQuery(title);
-    void runMatch(title);
-  }
-
-  async function confirm(c: MatchCandidate, openChapter: boolean) {
+  /** Treffer öffnen: Thema bei Bedarf hinzufügen, dann zum passenden Kapitel bzw. zum Thema. */
+  async function openCandidate(c: MatchCandidate) {
     try {
-      await services.learner.addActiveTopic(userId, c.topicId);
-      setMatch(null);
-      setQuery('');
-      toast(`„${c.title}“ hinzugefügt`);
-      if (openChapter && c.subtopicId) navigate(`/app/topics/${c.topicId}/chapters/${c.subtopicId}`);
-      else await load();
+      if (!activeIds.has(c.topicId)) {
+        await services.learner.addActiveTopic(userId, c.topicId);
+        toast(`„${c.title}“ hinzugefügt`);
+      }
+      navigate(c.subtopicId && !showAll ? `/app/topics/${c.topicId}/chapters/${c.subtopicId}` : `/app/topics/${c.topicId}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Thema konnte nicht hinzugefügt werden.');
     }
   }
 
-  const activeIds = new Set(tiles.map((t) => t.topic.id));
-  const totalAttempted = tiles.reduce((n, t) => n + t.progress.subtopics.reduce((m, s) => m + s.attemptedExercises, 0), 0);
-  const suggestions = [...allTopics.filter((t) => !activeIds.has(t.id)), ...allTopics.filter((t) => activeIds.has(t.id))].slice(0, 3);
+  function submitSearch(e: FormEvent) {
+    e.preventDefault();
+    const c = options[activeIndex];
+    if (listVisible && c) void openCandidate(c);
+  }
 
-  const candidates: MatchCandidate[] = !match
-    ? []
-    : showAll
-      ? allTopics.map((t) => ({ topicId: t.id, title: t.title, score: 0 }))
-      : match.kind === 'match'
-        ? [match.best]
-        : match.kind === 'ambiguous'
-          ? match.candidates
-          : match.suggestions;
-  const question = showAll
-    ? 'Alle Themen aus dem Lehrplan:'
-    : match?.kind === 'match'
-      ? 'Passt dieses Thema?'
-      : match?.kind === 'ambiguous'
-        ? 'Das passt zu mehreren Themen. Welches meinst du?'
-        : 'Dazu habe ich kein passendes Thema im Lehrplan gefunden. Meinst du eines dieser Themen? Du kannst deine Frage auch anders formulieren.';
+  function onSearchKey(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Escape') setListOpen(false);
+    else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      setListOpen(true);
+      if (options.length) setActiveIndex((i) => (i + (e.key === 'ArrowDown' ? 1 : options.length - 1)) % options.length);
+    }
+  }
 
   return (
     <div className="space-y-8">
       <header className="space-y-1">
         <p className="text-slate-600 font-medium">{greeting()}</p>
         <h1 className="text-3xl font-bold text-slate-900">Hallo {session!.user.displayName}!</h1>
-        {!loading && (
-          <p className="text-slate-600">
-            {tiles.length === 0
-              ? 'Schön, dass du da bist. Such dir ein Thema aus – dann geht es direkt los.'
-              : `Du hast ${tiles.length} ${tiles.length === 1 ? 'Thema' : 'Themen'} aktiv und ${totalAttempted} ${totalAttempted === 1 ? 'Aufgabe' : 'Aufgaben'} bearbeitet.`}
-          </p>
-        )}
+        {!loading && tiles.length === 0 && <p className="text-slate-600">Schön, dass du da bist. Such dir ein Thema aus – dann geht es direkt los.</p>}
       </header>
 
       {error && (
@@ -185,124 +170,96 @@ export default function DashboardPage() {
           className="rounded-2xl border border-indigo-200 bg-gradient-to-br from-indigo-50 via-white to-white p-6 shadow-sm flex flex-wrap items-center gap-6"
           aria-labelledby="next-heading"
         >
-          <span className="hidden sm:flex h-14 w-14 flex-none items-center justify-center rounded-2xl bg-indigo-600 text-white" aria-hidden="true">
-            <Sparkles size={28} />
-          </span>
           <div className="flex-1 min-w-56 space-y-1">
-            <h2 id="next-heading" className="text-sm font-semibold uppercase tracking-wide text-indigo-700">
+            <h2 id="next-heading" className="text-2xl font-bold text-slate-900">
               {recent.length > 0 ? 'Weiter, wo du aufgehört hast' : 'Dein nächster Schritt'}
             </h2>
-            <p className="text-2xl font-bold text-slate-900">{recommendation.subtopicTitle}</p>
-            <p className="flex flex-wrap items-center gap-2 text-slate-600">
-              <span>{recommendation.topicTitle}</span>
-              {/* Im Hochformat eigene Zeile statt verwaistem „·“ am Zeilenende */}
-              <span aria-hidden="true" className="hidden lg:inline">·</span>
-              <span className="basis-full lg:basis-auto font-medium text-indigo-800">{recommendation.reason}</span>
-              <StatusBadge status={recommendation.status} />
+            <p className="text-slate-600">
+              {recommendation.subtopicTitle} · {recommendation.topicTitle}
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {practiceExerciseId && (
-              <ButtonLink to={`/app/exercises/${practiceExerciseId}`} variant="secondary" size="lg" icon={<PenLine aria-hidden="true" size={20} />}>
-                Direkt üben
-              </ButtonLink>
-            )}
-            <ButtonLink
-              to={`/app/topics/${recommendation.topicId}/chapters/${recommendation.subtopicId}`}
-              variant="primary"
-              size="lg"
-              icon={<BookOpen aria-hidden="true" size={20} />}
-            >
-              Kapitel öffnen
-            </ButtonLink>
-          </div>
+          <ButtonLink
+            to={`/app/topics/${recommendation.topicId}/chapters/${recommendation.subtopicId}`}
+            variant="primary"
+            size="lg"
+            iconRight={<ArrowRight aria-hidden="true" size={20} />}
+          >
+            Weiter
+          </ButtonLink>
         </section>
       )}
 
       <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-4" aria-labelledby="ask-heading">
-        <h2 id="ask-heading" className="flex items-center gap-2 text-xl font-semibold">
-          <Search aria-hidden="true" size={22} className="text-indigo-700" />
+        <h2 id="ask-heading" className="text-xl font-semibold">
           Was möchtest du heute lernen?
         </h2>
-        <form onSubmit={ask} className="flex flex-col sm:flex-row gap-2">
+        <form onSubmit={submitSearch} role="search" className="relative">
+          <Search aria-hidden="true" size={22} className="pointer-events-none absolute left-4 top-6 -translate-y-1/2 text-slate-500" />
           <input
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setListOpen(true);
+            }}
+            onFocus={() => setListOpen(true)}
+            onBlur={() => setListOpen(false)}
+            onKeyDown={onSearchKey}
             placeholder="z. B. „Ich möchte den Satz des Pythagoras verstehen.“"
             aria-label="Was möchtest du heute lernen?"
+            role="combobox"
+            aria-expanded={listVisible}
+            aria-controls="topic-results"
+            aria-autocomplete="list"
+            aria-activedescendant={listVisible && options[activeIndex] ? `topic-option-${activeIndex}` : undefined}
+            autoComplete="off"
             maxLength={200}
-            className="flex-1 min-h-12 rounded-lg border-2 border-slate-500 bg-white px-4 py-3 text-lg placeholder:text-slate-500 focus:border-indigo-600 focus:outline-none focus:ring-4 focus:ring-indigo-100"
+            className="w-full min-h-12 rounded-lg border-2 border-slate-500 bg-white py-3 pl-12 pr-4 text-lg placeholder:text-slate-500 focus:border-indigo-600 focus:outline-none focus:ring-4 focus:ring-indigo-100"
           />
-          <Button type="submit" variant={recommendation ? 'secondary' : 'primary'} size="lg" disabled={!query.trim()} icon={<Search aria-hidden="true" size={20} />}>
-            Thema finden
-          </Button>
-        </form>
-        {suggestions.length > 0 && !match && (
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm font-medium text-slate-600">Vorschläge:</span>
-            {suggestions.map((t) => {
-              const { Icon } = areaVisual(t.area);
-              return (
-                <Chip key={t.id} icon={<Icon aria-hidden="true" size={18} />} onClick={() => suggest(t.title)}>
-                  {t.title}
-                </Chip>
-              );
-            })}
-          </div>
-        )}
-        {match && (
-          <div className="rounded-2xl border border-indigo-200 bg-indigo-50 p-4 space-y-3 animate-slide-up" aria-live="polite">
-            <p className="font-semibold">{question}</p>
-            <ul className="space-y-2">
-              {candidates.map((c) => {
-                const t = allTopics.find((x) => x.id === c.topicId);
-                const already = activeIds.has(c.topicId);
-                const chapterTitle = !showAll && c.subtopicId ? chapterTitles[c.subtopicId] : undefined;
-                const visual = areaVisual(t?.area ?? '');
-                return (
-                  <li key={c.topicId} className="rounded-xl bg-white p-4 flex flex-wrap items-center gap-3 shadow-sm">
-                    <span className={`flex h-11 w-11 flex-none items-center justify-center rounded-xl ${visual.cls}`} aria-hidden="true">
-                      <visual.Icon size={22} />
-                    </span>
-                    <div className="flex-1 min-w-48">
-                      <p className="font-semibold">{c.title}</p>
-                      {t && (
+          {listVisible && (
+            // onMouseDown: Das Eingabefeld behält beim Antippen eines Treffers den Fokus, sonst schließt die Liste vor dem Klick.
+            <div
+              className="absolute inset-x-0 top-full z-20 mt-2 max-h-96 overflow-auto rounded-xl border border-slate-200 bg-white p-2 shadow-lg"
+              onMouseDown={(e) => e.preventDefault()}
+            >
+              {options.length === 0 && <p className="px-3 py-2 text-slate-600">Dazu habe ich kein passendes Thema im Lehrplan gefunden.</p>}
+              <ul id="topic-results" role="listbox" aria-label="Passende Themen">
+                {options.map((c, i) => {
+                  const t = allTopics.find((x) => x.id === c.topicId);
+                  const chapterTitle = !showAll && c.subtopicId ? chapterTitles[c.subtopicId] : undefined;
+                  return (
+                    <li
+                      key={c.topicId}
+                      id={`topic-option-${i}`}
+                      role="option"
+                      aria-selected={i === activeIndex}
+                      onClick={() => void openCandidate(c)}
+                      onMouseEnter={() => setActiveIndex(i)}
+                      className={`flex min-h-11 cursor-pointer items-center gap-3 rounded-lg px-3 py-2 ${i === activeIndex ? 'bg-indigo-50' : ''}`}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-slate-900">{c.title}</p>
                         <p className="text-sm text-slate-600">
-                          Klasse {t.grade} · {t.area} · {t.subtopicCount} Kapitel
+                          {t && `Klasse ${t.grade} · ${t.area}`}
+                          {chapterTitle && ` · Kapitel „${chapterTitle}“`}
                         </p>
-                      )}
-                      {chapterTitle && <p className="text-sm text-indigo-800">Passendes Kapitel: {chapterTitle}</p>}
-                    </div>
-                    {already ? (
-                      <ButtonLink to={`/app/topics/${c.topicId}`} variant="secondary">
-                        Schon aktiv – öffnen
-                      </ButtonLink>
-                    ) : (
-                      <Button variant="secondary" onClick={() => void confirm(c, false)}>
-                        Thema hinzufügen
-                      </Button>
-                    )}
-                    {chapterTitle && (
-                      <Button variant="ghost" onClick={() => void confirm(c, true)}>
-                        Direkt zum passenden Kapitel
-                      </Button>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-            <div className="flex flex-wrap gap-2">
+                      </div>
+                      {activeIds.has(c.topicId) && <span className="text-sm text-slate-600">Schon aktiv</span>}
+                    </li>
+                  );
+                })}
+              </ul>
               {!showAll && (
-                <Button variant="ghost" onClick={() => setShowAll(true)}>
+                <button
+                  type="button"
+                  onClick={() => setShowAll(true)}
+                  className="mt-1 min-h-11 w-full rounded-lg px-3 text-left font-medium text-indigo-700 hover:bg-indigo-50"
+                >
                   Alle Themen zeigen
-                </Button>
+                </button>
               )}
-              <Button variant="ghost" onClick={() => setMatch(null)}>
-                Abbrechen
-              </Button>
             </div>
-          </div>
-        )}
+          )}
+        </form>
       </section>
 
       <section aria-labelledby="topics-heading" className="space-y-4">
@@ -317,7 +274,7 @@ export default function DashboardPage() {
         )}
         {!loading && tiles.length === 0 && (
           <EmptyState icon={<BookOpen size={24} />} title="Noch keine Themen.">
-            Tippe oben auf einen Vorschlag oder schreib, was du lernen möchtest – zum Beispiel für deine nächste Mathearbeit.
+            Schreib oben, was du lernen möchtest – zum Beispiel für deine nächste Mathearbeit.
           </EmptyState>
         )}
         <div className="grid lg:grid-cols-2 gap-4">
@@ -337,13 +294,11 @@ export default function DashboardPage() {
                     </p>
                     <h3 className="text-xl font-semibold text-slate-900">{topic.title}</h3>
                   </div>
-                  <StatusBadge status={progress.status} />
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-sm text-slate-600">Verständnis:</span>
                   <ScoreBadge score={progress.score} variant="band" />
                 </div>
-                <ProgressBar value={progress.completion} label="Aufgaben bearbeitet" />
                 <p className="text-sm text-slate-600">
                   <span className="font-semibold text-slate-900 tabular-nums">
                     {started} von {chapters}
@@ -352,7 +307,7 @@ export default function DashboardPage() {
                   {progress.lastActivityAt && (
                     <>
                       <span aria-hidden="true"> · </span>
-                      <Clock aria-hidden="true" size={14} className="inline -mt-0.5" /> Zuletzt geübt: {fmtDate(progress.lastActivityAt)}
+                      <Clock aria-hidden="true" size={14} className="inline -mt-0.5" /> {timeAgo(progress.lastActivityAt)}
                     </>
                   )}
                 </p>

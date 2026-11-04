@@ -91,3 +91,18 @@ export function matchTopic(query: string, topics: MatchableTopic[]): MatchResult
   }
   return { kind: 'ambiguous', candidates: ranked.slice(0, 3) };
 }
+
+/**
+ * Treffer für die Suche beim Tippen: erst die Ergebnisse von `matchTopic`, dann Themen, bei denen ein Wort aus Titel
+ * oder Schlüsselwörtern mit einem eingegebenen Wort beginnt (ab 3 Zeichen), damit schon „pyth“ etwas findet.
+ */
+export function searchTopics(query: string, result: MatchResult, topics: Pick<Topic, 'id' | 'title' | 'keywords'>[], max = 6): MatchCandidate[] {
+  const found = result.kind === 'match' ? [result.best] : result.kind === 'ambiguous' ? [...result.candidates] : [];
+  const qTokens = tokens(query).filter((q) => q.length >= 3);
+  for (const t of topics) {
+    if (found.some((c) => c.topicId === t.id)) continue;
+    const words = [t.title, ...t.keywords].flatMap((s) => normalize(s).split(' '));
+    if (qTokens.some((q) => words.some((w) => w.startsWith(q)))) found.push({ topicId: t.id, title: t.title, score: 0 });
+  }
+  return found.slice(0, max);
+}

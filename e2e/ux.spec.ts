@@ -293,7 +293,7 @@ test('Touch-Ziele: zentrale Bedienelemente sind ≥ 44 px hoch', async ({ page }
   await register(page);
   await addTopic(page, 'Pythagoras', 'Satz des Pythagoras');
   const checks = [
-    page.getByRole('button', { name: 'Thema finden' }),
+    page.getByRole('combobox', { name: 'Was möchtest du heute lernen?' }),
     page.getByRole('link', { name: 'Thema öffnen' }),
     page.getByRole('button', { name: 'Abmelden' }),
     page.getByRole('link', { name: 'Verlauf' }),
