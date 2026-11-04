@@ -266,7 +266,8 @@ test('Lernpfad: Einstieg überspringen führt direkt zur ersten Aufgabe', async 
   await page.goto('/app/topics/lineare-funktionen/chapters/lf-steigung');
   await page.getByRole('button', { name: 'Kenne ich schon – überspringen' }).click();
   await expect(page).toHaveURL(/\/app\/exercises\/lf-st-/);
-  await expect(page.getByText('Schritt 3 von 6')).toBeVisible(); // Formel-Check
+  // Aufgabenseite zeigt statt der Schrittleiste das Verständnis im Kapitel
+  await expect(page.getByRole('progressbar', { name: /Verständnis im Kapitel/ })).toBeVisible();
 });
 
 test('DoD 5 – kein KaTeX-Renderfehler in irgendeinem Kapitel', async ({ page }) => {

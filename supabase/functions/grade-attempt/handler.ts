@@ -1,11 +1,12 @@
 /**
  * Bewertet eine Abgabe serverseitig und speichert sie (Konzept: Score nicht fälschbar, Lösung nie vor der Abgabe im Browser).
  * Ablauf: Nutzer prüfen → Eingabe validieren → Lösungsschlüssel laden → evaluate.ts (identisch zum lokalen Modus)
- * → bei `unclear` nur Rückfrage → mit Rechenweg-Bild: optional KI-Auswertung (nur freigegebene Testnutzer)
+ * → mit Rechenweg-Bild: KI-Auswertung (nur freigegebene Testnutzer); ohne eingetipptes Ergebnis liest die KI das Endergebnis,
+ *   geprüft wird es trotzdem deterministisch mit evaluate.ts → bei `unclear` nur Rückfrage
  * → Bild hochladen + record_graded_attempt (übernimmt die protokollierten Hilfen).
  * Ohne Deno-Abhängigkeiten; die echte Verdrahtung steht in index.ts.
  */
-import { isTrustworthy, withAiWork, type AiGrading } from '../_shared/domain/aiGrading.ts';
+import { isTrustworthy, READ_MESSAGES, withAiWork, type AiGrading } from '../_shared/domain/aiGrading.ts';
 import { evaluateSubmission, type EvaluationResult } from '../_shared/domain/evaluate.ts';
 import { GRADE_LIMITS, type GradeRequest, type GradeResponse } from '../_shared/domain/gradingContract.ts';
 import { HttpError, json, requireUser, serveJson, type ResolveUser } from '../_shared/http.ts';
@@ -85,21 +86,32 @@ export function createGradeHandler(deps: GradeDeps): (req: Request) => Promise<R
     const ctx = await deps.loadContext(input.exerciseId);
     if (!ctx) throw new HttpError(404, 'Diese Aufgabe gibt es nicht.');
 
-    const gradable = { answer: ctx.key.answer, commonMistakes: ctx.key.commonMistakes };
-    let evaluation = evaluateSubmission(gradable, ctx.exercise.type, input.answerRaw, input.submission !== undefined);
-    if (evaluation.verdict === 'unclear') return json({ status: 'unclear', evaluation } satisfies GradeResponse);
-
-    const attemptId = deps.newId();
     const png = input.submission?.dataUrl ? decodePng(input.submission.dataUrl) : null;
+    let ai: AiGrading | null = null;
     if (png && ctx.exercise.type !== 'multiple-choice' && deps.gradeWork) {
-      const ai = await deps
+      ai = await deps
         .gradeWork({ userId, exerciseId: input.exerciseId, review: ctx.review, commonMistakes: ctx.key.commonMistakes, pngBase64: input.submission!.dataUrl!.slice(PNG_PREFIX.length) })
         .catch((e) => {
           console.error('KI-Auswertung fehlgeschlagen', e);
           return null;
         });
-      if (isTrustworthy(ai)) evaluation = withAiWork(evaluation, ai);
     }
+    const trusted = isTrustworthy(ai) ? ai : null;
+
+    // Kein Ergebnis eingetippt (Aufgaben mit Schreibfläche): Endergebnis aus der Handschrift lesen.
+    let answerRaw = input.answerRaw;
+    if (!answerRaw && ctx.exercise.type !== 'multiple-choice') {
+      const message = !png ? READ_MESSAGES.noWork : !ai ? READ_MESSAGES.unavailable : !trusted?.finalAnswerRead ? READ_MESSAGES.unreadable : null;
+      if (message) return json({ status: 'unclear', evaluation: { verdict: 'unclear', points: 0, feedback: message, marks: [{ color: 'yellow', message }] } } satisfies GradeResponse);
+      answerRaw = trusted!.finalAnswerRead.slice(0, GRADE_LIMITS.answerChars);
+    }
+
+    const gradable = { answer: ctx.key.answer, commonMistakes: ctx.key.commonMistakes };
+    let evaluation = evaluateSubmission(gradable, ctx.exercise.type, answerRaw, input.submission !== undefined);
+    if (evaluation.verdict === 'unclear') return json({ status: 'unclear', evaluation } satisfies GradeResponse);
+    if (trusted) evaluation = withAiWork(evaluation, trusted);
+
+    const attemptId = deps.newId();
     const storagePath = png ? `${userId}/${attemptId}.png` : null;
     if (png && storagePath) await deps.uploadImage(storagePath, png);
     try {
@@ -107,7 +119,7 @@ export function createGradeHandler(deps: GradeDeps): (req: Request) => Promise<R
         userId,
         exerciseId: input.exerciseId,
         attemptId,
-        answerRaw: input.answerRaw,
+        answerRaw,
         evaluation,
         startedAt: input.startedAt || null,
         submission: input.submission ? { kind: input.submission.kind, storagePath, strokes: input.submission.strokes ?? null } : null,

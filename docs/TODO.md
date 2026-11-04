@@ -11,6 +11,9 @@ Legende: 🔴 blockiert den Start mit echten Schülern · 🟡 vor dem Start dri
 
 ## 1. Als Nächstes: Weiterentwicklung und Aufräumen
 
+- [ ] 🔴 Aufgaben mit Schreibfläche haben kein Ergebnisfeld mehr – ohne KI können sie nicht bewertet werden. Vor dem Start mit echten Schülern muss die KI für alle laufen (bezahlter Zugang mit EU-Verarbeitung und AV-Vertrag, siehe „KI-Anbieter“ unten); bis dahin können nur Nutzer in `AI_GRADING_USERS` diese Aufgaben abgeben
+- [ ] 🟡 KI-Lesung des Endergebnisses prüfen: Die KI kennt die Musterlösung und könnte sie statt des Geschriebenen „lesen“. Mit absichtlich falschen Testbildern prüfen; falls nötig, das Endergebnis in einem eigenen Aufruf ohne Musterlösung lesen lassen
+
 - [ ] 🟡 Phase 2, Prototyp: KI-Korrektur der Handschrift testen (in `grade-attempt`, nur für Nutzer in `AI_GRADING_USERS`, Einrichtung im README). Kostenloser Gemini-Key ⇒ **nur eigene Testkonten**, keine echten Schülerdaten, bis die Anbieterfrage (unten) geklärt und ein AV-Vertrag abgeschlossen ist. Danach entscheiden: KI-Urteil in die Punkte einbeziehen? Korrektur mit `source = 'ai'` speichern (Migration von `record_graded_attempt`)
 - [ ] ⚪ Phase 2, Rest: Testmodus mit eigener Gewichtung
 - [ ] ⚪ Foto-Aufbereitung mit echten Handyfotos prüfen (Schatten, schräges Licht): bei Bedarf lokale statt globaler Kontrastanpassung (`enhanceForPng` in `src/components/handwriting/photo.ts`)

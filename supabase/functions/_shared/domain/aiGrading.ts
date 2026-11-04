@@ -30,6 +30,13 @@ export interface AiGrading {
   confidence: number;
 }
 
+/** Rückfragen, wenn kein Ergebnis eingetippt wurde und die KI es aus der Handschrift lesen soll. */
+export const READ_MESSAGES = {
+  noWork: 'Schreib deinen Rechenweg und dein Ergebnis auf die Schreibfläche oder lade ein Foto hoch.',
+  unavailable: 'Deine Handschrift kann gerade nicht automatisch gelesen werden. Bitte versuche es später noch einmal.',
+  unreadable: 'Ich konnte dein Endergebnis nicht sicher lesen. Schreib es bitte deutlich in die letzte Zeile, z. B. „c = 25 cm“.',
+};
+
 export const AI_GRADING_CONFIG = {
   /** Unterhalb dieser Sicherheit wird der Rechenweg als `unclear` behandelt (gelb, keine Punkte abziehen). */
   minConfidence: 0.6,
@@ -92,7 +99,8 @@ So gehst du vor:
 2. Zerlege ihn in Schritte. Bewerte jeden Schritt: green = richtig, red = falsch, yellow = nicht lesbar oder nicht eindeutig.
    Andere richtige Lösungswege als die Musterlösung sind ausdrücklich erlaubt. Folgefehler: Ein Schritt, der mit einem falschen Zwischenergebnis richtig weiterrechnet, ist yellow, nicht red.
 3. message: kurz, freundlich, auf Deutsch, in der Du-Form. Bei red sagen, was falsch ist, ohne die ganze Lösung zu verraten.
-4. finalAnswerRead: das Endergebnis, wie es auf dem Bild steht (leer, wenn keins erkennbar ist).
+4. finalAnswerRead: das Endergebnis genau so, wie der Schüler es aufgeschrieben hat – auch wenn es falsch ist. Setze nie die Musterlösung ein.
+   Meist steht es in der letzten Zeile oder ist unterstrichen. Leer lassen, wenn kein Endergebnis erkennbar ist.
 5. workVerdict für den ganzen Rechenweg: correct, partial (Ansatz richtig, aber Fehler), incorrect oder unclear (nicht beurteilbar).
 6. feedback: ein bis zwei Sätze Gesamtrückmeldung an den Schüler.
 7. confidence: wie sicher du bei Lesen und Bewerten bist (0 bis 1). Sei ehrlich; bei schlechter Schrift lieber niedrig.

@@ -160,6 +160,46 @@ Deno.test('normale Aufgabe mit Foto vom Rechenweg: Bild gespeichert und von der 
   assert.equal(body.evaluation.marks.at(-1).stepIndex, 0);
 });
 
+Deno.test('ohne eingetipptes Ergebnis: KI liest das Endergebnis, evaluate.ts bewertet es', async () => {
+  const { handler, calls } = setup({ loadContext: async () => context('numeric'), gradeWork: async () => aiGrading({ finalAnswerRead: 'c = 15 cm' }) });
+  const body = await (await handler(post({ exerciseId: 'pyth-1', answerRaw: '', submission: { kind: 'canvas', dataUrl: PNG } }))).json();
+  assert.equal(body.status, 'saved');
+  assert.equal(body.evaluation.verdict, 'correct');
+  assert.equal(calls.recorded[0].answerRaw, 'c = 15 cm'); // im Verlauf steht, was gelesen wurde
+});
+
+Deno.test('ohne eingetipptes Ergebnis: falsch gelesenes Ergebnis wird als falsch bewertet (typischer Fehler)', async () => {
+  const { handler } = setup({ gradeWork: async () => aiGrading({ finalAnswerRead: '21' }) });
+  const body = await (await handler(post({ exerciseId: 'pyth-1', answerRaw: '', submission: { kind: 'canvas', dataUrl: PNG } }))).json();
+  assert.equal(body.evaluation.verdict, 'incorrect');
+  assert.equal(body.evaluation.feedback.startsWith('Quadriere zuerst.'), true);
+});
+
+Deno.test('ohne eingetipptes Ergebnis: Rückfrage, wenn nichts gelesen werden kann – nichts gespeichert', async () => {
+  const orig = console.error;
+  console.error = () => {};
+  try {
+    const cases: [Partial<GradeDeps>, unknown, RegExp][] = [
+      [{ gradeWork: async () => aiGrading() }, undefined, /Schreib deinen Rechenweg/], // kein Bild
+      [{ gradeWork: async () => null }, { kind: 'canvas', dataUrl: PNG }, /gerade nicht automatisch gelesen/], // KI nicht freigeschaltet
+      [{}, { kind: 'canvas', dataUrl: PNG }, /gerade nicht automatisch gelesen/], // keine KI konfiguriert
+      [{ gradeWork: async () => { throw new Error('Gemini 503'); } }, { kind: 'canvas', dataUrl: PNG }, /gerade nicht automatisch gelesen/],
+      [{ gradeWork: async () => aiGrading({ confidence: 0.3 }) }, { kind: 'photo', dataUrl: PNG }, /nicht sicher lesen/],
+      [{ gradeWork: async () => aiGrading({ finalAnswerRead: '' }) }, { kind: 'canvas', dataUrl: PNG }, /nicht sicher lesen/],
+    ];
+    for (const [over, submission, message] of cases) {
+      const { handler, calls } = setup(over);
+      const body = await (await handler(post({ exerciseId: 'pyth-1', answerRaw: '', submission }))).json();
+      assert.equal(body.status, 'unclear');
+      assert.match(body.evaluation.feedback, message);
+      assert.equal(calls.recorded.length, 0);
+      assert.equal(calls.uploads.length, 0);
+    }
+  } finally {
+    console.error = orig;
+  }
+});
+
 Deno.test('Speichern schlägt fehl: Bild wird wieder entfernt, 500 ohne interne Details', async () => {
   const { handler, calls } = setup({
     loadContext: async () => context('handwriting'),

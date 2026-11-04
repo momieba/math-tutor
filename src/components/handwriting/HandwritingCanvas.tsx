@@ -1,5 +1,5 @@
 import { Eraser, Hand, Pencil, Redo2, Slash, Trash2, Undo2, ZoomIn, ZoomOut, type LucideIcon } from 'lucide-react';
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import {
   addStroke,
   canRedo,
@@ -31,6 +31,8 @@ interface Props {
   history: CanvasHistory;
   onChange: (next: CanvasHistory) => void;
   disabled?: boolean;
+  /** Zusätzliche Bedienelemente am Ende der Werkzeugleiste (z. B. „Foto hochladen“). */
+  toolbarEnd?: ReactNode;
 }
 
 /**
@@ -39,8 +41,9 @@ interface Props {
  * - Handballen-Erkennung: Sobald ein Stift erkannt wurde, werden Fingerberührungen auf der Fläche ignoriert.
  * - Zoom vergrößert die Darstellung; mit „Verschieben“ lässt sich die vergrößerte Fläche per Finger bewegen.
  * Die Komponente ist „controlled“: Die Strich-Historie liegt beim Aufrufer (Abgabe, Entwurf, Export).
+ * Sie hat keinen eigenen Rahmen: Sie sitzt im Schreibblatt der Aufgabenseite (Werkzeugleiste oben, darunter das Papier).
  */
-export function HandwritingCanvas({ history, onChange, disabled = false }: Props) {
+export function HandwritingCanvas({ history, onChange, disabled = false, toolbarEnd }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [tool, setTool] = useState<Tool>('pen');
   const [color, setColor] = useState(COLORS[0].value);
@@ -173,81 +176,74 @@ export function HandwritingCanvas({ history, onChange, disabled = false }: Props
       <Icon aria-hidden="true" size={22} />
     </button>
   );
-  /** Gruppen: hoch nebeneinander, quer als 2-spaltiges Raster in der senkrechten Leiste. */
-  const group = 'flex flex-wrap items-center gap-2 landscape:grid landscape:grid-cols-2';
-  const divider = <span className="h-8 w-px bg-slate-200 landscape:h-px landscape:w-full" aria-hidden="true" />;
+  const group = 'flex items-center gap-1';
+  const divider = <span className="h-8 w-px bg-slate-200" aria-hidden="true" />;
 
   return (
-    <div className="space-y-2">
-      {/* Querformat: Leiste links neben der Fläche (Daumennähe). Hochformat: Leiste unter der Fläche. */}
-      <div className="flex flex-col gap-3 landscape:flex-row landscape:items-start">
-        <div
-          className="order-2 flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white p-2 shadow-lg landscape:order-1 landscape:w-28 landscape:flex-none landscape:flex-col landscape:items-stretch"
-          role="toolbar"
-          aria-label="Werkzeuge der Schreibfläche"
-        >
-          <div className={group} role="group" aria-label="Werkzeug">
-            {toolBtn('pen', 'Stift', Pencil)}
-            {toolBtn('line', 'Linie', Slash)}
-            {toolBtn('eraser', 'Radierer', Eraser)}
-            {toolBtn('pan', 'Verschieben', Hand)}
-          </div>
-          {divider}
-          <div className={group} role="group" aria-label="Farbe">
-            {COLORS.map((c) => (
-              <button
-                key={c.value}
-                type="button"
-                onClick={() => setColor(c.value)}
-                aria-label={`Farbe ${c.label}`}
-                title={`Farbe ${c.label}`}
-                aria-pressed={color === c.value}
-                disabled={disabled}
-                className={`h-11 w-11 rounded-full border-4 transition-shadow ${color === c.value ? 'border-white ring-2 ring-indigo-600' : 'border-white ring-1 ring-slate-200'}`}
-                style={{ backgroundColor: c.value }}
-              />
-            ))}
-          </div>
-          {divider}
-          <div className={group} role="group" aria-label="Bearbeiten">
-            {actionBtn('Rückgängig', () => onChange(undo(history)), canUndo(history), Undo2)}
-            {actionBtn('Wiederholen', () => onChange(redo(history)), canRedo(history), Redo2)}
-            {actionBtn('Alles löschen', () => onChange(clearAll(history)), visibleStrokes(history).length > 0, Trash2)}
-          </div>
-          {divider}
-          <div className={group} role="group" aria-label="Zoom">
-            {actionBtn('Verkleinern', () => setZoom((z) => nextZoom(z, -1)), zoom > ZOOM_LEVELS[0], ZoomOut)}
-            {actionBtn('Vergrößern', () => setZoom((z) => nextZoom(z, 1)), zoom < ZOOM_LEVELS[ZOOM_LEVELS.length - 1], ZoomIn)}
-            <span className="min-w-12 text-center text-sm font-medium tabular-nums text-slate-700 landscape:col-span-2" aria-live="polite">
-              {Math.round(zoom * 100)} %
-            </span>
-          </div>
+    <div>
+      <div className="flex flex-wrap items-center gap-2 border-y border-slate-200 bg-slate-50 px-3 py-2" role="toolbar" aria-label="Werkzeuge der Schreibfläche">
+        <div className={group} role="group" aria-label="Werkzeug">
+          {toolBtn('pen', 'Stift', Pencil)}
+          {toolBtn('line', 'Linie', Slash)}
+          {toolBtn('eraser', 'Radierer', Eraser)}
+          {toolBtn('pan', 'Verschieben', Hand)}
         </div>
-        <div className="order-1 min-w-0 flex-1 overflow-auto max-h-[70vh] rounded-2xl border border-slate-300 bg-white shadow-sm landscape:order-2">
-          <canvas
-            ref={canvasRef}
-            aria-label="Schreibfläche für deinen Rechenweg"
-            role="img"
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerUp={finish}
-            onPointerCancel={finish}
-            onContextMenu={(e) => e.preventDefault()}
-            className="block select-none"
-            style={{
-              width: `${zoom * 100}%`,
-              aspectRatio: `${WORLD.width} / ${WORLD.height}`,
-              touchAction: tool === 'pan' ? 'pan-x pan-y' : 'none',
-              cursor: disabled ? 'not-allowed' : tool === 'pan' ? 'grab' : 'crosshair',
-              // Kästchenpapier als CSS-Hintergrund: wird nicht exportiert und vom Radierer nicht entfernt.
-              backgroundImage:
-                'linear-gradient(to right, #dbe4f0 1px, transparent 1px), linear-gradient(to bottom, #dbe4f0 1px, transparent 1px)',
-              backgroundSize: `${(100 / WORLD.width) * 40}% ${(100 / WORLD.height) * 40}%`,
-            }}
-          />
+        {divider}
+        <div className={group} role="group" aria-label="Farbe">
+          {COLORS.map((c) => (
+            <button
+              key={c.value}
+              type="button"
+              onClick={() => setColor(c.value)}
+              aria-label={`Farbe ${c.label}`}
+              title={`Farbe ${c.label}`}
+              aria-pressed={color === c.value}
+              disabled={disabled}
+              className={`h-11 w-11 rounded-full border-4 transition-shadow ${color === c.value ? 'border-white ring-2 ring-indigo-600' : 'border-white ring-1 ring-slate-200'}`}
+              style={{ backgroundColor: c.value }}
+            />
+          ))}
         </div>
+        {divider}
+        <div className={group} role="group" aria-label="Bearbeiten">
+          {actionBtn('Rückgängig', () => onChange(undo(history)), canUndo(history), Undo2)}
+          {actionBtn('Wiederholen', () => onChange(redo(history)), canRedo(history), Redo2)}
+          {actionBtn('Alles löschen', () => onChange(clearAll(history)), visibleStrokes(history).length > 0, Trash2)}
+        </div>
+        {divider}
+        <div className={group} role="group" aria-label="Zoom">
+          {actionBtn('Verkleinern', () => setZoom((z) => nextZoom(z, -1)), zoom > ZOOM_LEVELS[0], ZoomOut)}
+          {actionBtn('Vergrößern', () => setZoom((z) => nextZoom(z, 1)), zoom < ZOOM_LEVELS[ZOOM_LEVELS.length - 1], ZoomIn)}
+          <span className="min-w-12 text-center text-sm font-medium tabular-nums text-slate-700" aria-live="polite">
+            {Math.round(zoom * 100)} %
+          </span>
+        </div>
+        {toolbarEnd && <div className="ml-auto">{toolbarEnd}</div>}
       </div>
-      {tool === 'pan' && <p className="text-sm text-slate-600 px-1">Verschieben aktiv: Mit dem Finger wischen bewegt die Fläche. Zum Schreiben wieder „Stift“ wählen.</p>}
+      {tool === 'pan' && <p className="px-4 pt-2 text-sm text-slate-600">Verschieben aktiv: Mit dem Finger wischen bewegt die Fläche. Zum Schreiben wieder „Stift“ wählen.</p>}
+      <div className="overflow-auto rounded-b-2xl bg-white">
+        <canvas
+          ref={canvasRef}
+          aria-label="Schreibfläche für deinen Rechenweg"
+          role="img"
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={finish}
+          onPointerCancel={finish}
+          onContextMenu={(e) => e.preventDefault()}
+          className="block select-none"
+          style={{
+            width: `${zoom * 100}%`,
+            aspectRatio: `${WORLD.width} / ${WORLD.height}`,
+            touchAction: tool === 'pan' ? 'pan-x pan-y' : 'none',
+            cursor: disabled ? 'not-allowed' : tool === 'pan' ? 'grab' : 'crosshair',
+            // Kästchenpapier als CSS-Hintergrund: wird nicht exportiert und vom Radierer nicht entfernt.
+            backgroundImage:
+              'linear-gradient(to right, #dbe4f0 1px, transparent 1px), linear-gradient(to bottom, #dbe4f0 1px, transparent 1px)',
+            backgroundSize: `${(100 / WORLD.width) * 40}% ${(100 / WORLD.height) * 40}%`,
+          }}
+        />
+      </div>
     </div>
   );
 }

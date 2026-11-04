@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, BookOpen, Camera, Eye, Lightbulb, PenLine, RotateCcw, Send, TrendingDown, TrendingUp, TriangleAlert } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BookOpen, Camera, Eye, Lightbulb, Maximize2, Minimize2, PenLine, RotateCcw, Send, TrendingDown, TrendingUp, TriangleAlert } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { ChoiceInput, MathInput, NumericInput } from '../components/AnswerInputs';
@@ -9,10 +9,10 @@ import { HandwritingCanvas } from '../components/handwriting/HandwritingCanvas';
 import { preparePhoto } from '../components/handwriting/photo';
 import { exportStrokesAsPng } from '../components/handwriting/renderStrokes';
 import { MathText } from '../components/MathText';
+import { ProgressBar } from '../components/ProgressBar';
 import { ScoreBadge } from '../components/ScoreBadge';
 import { SolutionView } from '../components/SolutionView';
 import { StatusBadge } from '../components/StatusBadge';
-import { StepBar } from '../components/StepBar';
 import { Button, ButtonLink, Dialog, EmptyState, Skeleton, useToast } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import type { EvaluationResult } from '../domain/evaluate';
@@ -37,7 +37,9 @@ const looksMathy = (s: string) => /[\d^_=+\-*/\\√²³]/.test(s);
 const prefersReducedMotion = () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
 /**
- * Aufgabe bearbeiten (Fokus-Modus): Eingabe je Typ, gestufte Hinweise, „Lösung anzeigen“, Abgabe, Feedback, Musterlösung.
+ * Aufgabe bearbeiten (Fokus-Modus): Schreibblatt mit Aufgabe, Hinweis-Button und Schreibfläche (Vollbild möglich),
+ * gestufte Hinweise, „Lösung anzeigen“, Abgabe, Feedback, Musterlösung. Bei Aufgaben mit Schreibfläche gibt es kein
+ * Ergebnisfeld: Die KI liest das Endergebnis aus der Handschrift (nur im lokalen Modus wird es eingetippt).
  * Die Seite kennt die Lösung nicht: Hinweise und Musterlösung kommen einzeln vom Bewertungsdienst (services.grading),
  * die Abgabe wird dort bewertet und gespeichert (services.attempts.submit, sonst Entwurf + erneuter Versuch).
  */
@@ -82,6 +84,7 @@ export default function ExercisePage() {
   const [notice, setNotice] = useState<EvaluationResult | null>(null);
   const [phase, setPhase] = useState<Phase>({ kind: 'answering' });
   const [chapterProgress, setChapterProgress] = useState<SubtopicProgress | null>(null);
+  const [fullscreen, setFullscreen] = useState(false);
   const noticeRef = useRef<HTMLDivElement>(null);
   const resultRef = useRef<HTMLDivElement>(null);
 
@@ -98,6 +101,7 @@ export default function ExercisePage() {
     setNotice(null);
     setPhase({ kind: 'answering' });
     setChapterProgress(null);
+    setFullscreen(false);
   }
 
   useEffect(() => {
@@ -151,6 +155,19 @@ export default function ExercisePage() {
     target?.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'nearest' });
   }, [phase.kind, notice]);
 
+  // Vollbild: Seite dahinter nicht scrollen, Esc beendet.
+  useEffect(() => {
+    if (!fullscreen) return;
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setFullscreen(false);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = overflow;
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [fullscreen]);
+
   if (!loaded) {
     return (
       <div className="space-y-6" role="status">
@@ -174,8 +191,10 @@ export default function ExercisePage() {
   const chapterUrl = `/app/topics/${chapter.topicId}/chapters/${chapter.id}`;
   const locked = phase.kind !== 'answering';
   const isHandwriting = exercise.type === 'handwriting';
-  /** Rechenweg (Schreibfläche oder Foto) gibt es bei allen Aufgaben außer Multiple Choice; Pflicht nur bei Handschrift-Aufgaben. */
+  /** Schreibfläche (oder Foto) gibt es bei allen Aufgaben außer Multiple Choice. */
   const offersWork = exercise.type !== 'multiple-choice';
+  /** Ergebnis eintippen: bei Multiple Choice und im lokalen Modus (dort liest keine KI die Handschrift). */
+  const typesAnswer = !offersWork || services.mode === 'local';
   const unit = exercise.answerFormat.kind === 'numeric' ? exercise.answerFormat.unit : undefined;
   const saved = phase.kind === 'saved';
   const hintsUsed = hints.length;
@@ -202,6 +221,7 @@ export default function ExercisePage() {
       return;
     }
     setPending(null);
+    setFullscreen(false);
     setPreviousCount((n) => n + 1);
     setPhase({ kind: 'saved', record: outcome.record, evaluation: outcome.evaluation, review: outcome.review });
     toast('Lösung gespeichert');
@@ -294,7 +314,9 @@ export default function ExercisePage() {
     );
   })();
 
-  const canSubmit = phase.kind === 'answering' && !photoBusy && (answer.trim() !== '' || (isHandwriting && (photo !== null || !isBlank(drawing))));
+  const hasWork = photo !== null || !isBlank(drawing);
+  const canSubmit =
+    phase.kind === 'answering' && !photoBusy && (!offersWork ? answer.trim() !== '' : typesAnswer ? answer.trim() !== '' || (isHandwriting && hasWork) : hasWork);
 
   async function choosePhoto(file: File | undefined) {
     if (!file) return;
@@ -314,16 +336,44 @@ export default function ExercisePage() {
   // Für den Score zählt, was der Bewertungsdienst protokolliert hat (record), nicht der Stand der Seite.
   const usedHints = phase.kind === 'saved' ? phase.record.hintsUsed : hintsUsed;
   const usedSolution = phase.kind === 'saved' ? phase.record.solutionViewed : solutionViewed;
-  const hintPenalty = Math.round(SCORE_CONFIG.hintPenaltyPerHint * 100);
   const solutionShare = Math.round(SCORE_CONFIG.solutionViewedFactor * 100);
 
+  const chapterScore = chapterProgress?.score ?? scoreBefore;
+
+  // Immer nur eine Hilfe-Schaltfläche: erst die drei Hinweise der Reihe nach, danach „Lösung anzeigen“.
+  const helpButton =
+    saved || solutionViewed ? null : hintsUsed < 3 ? (
+      <Button icon={<Lightbulb aria-hidden="true" size={20} />} onClick={() => void revealHint()} disabled={locked} loading={helpBusy}>
+        {`Hinweis ${hintsUsed + 1} von 3`}
+      </Button>
+    ) : (
+      <Button icon={<Eye aria-hidden="true" size={20} />} onClick={() => setConfirmSolution(true)} disabled={locked || helpBusy}>
+        Lösung anzeigen
+      </Button>
+    );
+
+  const photoButton = !locked && (
+    // Schmal (z. B. im Vollbild) nur das Icon, damit die Werkzeugleiste einzeilig bleibt.
+    <Button loading={photoBusy} icon={<Camera aria-hidden="true" size={18} />} onClick={() => photoInput.current?.click()} aria-label="Foto hochladen" title="Foto hochladen">
+      <span className="hidden xl:inline">Foto hochladen</span>
+    </Button>
+  );
+
   return (
-    <div className={`mx-auto space-y-6 pb-16 ${offersWork ? 'max-w-5xl' : 'max-w-3xl'}`}>
+    <div className={`mx-auto space-y-6 pb-16 ${offersWork ? 'max-w-6xl' : 'max-w-3xl'}`}>
       <Link to={chapterUrl} onClick={leave} className="inline-flex min-h-11 items-center gap-2 font-medium text-indigo-700">
         <ArrowLeft aria-hidden="true" size={20} /> {chapter.title}
       </Link>
 
-      <StepBar current={stepOfExercise(chapter.exercises, exercise.id)} />
+      {chapterScore !== null && (
+        <div className="flex items-center gap-4">
+          <span className="text-sm font-medium text-slate-600">Verständnis</span>
+          <div className="flex-1">
+            <ProgressBar value={chapterScore / 100} label={`Verständnis im Kapitel „${chapter.title}“`} showValue={false} size="sm" />
+          </div>
+          <ScoreBadge score={chapterScore} variant="band" />
+        </div>
+      )}
 
       {pending && phase.kind === 'answering' && (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6 space-y-4 animate-slide-up" role="alert">
@@ -345,51 +395,103 @@ export default function ExercisePage() {
         </div>
       )}
 
-      <header className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
-        <p className="text-sm text-slate-500">
-          {REQUIREMENT_LABEL[exercise.requirement]} · {DIFFICULTY_LABEL[exercise.difficulty]}
-          {previousCount > 0 && ` · bisher ${previousCount} Versuch${previousCount === 1 ? '' : 'e'}`}
+      {offersWork && !locked && (
+        <p className="text-slate-600">
+          {typesAnswer
+            ? 'Schreib deinen Rechenweg mit Stift oder Finger auf das Kästchenpapier oder lade ein Foto aus deinem Heft hoch. Dein Ergebnis trägst du unten ein.'
+            : 'Schreib deinen Rechenweg und dein Ergebnis mit Stift oder Finger auf das Kästchenpapier – oder lade ein Foto aus deinem Heft hoch.'}
         </p>
-        <h1 className="text-2xl leading-relaxed font-semibold text-slate-900">
-          <MathText text={exercise.prompt} />
-        </h1>
-        {exercise.figure && <ExerciseFigure figure={exercise.figure} />}
-      </header>
+      )}
 
-      <section className="space-y-4" aria-label="Deine Lösung">
-        {offersWork && (
-          <div className="space-y-2">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-slate-600">
-                {photo
-                  ? 'Dein Foto vom Rechenweg:'
-                  : `Schreibe deinen Rechenweg${isHandwriting ? '' : ' (freiwillig)'} mit Stift oder Finger auf das Kästchenpapier – oder lade ein Foto aus deinem Heft hoch.`}
+      <section
+        aria-label="Aufgabe und deine Lösung"
+        // my-0!: Der Abstand aus space-y-6 würde die Vollbild-Ebene sonst unten abschneiden.
+        className={fullscreen ? 'fixed inset-0 z-50 my-0! space-y-4 overflow-auto bg-slate-100 p-2 sm:p-4' : 'space-y-4'}
+      >
+        <div
+          className="mx-auto rounded-2xl border border-slate-200 bg-white shadow-sm"
+          // Vollbild: so breit, dass das ganze Blatt (Seitenverhältnis 3:2) auf den Bildschirm passt – sonst müsste man zum Scrollen neben das Papier wischen.
+          style={fullscreen ? { maxWidth: 'max(36rem, calc((100dvh - 19rem) * 1.5))' } : undefined}
+        >
+          <header className="flex flex-wrap items-start gap-4 p-6">
+            <div className="flex-1 min-w-64 space-y-3">
+              <p className="text-sm text-slate-500">
+                {REQUIREMENT_LABEL[exercise.requirement]} · {DIFFICULTY_LABEL[exercise.difficulty]}
+                {previousCount > 0 && ` · bisher ${previousCount} Versuch${previousCount === 1 ? '' : 'e'}`}
               </p>
-              {!locked &&
-                (photo ? (
-                  <Button icon={<PenLine aria-hidden="true" size={18} />} onClick={() => setPhoto(null)}>
-                    Stattdessen schreiben
-                  </Button>
-                ) : (
-                  <Button loading={photoBusy} icon={<Camera aria-hidden="true" size={18} />} onClick={() => photoInput.current?.click()}>
-                    Foto hochladen
-                  </Button>
-                ))}
-              <input ref={photoInput} type="file" accept="image/*" className="hidden" aria-label="Foto vom Rechenweg" onChange={(e) => void choosePhoto(e.target.files?.[0])} />
+              <h1 className="text-2xl leading-relaxed font-semibold text-slate-900">
+                <MathText text={exercise.prompt} />
+              </h1>
+              {exercise.figure && <ExerciseFigure figure={exercise.figure} />}
             </div>
-            {photoError && (
-              <p role="alert" className="text-sm text-red-700">
-                {photoError}
-              </p>
-            )}
-            {photo ? (
-              <img src={photo} alt="Dein Foto vom Rechenweg" className="max-h-[32rem] w-full rounded-2xl border border-slate-200 bg-white object-contain" />
-            ) : (
-              <HandwritingCanvas history={drawing} onChange={setDrawing} disabled={locked} />
-            )}
-          </div>
-        )}
-        {exercise.type === 'multiple-choice' ? answerField : <div className="rounded-2xl border border-indigo-200 bg-indigo-50 p-6">{answerField}</div>}
+            <div className="ml-auto flex items-center gap-2">
+              {helpButton}
+              {offersWork && !photo && (
+                <button
+                  type="button"
+                  onClick={() => setFullscreen((v) => !v)}
+                  aria-label={fullscreen ? 'Vollbild beenden' : 'Schreibfläche im Vollbild'}
+                  title={fullscreen ? 'Vollbild beenden' : 'Vollbild'}
+                  aria-pressed={fullscreen}
+                  className="flex h-11 w-11 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 transition-colors hover:bg-slate-100 active:scale-95"
+                >
+                  {fullscreen ? <Minimize2 aria-hidden="true" size={22} /> : <Maximize2 aria-hidden="true" size={22} />}
+                </button>
+              )}
+            </div>
+          </header>
+
+          {!saved && (hintsUsed > 0 || helpError) && (
+            <div className="space-y-2 px-6 pb-4" aria-label="Hilfe">
+              <ol className="space-y-2">
+                {hints.map((h, i) => (
+                  <li key={i} className="rounded-lg border border-sky-200 bg-sky-50 p-4 animate-slide-up">
+                    <strong className="text-sky-800">Hinweis {i + 1}:</strong> <MathText text={h} />
+                  </li>
+                ))}
+              </ol>
+              {helpError && (
+                <p role="alert" className="text-sm text-red-700">
+                  {helpError}
+                </p>
+              )}
+            </div>
+          )}
+
+          {offersWork ? (
+            <>
+              <input ref={photoInput} type="file" accept="image/*" className="hidden" aria-label="Foto vom Rechenweg" onChange={(e) => void choosePhoto(e.target.files?.[0])} />
+              {photoError && (
+                <p role="alert" className="px-6 pb-3 text-sm text-red-700">
+                  {photoError}
+                </p>
+              )}
+              {photo ? (
+                <div>
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-y border-slate-200 bg-slate-50 px-3 py-2">
+                    <span className="px-1 font-medium text-slate-700">Dein Foto vom Rechenweg</span>
+                    {!locked && (
+                      <Button icon={<PenLine aria-hidden="true" size={18} />} onClick={() => setPhoto(null)}>
+                        Stattdessen schreiben
+                      </Button>
+                    )}
+                  </div>
+                  <img src={photo} alt="Dein Foto vom Rechenweg" className="max-h-[40rem] w-full rounded-b-2xl bg-white object-contain" />
+                </div>
+              ) : (
+                <HandwritingCanvas history={drawing} onChange={setDrawing} disabled={locked} toolbarEnd={photoButton} />
+              )}
+              {typesAnswer && (
+                <div className="space-y-2 rounded-b-2xl border-t border-slate-200 bg-indigo-50 p-6">
+                  {answerField}
+                  <p className="text-sm text-slate-600">Im lokalen Modus wird die Handschrift nicht gelesen, deshalb trägst du das Ergebnis hier ein.</p>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="px-6 pb-6">{answerField}</div>
+          )}
+        </div>
 
         <div ref={noticeRef} className="scroll-mt-24">
           {notice && <FeedbackPanel verdict={notice.verdict} points={0} feedback={notice.feedback} marks={notice.marks} />}
@@ -399,7 +501,7 @@ export default function ExercisePage() {
           <div className="flex flex-wrap items-center justify-end gap-3">
             {phase.kind === 'saving' && (
               <p className="text-slate-600" role="status">
-                Speichere deine Lösung …
+                {offersWork && !typesAnswer ? 'Dein Rechenweg wird gelesen und geprüft …' : 'Speichere deine Lösung …'}
               </p>
             )}
             <Button
@@ -491,40 +593,6 @@ export default function ExercisePage() {
             </div>
           )}
         </div>
-      )}
-
-      {!saved && (
-        <section className="space-y-3" aria-label="Hilfe">
-          {hintsUsed > 0 && (
-            <ol className="space-y-2">
-              {hints.map((h, i) => (
-                <li key={i} className="rounded-lg border border-sky-200 bg-sky-50 p-4 animate-slide-up">
-                  <strong className="text-sky-800">Hinweis {i + 1}:</strong> <MathText text={h} />
-                </li>
-              ))}
-            </ol>
-          )}
-          {/* Immer nur eine Hilfe-Schaltfläche: erst die drei Hinweise der Reihe nach, danach „Lösung anzeigen“. */}
-          {!solutionViewed && (
-            <div className="flex flex-wrap items-center gap-3">
-              {hintsUsed < 3 ? (
-                <Button variant="ghost" icon={<Lightbulb aria-hidden="true" size={20} />} onClick={() => void revealHint()} disabled={locked} loading={helpBusy}>
-                  {`Hinweis ${hintsUsed + 1} von 3`}
-                </Button>
-              ) : (
-                <Button variant="ghost" icon={<Eye aria-hidden="true" size={20} />} onClick={() => setConfirmSolution(true)} disabled={locked || helpBusy}>
-                  Lösung anzeigen
-                </Button>
-              )}
-              <span className="text-sm text-slate-500">Jeder Hinweis kostet {hintPenalty} % der Punkte.</span>
-            </div>
-          )}
-          {helpError && (
-            <p role="alert" className="text-sm text-red-700">
-              {helpError}
-            </p>
-          )}
-        </section>
       )}
 
       <Dialog
