@@ -6,7 +6,7 @@
  *
  * Einrichtung: API-Key unter https://aistudio.google.com/apikey anlegen und in .env.local eintragen:
  *   GEMINI_API_KEY=...
- *   GEMINI_MODEL=gemini-2.5-flash   (optional)
+ *   GEMINI_MODEL=gemini-3.5-flash,gemini-3.8-flash   (optional, Reihenfolge = Ersatzmodelle)
  *
  * Aufruf:
  *   npm run ai:test -- --list                          Handschrift-Aufgaben anzeigen
@@ -18,7 +18,7 @@ import { extname } from 'node:path';
 import { topics } from '../src/content/index';
 import { aiGradingMarks, isTrustworthy } from '../src/domain/aiGrading';
 import { evaluateAnswer } from '../src/domain/evaluate';
-import { GEMINI_API, GEMINI_DEFAULT_MODEL, GeminiError, gradeWorkWithGemini } from '../src/services/ai/geminiGrader';
+import { GEMINI_API, gradeWorkWithGemini, modelList } from '../src/services/ai/geminiGrader';
 import type { AuthoredExercise } from '../src/types';
 
 const MIME: Record<string, string> = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' };
@@ -64,18 +64,18 @@ async function grade(exerciseId: string, imagePath: string) {
   const ex = exercises.find((e) => e.id === exerciseId) ?? fail(`Aufgabe „${exerciseId}“ gibt es nicht (--list zeigt die Handschrift-Aufgaben).`);
   const mimeType = MIME[extname(imagePath).toLowerCase()] ?? fail('Bild muss .png, .jpg oder .webp sein.');
   const base64 = readFileSync(imagePath).toString('base64');
-  const model = process.env.GEMINI_MODEL || GEMINI_DEFAULT_MODEL;
+  const model = process.env.GEMINI_MODEL;
 
   const started = Date.now();
-  const result = await gradeWorkWithGemini(ex, { mimeType, base64 }, { apiKey: apiKey(), model }).catch((e: unknown) => {
-    if (e instanceof GeminiError && e.status === 404) fail(`Modell „${model}“ nicht gefunden. Verfügbare Modelle: npm run ai:test -- --models`);
-    return fail(e instanceof Error ? e.message : String(e));
-  });
+  const result = await gradeWorkWithGemini(ex, { mimeType, base64 }, { apiKey: apiKey(), model }).catch((e: unknown) =>
+    fail(`Keins der Modelle (${modelList(model).join(', ')}) hat geantwortet: ${e instanceof Error ? e.message : String(e)}
+Verfügbare Modelle: npm run ai:test -- --models`),
+  );
   if (flag('--raw')) console.log(result.raw, '\n');
 
   const g = result.grading;
   console.log(`Aufgabe:  ${ex.prompt.replace(/\s+/g, ' ')}`);
-  console.log(`Modell:   ${model} · ${((Date.now() - started) / 1000).toFixed(1)} s · ${result.tokens ?? '?'} Tokens\n`);
+  console.log(`Modell:   ${result.model} · ${((Date.now() - started) / 1000).toFixed(1)} s · ${result.tokens ?? '?'} Tokens\n`);
   if (!g) fail('Antwort passt nicht zum Schema (mit --raw ansehen).');
 
   console.log(`Abschrift:\n  ${g.transcription.replace(/\n/g, '\n  ')}\n`);

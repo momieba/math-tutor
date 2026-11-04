@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { pythagoras } from '../content/pythagoras';
-import { aiGradingMarks, buildAiGradingPrompt, isTrustworthy, parseAiGrading, withAiWork } from './aiGrading';
+import { aiGradingMarks, buildAiGradingPrompt, isTrustworthy, parseAiGrading, plainAnswer, withAiWork } from './aiGrading';
 import { evaluateHandwriting, evaluateSubmission, UNCHECKED_WORK_MESSAGE } from './evaluate';
 
 const valid = {
@@ -91,5 +91,19 @@ describe('evaluateSubmission', () => {
 
   it('Handschrift-Aufgabe ohne Endergebnis: Rückfrage wie bisher', () => {
     expect(evaluateSubmission(ex, 'handwriting', '', true).verdict).toBe('unclear');
+  });
+});
+
+describe('plainAnswer', () => {
+  it('übersetzt LaTeX-Endergebnisse in Text, den evaluate.ts versteht', () => {
+    expect(plainAnswer(String.raw`$c = 17\text{ cm}$`)).toBe('c = 17 cm');
+    expect(plainAnswer(String.raw`$x_1 = 3;\; x_2 = -5$`)).toBe('x_1 = 3; x_2 = -5');
+    expect(plainAnswer(String.raw`$c \approx 6{,}8\,\mathrm{cm}$`)).toBe('c ≈ 6,8 cm');
+    expect(plainAnswer('c = 17 cm')).toBe('c = 17 cm');
+  });
+
+  it('LaTeX-Ergebnis wird nach dem Übersetzen richtig bewertet', () => {
+    const ex = { answer: { kind: 'numeric' as const, value: 17, tolerance: 0, unit: 'cm' }, commonMistakes: [] };
+    expect(evaluateSubmission(ex, 'handwriting', parseAiGrading({ ...valid, finalAnswerRead: String.raw`$c = 17\text{ cm}$` })!.finalAnswerRead, true).verdict).toBe('correct');
   });
 });

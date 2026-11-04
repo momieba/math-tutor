@@ -100,6 +100,7 @@ So gehst du vor:
    Andere richtige Lösungswege als die Musterlösung sind ausdrücklich erlaubt. Folgefehler: Ein Schritt, der mit einem falschen Zwischenergebnis richtig weiterrechnet, ist yellow, nicht red.
 3. message: kurz, freundlich, auf Deutsch, in der Du-Form. Bei red sagen, was falsch ist, ohne die ganze Lösung zu verraten.
 4. finalAnswerRead: das Endergebnis genau so, wie der Schüler es aufgeschrieben hat – auch wenn es falsch ist. Setze nie die Musterlösung ein.
+   Als einfacher Text OHNE LaTeX und ohne $, z. B. „c = 17 cm“, „x = 3; x = -5“, „(2|3)“, „y = 2x - 3“, „√46“.
    Meist steht es in der letzten Zeile oder ist unterstrichen. Leer lassen, wenn kein Endergebnis erkennbar ist.
 5. workVerdict für den ganzen Rechenweg: correct, partial (Ansatz richtig, aber Fehler), incorrect oder unclear (nicht beurteilbar).
 6. feedback: ein bis zwei Sätze Gesamtrückmeldung an den Schüler.
@@ -128,11 +129,32 @@ export function parseAiGrading(raw: unknown): AiGrading | null {
     readable: o.readable,
     transcription: str(o.transcription, 4000),
     steps: parsedSteps,
-    finalAnswerRead: str(o.finalAnswerRead, 200),
+    finalAnswerRead: plainAnswer(str(o.finalAnswerRead, 200)),
     workVerdict: o.workVerdict as Verdict,
     feedback: str(o.feedback),
     confidence,
   };
+}
+
+/**
+ * Endergebnis als einfacher Text für evaluate.ts. Modelle liefern trotz Anweisung manchmal LaTeX
+ * (`$c = 17\text{ cm}$`, `\frac{3}{4}`, `\sqrt{46}`); das wird hier in die übliche Schreibweise übersetzt.
+ */
+export function plainAnswer(s: string): string {
+  return s
+    .replace(/\$/g, '')
+    .replace(/\\(?:text|mathrm|mathit|operatorname)\s*\{([^{}]*)\}/g, '$1')
+    .replace(/\\d?frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}/g, '($1)/($2)')
+    .replace(/\\sqrt\s*\{([^{}]*)\}/g, '√($1)')
+    .replace(/\\(?:cdot|times)/g, '·')
+    .replace(/\\approx/g, '≈')
+    .replace(/\\pm/g, '±')
+    .replace(/\\(?:left|right)/g, '')
+    .replace(/\\[,;:! ]|~/g, ' ')
+    .replace(/\\\{|\\\}/g, (m) => m.slice(1))
+    .replace(/[{}]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function safeJson(text: string): unknown {
