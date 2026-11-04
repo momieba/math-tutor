@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const FILES = ['domain/evaluate.ts', 'domain/gradingContract.ts', 'types/index.ts', 'types/content.ts', 'types/learner.ts'];
+const FILES = ['domain/evaluate.ts', 'domain/gradingContract.ts', 'domain/aiGrading.ts', 'services/ai/geminiGrader.ts', 'types/index.ts', 'types/content.ts', 'types/learner.ts'];
 const src = (f) => fileURLToPath(new URL(`../src/${f}`, import.meta.url));
 const dst = (f) => fileURLToPath(new URL(`../supabase/functions/_shared/${f}`, import.meta.url));
 

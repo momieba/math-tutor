@@ -70,6 +70,8 @@ Lokal setzt `localGradingService` dieselben Regeln im Browser um.
 
 **Handschrift (Phase 1):** Bewertet wird nur das eingetippte Endergebnis. Der Rechenweg wird als PNG (≤ 1000 px) plus Strichdaten gespeichert, aber nicht gelesen und deshalb immer gelb als „nicht automatisch geprüft“ markiert.
 
+**KI-Korrektur (Phase 2, Prototyp):** Für Nutzer in `AI_GRADING_USERS` schickt `grade-attempt` Bild, Aufgabe und Musterlösung an Gemini (`services/ai/geminiGrader.ts`, Prompt und Prüfung der Antwort in `domain/aiGrading.ts`). Ist die Antwort lesbar, beurteilbar und sicher genug (`AI_GRADING_CONFIG.minConfidence`), ersetzt `withAiWork` die gelbe Markierung durch Markierungen je Schritt. Punkte und Urteil kommen weiterhin nur aus dem Endergebnis; Fehler oder Zeitüberschreitung (25 s) lassen den Rechenweg gelb, die Abgabe gelingt trotzdem. Die Korrektur wird derzeit mit `source = 'auto'` gespeichert.
+
 ## 6. Datenmodell
 **Inhalte** (Text-Slug-IDs; Clients dürfen nur lesen, schreiben darf nur `service_role` über den Inhalts-Seed):
 `curricula → topics → subtopics → {learning_materials, exercises → {exercise_keys, solutions, hints}}`, dazu `tests → test_exercises` (Phase 2).
@@ -130,7 +132,7 @@ Jedes Kapitel folgt demselben Schema mit einem Hauptbutton je Bildschirm: **1. E
 ## 10. Erweiterungspunkte
 | Feature | Ansatz |
 |---|---|
-| **KI-Korrektur Handschrift** (Ph. 2) | Edge Function `grade-submission` lädt das Bild, ruft die KI auf und schreibt `corrections` (`source='ai'`, Markierungen je Schritt). Bei Unsicherheit `unclear`. |
+| **KI-Korrektur Handschrift** (Ph. 2) | Prototyp in `grade-attempt` (siehe §5). Offen: eigener Anbieter mit EU-Verarbeitung und AV-Vertrag, `source='ai'`, KI-Urteil in die Punkte einbeziehen, Foto-Upload. |
 | **Foto-Upload** (Ph. 2) | `Submission.kind='photo'`, gleicher Bucket und Pfad. |
 | **Eltern/Lehrer** (Ph. 3) | Edge Function schreibt `parent_child` bzw. `teacher_student` (Einladungscode + Einwilligung). Zusätzliche Lese-Policies über `is_approved_parent_of(uid)` / `is_approved_teacher_of(uid)`. `progress` wird dann serverseitig befüllt. |
 | **Abos** (Ph. 3) | Stripe Checkout/Portal über Edge Function, Webhook schreibt `subscriptions`. Zugriff über `has_active_subscription(uid)`. Keine Zahlungsdaten in der DB. |

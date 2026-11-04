@@ -1,5 +1,6 @@
 // deno test supabase/functions   (npm run test:functions)
 import assert from 'node:assert/strict';
+import type { AiGrading } from '../_shared/domain/aiGrading.ts';
 import { createGradeHandler, type GradeDeps, type GradedAttempt, type GradingContext } from './handler.ts';
 
 const USER = '11111111-1111-4111-8111-111111111111';
@@ -90,6 +91,63 @@ Deno.test('Handschrift: Bild unter <uid>/<attemptId>.png, Striche gespeichert', 
   assert.deepEqual(calls.uploads, [`${USER}/${ATTEMPT}.png`]);
   assert.deepEqual(calls.recorded[0].submission, { kind: 'canvas', storagePath: `${USER}/${ATTEMPT}.png`, strokes });
   assert.equal(body.evaluation.marks.at(-1).color, 'yellow'); // Rechenweg wird (noch) nicht automatisch geprüft
+});
+
+const aiGrading = (over: Partial<AiGrading> = {}): AiGrading => ({
+  readable: true,
+  transcription: '$c^2 = 9^2 + 12^2$',
+  steps: [{ text: '$c^2 = 9^2 + 12^2$', color: 'green', message: '' }],
+  finalAnswerRead: '15',
+  workVerdict: 'correct',
+  feedback: 'Sauber gerechnet.',
+  confidence: 0.9,
+  ...over,
+});
+const handwritingPost = () => post({ exerciseId: 'pyth-1', answerRaw: '15', submission: { kind: 'canvas', dataUrl: PNG } });
+
+Deno.test('KI-Auswertung: ersetzt die gelbe Markierung durch Schritt-Markierungen, Punkte unverändert', async () => {
+  const seen: { userId: string; pngBase64: string }[] = [];
+  const { handler, calls } = setup({
+    loadContext: async () => context('handwriting'),
+    gradeWork: async (req) => (seen.push(req), aiGrading()),
+  });
+  const body = await (await handler(handwritingPost())).json();
+  assert.equal(seen[0].userId, USER);
+  assert.equal(seen[0].pngBase64, PNG.slice('data:image/png;base64,'.length));
+  assert.equal(body.evaluation.points, 1);
+  assert.deepEqual(body.evaluation.marks.at(-1), { color: 'green', message: '$c^2 = 9^2 + 12^2$', stepIndex: 0 });
+  assert.ok(!body.evaluation.marks.some((m: { color: string }) => m.color === 'yellow'));
+  assert.deepEqual(calls.recorded[0].evaluation.marks, body.evaluation.marks); // so wird es auch gespeichert
+});
+
+Deno.test('KI-Auswertung unsicher, nicht freigeschaltet oder fehlerhaft: Rechenweg bleibt gelb, Abgabe klappt', async () => {
+  const orig = console.error;
+  console.error = () => {};
+  try {
+    for (const gradeWork of [
+      async () => aiGrading({ confidence: 0.2 }),
+      async () => null,
+      async () => {
+        throw new Error('Gemini 429');
+      },
+    ]) {
+      const { handler, calls } = setup({ loadContext: async () => context('handwriting'), gradeWork });
+      const body = await (await handler(handwritingPost())).json();
+      assert.equal(body.status, 'saved');
+      assert.equal(body.evaluation.marks.at(-1).color, 'yellow');
+      assert.equal(calls.recorded.length, 1);
+    }
+  } finally {
+    console.error = orig;
+  }
+});
+
+Deno.test('KI-Auswertung nur für Handschrift-Aufgaben mit Bild', async () => {
+  let called = 0;
+  const gradeWork = async () => (called++, aiGrading());
+  await setup({ gradeWork }).handler(post({ exerciseId: 'pyth-1', answerRaw: '15' }));
+  await setup({ loadContext: async () => context('handwriting'), gradeWork }).handler(post({ exerciseId: 'pyth-1', answerRaw: '15', submission: { kind: 'canvas' } }));
+  assert.equal(called, 0);
 });
 
 Deno.test('Speichern schlägt fehl: Bild wird wieder entfernt, 500 ohne interne Details', async () => {

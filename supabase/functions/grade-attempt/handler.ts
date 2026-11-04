@@ -1,9 +1,11 @@
 /**
  * Bewertet eine Abgabe serverseitig und speichert sie (Konzept: Score nicht fälschbar, Lösung nie vor der Abgabe im Browser).
  * Ablauf: Nutzer prüfen → Eingabe validieren → Lösungsschlüssel laden → evaluate.ts (identisch zum lokalen Modus)
- * → bei `unclear` nur Rückfrage → sonst Bild hochladen + record_graded_attempt (übernimmt die protokollierten Hilfen).
+ * → bei `unclear` nur Rückfrage → Handschrift: optional KI-Auswertung des Rechenwegs (nur freigegebene Testnutzer)
+ * → Bild hochladen + record_graded_attempt (übernimmt die protokollierten Hilfen).
  * Ohne Deno-Abhängigkeiten; die echte Verdrahtung steht in index.ts.
  */
+import { isTrustworthy, withAiWork, type AiGrading } from '../_shared/domain/aiGrading.ts';
 import { evaluateAnswer, evaluateHandwriting, type EvaluationResult } from '../_shared/domain/evaluate.ts';
 import { GRADE_LIMITS, type GradeRequest, type GradeResponse } from '../_shared/domain/gradingContract.ts';
 import { HttpError, json, requireUser, serveJson, type ResolveUser } from '../_shared/http.ts';
@@ -32,6 +34,11 @@ export interface GradeDeps {
   removeImage(path: string): Promise<void>;
   recordAttempt(attempt: GradedAttempt): Promise<void>;
   newId(): string;
+  /**
+   * KI-Auswertung des Rechenwegs (Phase 2). Liefert null, wenn sie für diesen Nutzer nicht freigeschaltet ist.
+   * Fehler und Zeitüberschreitung führen nie zu einer fehlgeschlagenen Abgabe – dann bleibt der Rechenweg ungeprüft (gelb).
+   */
+  gradeWork?(req: { userId: string; exerciseId: string; review: ExerciseReview; commonMistakes: CommonMistake[]; pngBase64: string }): Promise<AiGrading | null>;
 }
 
 const SUBMISSION_KINDS: SubmissionKind[] = ['canvas', 'photo', 'text'];
@@ -79,12 +86,21 @@ export function createGradeHandler(deps: GradeDeps): (req: Request) => Promise<R
     if (!ctx) throw new HttpError(404, 'Diese Aufgabe gibt es nicht.');
 
     const gradable = { answer: ctx.key.answer, commonMistakes: ctx.key.commonMistakes };
-    const evaluation =
+    let evaluation =
       ctx.exercise.type === 'handwriting' ? evaluateHandwriting(gradable, input.answerRaw, input.submission !== undefined) : evaluateAnswer(gradable, input.answerRaw);
     if (evaluation.verdict === 'unclear') return json({ status: 'unclear', evaluation } satisfies GradeResponse);
 
     const attemptId = deps.newId();
     const png = input.submission?.dataUrl ? decodePng(input.submission.dataUrl) : null;
+    if (png && ctx.exercise.type === 'handwriting' && deps.gradeWork) {
+      const ai = await deps
+        .gradeWork({ userId, exerciseId: input.exerciseId, review: ctx.review, commonMistakes: ctx.key.commonMistakes, pngBase64: input.submission!.dataUrl!.slice(PNG_PREFIX.length) })
+        .catch((e) => {
+          console.error('KI-Auswertung fehlgeschlagen', e);
+          return null;
+        });
+      if (isTrustworthy(ai)) evaluation = withAiWork(evaluation, ai);
+    }
     const storagePath = png ? `${userId}/${attemptId}.png` : null;
     if (png && storagePath) await deps.uploadImage(storagePath, png);
     try {

@@ -11,9 +11,9 @@ Legende: 🔴 blockiert den Start mit echten Schülern · 🟡 vor dem Start dri
 
 ## 1. Als Nächstes: Weiterentwicklung und Aufräumen
 
-- [ ] 🟡 Phase 2, Prototyp: KI-Korrektur der Handschrift (`grade-submission`) mit einem kostenlosen API-Key, **nur für kleine Tests mit eigenen Testdaten**. Kostenlose Stufen dürfen die Daten oft speichern und zum Training verwenden, deshalb keine echten Schülerdaten, bis die Anbieterfrage (unten) geklärt und ein AV-Vertrag abgeschlossen ist
+- [ ] 🟡 Phase 2, Prototyp: KI-Korrektur der Handschrift testen (in `grade-attempt`, nur für Nutzer in `AI_GRADING_USERS`, Einrichtung im README). Kostenloser Gemini-Key ⇒ **nur eigene Testkonten**, keine echten Schülerdaten, bis die Anbieterfrage (unten) geklärt und ein AV-Vertrag abgeschlossen ist. Danach entscheiden: KI-Urteil in die Punkte einbeziehen? Korrektur mit `source = 'ai'` speichern (Migration von `record_graded_attempt`)
 - [ ] ⚪ Phase 2, Rest: Foto-Upload, Testmodus mit eigener Gewichtung
-- [ ] ⚪ KI-Anbieter für den Echtbetrieb: Verarbeitung in der EU / keine Speicherung / kein Training verbindlich? (vor dem Einschalten für echte Schüler)
+- [ ] ⚪ KI-Anbieter für den Echtbetrieb: Verarbeitung in der EU / keine Speicherung / kein Training verbindlich? Nutzungsbedingungen auf Altersgrenzen prüfen (App für Minderjährige). Kandidat: Gemini über Vertex AI (EU-Region). Vor dem Einschalten für echte Schüler
 - [ ] ⚪ Login-/Registrierungsseite an das neue Designsystem angleichen (nutzt noch einfache Formular-Stile)
 - [ ] ⚪ `@supabase/supabase-js` nur im Supabase-Modus laden (dynamischer Import, kleineres Hauptbundle)
 - [ ] 🟡 Restlicher Lehrplan NRW Gymnasium G9 als Aufgabenpools (Muster: `src/content/lineare-funktionen/`, ein Ordner je Thema, eine Datei je Kapitel, Vorlagen + handgeschriebene Sach- und Wissensaufgaben). Offen laut schulinternem G9-Curriculum (KLP 2019): Kl. 8 Terme mit Klammern, Zufall und mehrstufige Zufallsexperimente, Ähnlichkeit/Strahlensätze; Kl. 9 Quadratwurzeln und reelle Zahlen, quadratische Funktionen, Potenzen; Kl. 10 Trigonometrie, Exponentialfunktionen, Pyramide/Kegel/Kugel, bedingte Wahrscheinlichkeit; Kl. 5–7 komplett. Thema für Thema mit fachlicher Freigabe
