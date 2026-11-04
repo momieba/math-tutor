@@ -62,6 +62,33 @@ describe('isTrustworthy / aiGradingMarks', () => {
   });
 });
 
+describe('issues (Fehlendes und Unsauberes)', () => {
+  it('werden nach den Schritten markiert, rot vor gelb', () => {
+    const g = parseAiGrading({
+      ...valid,
+      issues: [
+        { color: 'yellow', message: 'Antwortsatz fehlt.' },
+        { color: 'red', message: 'Die Einheit fehlt: Schreib „5 cm“.' },
+      ],
+    })!;
+    expect(aiGradingMarks(g).slice(2)).toEqual([
+      { color: 'red', message: 'Die Einheit fehlt: Schreib „5 cm“.' },
+      { color: 'yellow', message: 'Antwortsatz fehlt.' },
+    ]);
+  });
+
+  it('werden tolerant gelesen: fehlendes Feld, grüne oder leere Einträge fallen weg', () => {
+    expect(parseAiGrading(valid)!.issues).toEqual([]);
+    const g = parseAiGrading({ ...valid, issues: [{ color: 'green', message: 'x' }, { color: 'red', message: '' }, null, { color: 'yellow', message: 'ok' }] })!;
+    expect(g.issues).toEqual([{ color: 'yellow', message: 'ok' }]);
+  });
+
+  it('die Rückmeldung der KI ersetzt das allgemeine „Richtig!“', () => {
+    const base = evaluateHandwriting({ answer: { kind: 'numeric', value: 5, tolerance: 0 }, commonMistakes: [] }, '5', true);
+    expect(withAiWork(base, parseAiGrading({ ...valid, feedback: 'Sauber gerechnet.' })!).feedback).toBe('Sauber gerechnet.');
+  });
+});
+
 describe('buildAiGradingPrompt', () => {
   it('enthält Aufgabe, Musterlösung und den Schutz gegen Anweisungen im Bild', () => {
     const ex = pythagoras.subtopics.flatMap((s) => s.exercises).find((e) => e.type === 'handwriting')!;

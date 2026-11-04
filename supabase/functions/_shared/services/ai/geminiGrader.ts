@@ -54,7 +54,8 @@ export async function gradeWorkWithGemini(ex: AiGradableExercise, image: { mimeT
   const deadline = Date.now() + (opts.timeoutMs ?? 30_000);
   const body = JSON.stringify({
     contents: [{ parts: [{ text: buildAiGradingPrompt(ex) }, { inline_data: { mime_type: image.mimeType, data: image.base64 } }] }],
-    generationConfig: { responseMimeType: 'application/json', responseSchema: AI_GRADING_SCHEMA, temperature: 0 },
+    // Wenig „Denken“: Antwort in wenigen Sekunden statt teils über 30 s, bei gleicher Qualität für diese Aufgabe (gemessen).
+    generationConfig: { responseMimeType: 'application/json', responseSchema: AI_GRADING_SCHEMA, temperature: 0, thinkingConfig: { thinkingLevel: 'low' } },
   });
   let lastError: unknown = new GeminiError(0, 'Kein Gemini-Modell konfiguriert.');
   for (const [i, model] of models.entries()) {

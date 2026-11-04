@@ -97,6 +97,7 @@ const aiGrading = (over: Partial<AiGrading> = {}): AiGrading => ({
   readable: true,
   transcription: '$c^2 = 9^2 + 12^2$',
   steps: [{ text: '$c^2 = 9^2 + 12^2$', color: 'green', message: '' }],
+  issues: [],
   finalAnswerRead: '15',
   workVerdict: 'correct',
   feedback: 'Sauber gerechnet.',
