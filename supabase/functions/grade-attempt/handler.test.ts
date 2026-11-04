@@ -142,12 +142,22 @@ Deno.test('KI-Auswertung unsicher, nicht freigeschaltet oder fehlerhaft: Rechenw
   }
 });
 
-Deno.test('KI-Auswertung nur für Handschrift-Aufgaben mit Bild', async () => {
+Deno.test('KI-Auswertung nur mit Bild und nicht bei Multiple Choice', async () => {
   let called = 0;
   const gradeWork = async () => (called++, aiGrading());
   await setup({ gradeWork }).handler(post({ exerciseId: 'pyth-1', answerRaw: '15' }));
   await setup({ loadContext: async () => context('handwriting'), gradeWork }).handler(post({ exerciseId: 'pyth-1', answerRaw: '15', submission: { kind: 'canvas' } }));
+  await setup({ loadContext: async () => context('multiple-choice'), gradeWork }).handler(handwritingPost());
   assert.equal(called, 0);
+});
+
+Deno.test('normale Aufgabe mit Foto vom Rechenweg: Bild gespeichert und von der KI ausgewertet', async () => {
+  const { handler, calls } = setup({ gradeWork: async () => aiGrading() });
+  const body = await (await handler(post({ exerciseId: 'pyth-1', answerRaw: '15', submission: { kind: 'photo', dataUrl: PNG } }))).json();
+  assert.equal(body.evaluation.verdict, 'correct');
+  assert.deepEqual(calls.uploads, [`${USER}/${ATTEMPT}.png`]);
+  assert.equal(calls.recorded[0].submission?.kind, 'photo');
+  assert.equal(body.evaluation.marks.at(-1).stepIndex, 0);
 });
 
 Deno.test('Speichern schlägt fehl: Bild wird wieder entfernt, 500 ohne interne Details', async () => {

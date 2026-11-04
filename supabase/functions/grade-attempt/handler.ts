@@ -1,12 +1,12 @@
 /**
  * Bewertet eine Abgabe serverseitig und speichert sie (Konzept: Score nicht fälschbar, Lösung nie vor der Abgabe im Browser).
  * Ablauf: Nutzer prüfen → Eingabe validieren → Lösungsschlüssel laden → evaluate.ts (identisch zum lokalen Modus)
- * → bei `unclear` nur Rückfrage → Handschrift: optional KI-Auswertung des Rechenwegs (nur freigegebene Testnutzer)
+ * → bei `unclear` nur Rückfrage → mit Rechenweg-Bild: optional KI-Auswertung (nur freigegebene Testnutzer)
  * → Bild hochladen + record_graded_attempt (übernimmt die protokollierten Hilfen).
  * Ohne Deno-Abhängigkeiten; die echte Verdrahtung steht in index.ts.
  */
 import { isTrustworthy, withAiWork, type AiGrading } from '../_shared/domain/aiGrading.ts';
-import { evaluateAnswer, evaluateHandwriting, type EvaluationResult } from '../_shared/domain/evaluate.ts';
+import { evaluateSubmission, type EvaluationResult } from '../_shared/domain/evaluate.ts';
 import { GRADE_LIMITS, type GradeRequest, type GradeResponse } from '../_shared/domain/gradingContract.ts';
 import { HttpError, json, requireUser, serveJson, type ResolveUser } from '../_shared/http.ts';
 import type { CommonMistake, ExerciseReview, ExerciseType, ExpectedAnswer, SubmissionKind } from '../_shared/types/index.ts';
@@ -86,13 +86,12 @@ export function createGradeHandler(deps: GradeDeps): (req: Request) => Promise<R
     if (!ctx) throw new HttpError(404, 'Diese Aufgabe gibt es nicht.');
 
     const gradable = { answer: ctx.key.answer, commonMistakes: ctx.key.commonMistakes };
-    let evaluation =
-      ctx.exercise.type === 'handwriting' ? evaluateHandwriting(gradable, input.answerRaw, input.submission !== undefined) : evaluateAnswer(gradable, input.answerRaw);
+    let evaluation = evaluateSubmission(gradable, ctx.exercise.type, input.answerRaw, input.submission !== undefined);
     if (evaluation.verdict === 'unclear') return json({ status: 'unclear', evaluation } satisfies GradeResponse);
 
     const attemptId = deps.newId();
     const png = input.submission?.dataUrl ? decodePng(input.submission.dataUrl) : null;
-    if (png && ctx.exercise.type === 'handwriting' && deps.gradeWork) {
+    if (png && ctx.exercise.type !== 'multiple-choice' && deps.gradeWork) {
       const ai = await deps
         .gradeWork({ userId, exerciseId: input.exerciseId, review: ctx.review, commonMistakes: ctx.key.commonMistakes, pngBase64: input.submission!.dataUrl!.slice(PNG_PREFIX.length) })
         .catch((e) => {

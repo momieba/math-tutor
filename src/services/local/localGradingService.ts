@@ -3,7 +3,7 @@
  * + Edge Function grade-attempt): Hinweise nur der Reihe nach, Hilfen werden pro Aufgabe protokolliert und
  * beim nächsten bewerteten Versuch angerechnet, unklare Eingaben werden nicht gespeichert.
  */
-import { evaluateAnswer, evaluateHandwriting } from '../../domain/evaluate';
+import { evaluateSubmission } from '../../domain/evaluate';
 import type { AuthoredExercise, ExerciseReview } from '../../types';
 import type { GradingService } from '../types';
 import type { LocalLearnerRepository } from './localLearnerRepository';
@@ -74,8 +74,7 @@ export function createLocalGradingService(learner: LocalLearnerRepository): Grad
     },
     async grade(input) {
       const { e, topicId } = await exerciseOf(input.exerciseId);
-      const evaluation =
-        e.type === 'handwriting' ? evaluateHandwriting(e, input.answerRaw, input.submission !== undefined) : evaluateAnswer(e, input.answerRaw);
+      const evaluation = evaluateSubmission(e, e.type, input.answerRaw, input.submission !== undefined);
       if (evaluation.verdict === 'unclear') return { status: 'unclear', evaluation };
 
       const session = load(input.userId, input.exerciseId);

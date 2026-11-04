@@ -38,7 +38,7 @@ export function Datenschutz() {
       <ul>
         <li>Kontodaten: E-Mail-Adresse, Passwort (nur verschlüsselt als Hash), Name bzw. Spitzname, Zeitpunkt und Version deiner Einwilligung</li>
         <li>Lerndaten: gewählte Themen, deine Antworten, Punkte, genutzte Hinweise, ob du die Lösung angesehen hast, Zeitpunkte</li>
-        <li>Handschrift: Bilder und Stiftstriche deiner handschriftlichen Lösungen</li>
+        <li>Rechenweg: Bilder und Stiftstriche deiner handschriftlichen Lösungen sowie Fotos, die du von deinem Rechenweg hochlädst</li>
         <li>Ergebnisse: Bewertungen, Rückmeldungen und dein Lernfortschritt</li>
       </ul>
       <p>

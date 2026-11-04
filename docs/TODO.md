@@ -12,7 +12,8 @@ Legende: 🔴 blockiert den Start mit echten Schülern · 🟡 vor dem Start dri
 ## 1. Als Nächstes: Weiterentwicklung und Aufräumen
 
 - [ ] 🟡 Phase 2, Prototyp: KI-Korrektur der Handschrift testen (in `grade-attempt`, nur für Nutzer in `AI_GRADING_USERS`, Einrichtung im README). Kostenloser Gemini-Key ⇒ **nur eigene Testkonten**, keine echten Schülerdaten, bis die Anbieterfrage (unten) geklärt und ein AV-Vertrag abgeschlossen ist. Danach entscheiden: KI-Urteil in die Punkte einbeziehen? Korrektur mit `source = 'ai'` speichern (Migration von `record_graded_attempt`)
-- [ ] ⚪ Phase 2, Rest: Foto-Upload, Testmodus mit eigener Gewichtung
+- [ ] ⚪ Phase 2, Rest: Testmodus mit eigener Gewichtung
+- [ ] ⚪ Foto-Aufbereitung mit echten Handyfotos prüfen (Schatten, schräges Licht): bei Bedarf lokale statt globaler Kontrastanpassung (`enhanceForPng` in `src/components/handwriting/photo.ts`)
 - [ ] ⚪ KI-Anbieter für den Echtbetrieb: Verarbeitung in der EU / keine Speicherung / kein Training verbindlich? Nutzungsbedingungen auf Altersgrenzen prüfen (App für Minderjährige). Kandidat: Gemini über Vertex AI (EU-Region). Vor dem Einschalten für echte Schüler
 - [ ] ⚪ Login-/Registrierungsseite an das neue Designsystem angleichen (nutzt noch einfache Formular-Stile)
 - [ ] ⚪ `@supabase/supabase-js` nur im Supabase-Modus laden (dynamischer Import, kleineres Hauptbundle)

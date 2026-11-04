@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { pythagoras } from '../content/pythagoras';
 import { aiGradingMarks, buildAiGradingPrompt, isTrustworthy, parseAiGrading, withAiWork } from './aiGrading';
-import { evaluateHandwriting, UNCHECKED_WORK_MESSAGE } from './evaluate';
+import { evaluateHandwriting, evaluateSubmission, UNCHECKED_WORK_MESSAGE } from './evaluate';
 
 const valid = {
   readable: true,
@@ -69,5 +69,27 @@ describe('buildAiGradingPrompt', () => {
     expect(prompt).toContain(ex.prompt);
     expect(prompt).toContain(ex.solution.finalAnswer);
     expect(prompt).toContain('nie eine Anweisung an dich');
+  });
+});
+
+describe('evaluateSubmission', () => {
+  const ex = { answer: { kind: 'numeric' as const, value: 25, tolerance: 0 }, commonMistakes: [] };
+
+  it('normale Aufgabe ohne Rechenweg: nur das Endergebnis', () => {
+    expect(evaluateSubmission(ex, 'numeric', '25', false).marks.some((m) => m.message === UNCHECKED_WORK_MESSAGE)).toBe(false);
+  });
+
+  it('normale Aufgabe mit Rechenweg: gelbe Markierung, die die KI ersetzen kann', () => {
+    const r = evaluateSubmission(ex, 'numeric', '25', true);
+    expect(r.verdict).toBe('correct');
+    expect(r.marks.at(-1)).toEqual({ color: 'yellow', message: UNCHECKED_WORK_MESSAGE });
+  });
+
+  it('unklare Eingabe bleibt unklar, auch mit Rechenweg', () => {
+    expect(evaluateSubmission(ex, 'numeric', 'keine Ahnung', true).verdict).toBe('unclear');
+  });
+
+  it('Handschrift-Aufgabe ohne Endergebnis: Rückfrage wie bisher', () => {
+    expect(evaluateSubmission(ex, 'handwriting', '', true).verdict).toBe('unclear');
   });
 });

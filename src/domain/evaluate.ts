@@ -2,7 +2,7 @@
  * Deterministische Antwortprüfung (Phase 1). Reine Funktion, ohne I/O.
  * Phase 2: Handschrift/Foto-Auswertung per KI liefert zusätzlich Schritt-Markierungen (Correction.marks).
  */
-import type { AuthoredExercise, CorrectionMark, ExpectedAnswer, Verdict } from '../types';
+import type { AuthoredExercise, CorrectionMark, ExerciseType, ExpectedAnswer, Verdict } from '../types';
 
 /** Was die Prüfung von einer Aufgabe braucht: nur der Lösungsschlüssel (läuft lokal und in der Edge Function). */
 export type GradableExercise = Pick<AuthoredExercise, 'answer' | 'commonMistakes'>;
@@ -415,7 +415,7 @@ export const UNCHECKED_WORK_MESSAGE =
  * Handschrift-Aufgaben (Phase 1): Geprüft wird nur das eingetippte Endergebnis.
  * Der Rechenweg auf der Schreibfläche ist nicht maschinell gelesen ⇒ immer eine gelbe Markierung, nie ein grünes „Weg korrekt“.
  * Ohne Endergebnis gibt es keine Bewertung (`unclear`), statt eine unsichere Korrektur anzuzeigen (Konzept §8/§9).
- * Phase 2: KI-Auswertung (Edge Function `grade-submission`) ersetzt die gelbe Markierung durch Schritt-Markierungen.
+ * Phase 2: Die KI-Auswertung in `grade-attempt` (domain/aiGrading.ts) ersetzt die gelbe Markierung durch Schritt-Markierungen.
  */
 export function evaluateHandwriting(ex: GradableExercise, finalAnswer: string, hasDrawing: boolean): EvaluationResult {
   if (!finalAnswer.trim()) {
@@ -430,4 +430,15 @@ export function evaluateHandwriting(ex: GradableExercise, finalAnswer: string, h
     ? { color: 'yellow', message: UNCHECKED_WORK_MESSAGE }
     : { color: 'yellow', message: 'Du hast keinen Rechenweg aufgeschrieben – geprüft wurde nur das Endergebnis.' };
   return { ...base, marks: [...base.marks, workMark] };
+}
+
+/**
+ * Bewertet eine Abgabe je nach Aufgabentyp (Server und lokaler Modus). Bei normalen Aufgaben ist der Rechenweg
+ * (Schreibfläche oder Foto) freiwillig: Liegt einer bei, wird er wie bei Handschrift-Aufgaben gelb als ungeprüft markiert.
+ */
+export function evaluateSubmission(ex: GradableExercise, type: ExerciseType, answer: string, hasWork: boolean): EvaluationResult {
+  if (type === 'handwriting') return evaluateHandwriting(ex, answer, hasWork);
+  const base = evaluateAnswer(ex, answer);
+  if (!hasWork || base.verdict === 'unclear') return base;
+  return { ...base, marks: [...base.marks, { color: 'yellow', message: UNCHECKED_WORK_MESSAGE }] };
 }

@@ -74,6 +74,7 @@ export function buildAiGradingPrompt(ex: AiGradableExercise): string {
   const alternative = ex.solution.alternative ? `\nAlternativer Lösungsweg:\n${steps(ex.solution.alternative)}` : '';
   const mistakes = ex.commonMistakes.length ? ex.commonMistakes.map((m) => `- ${m.description}: ${m.feedback}`).join('\n') : '- (keine hinterlegt)';
   return `Du korrigierst den handschriftlichen Rechenweg eines Schülers (Klasse 7–9, Gymnasium) zu einer Matheaufgabe.
+Das Bild ist entweder auf einem Tablet geschrieben oder ein Foto aus dem Heft (dann ggf. schief, mit Linien oder Karos).
 
 Aufgabe (Anforderung: ${ex.requirement}):
 ${ex.prompt}

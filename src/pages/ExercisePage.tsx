@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, BookOpen, Eye, Lightbulb, RotateCcw, Send, TrendingDown, TrendingUp, TriangleAlert } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BookOpen, Camera, Eye, Lightbulb, PenLine, RotateCcw, Send, TrendingDown, TrendingUp, TriangleAlert } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { ChoiceInput, MathInput, NumericInput } from '../components/AnswerInputs';
@@ -6,6 +6,7 @@ import { FeedbackPanel } from '../components/FeedbackPanel';
 import { ExerciseFigure } from '../components/figures/ExerciseFigure';
 import { compactStrokes, emptyHistory, historyFromStrokes, isBlank, isStrokeList, visibleStrokes, type CanvasHistory } from '../components/handwriting/canvasModel';
 import { HandwritingCanvas } from '../components/handwriting/HandwritingCanvas';
+import { preparePhoto } from '../components/handwriting/photo';
 import { exportStrokesAsPng } from '../components/handwriting/renderStrokes';
 import { MathText } from '../components/MathText';
 import { ScoreBadge } from '../components/ScoreBadge';
@@ -66,6 +67,11 @@ export default function ExercisePage() {
 
   const [answer, setAnswer] = useState('');
   const [drawing, setDrawing] = useState<CanvasHistory>(emptyHistory);
+  /** Foto vom Heft statt Schreibfläche (aufbereitete PNG-data-URL). */
+  const [photo, setPhoto] = useState<string | null>(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const photoInput = useRef<HTMLInputElement>(null);
   /** Bereits aufgedeckte Hinweise bzw. vor der Abgabe angesehene Musterlösung (vom Bewertungsdienst protokolliert). */
   const [hints, setHints] = useState<string[]>([]);
   const [solution, setSolution] = useState<ModelSolution | null>(null);
@@ -82,6 +88,8 @@ export default function ExercisePage() {
   function resetForm() {
     setAnswer('');
     setDrawing(emptyHistory());
+    setPhoto(null);
+    setPhotoError(null);
     setHints([]);
     setSolution(null);
     setHelpError(null);
@@ -128,6 +136,7 @@ export default function ExercisePage() {
         setStartedAt(draft.input.startedAt);
         const strokes = draft.input.submission?.strokes;
         if (isStrokeList(strokes)) setDrawing(historyFromStrokes(strokes));
+        if (draft.input.submission?.kind === 'photo' && draft.input.submission.dataUrl) setPhoto(draft.input.submission.dataUrl);
       }
       setLoaded(true);
     })();
@@ -165,6 +174,8 @@ export default function ExercisePage() {
   const chapterUrl = `/app/topics/${chapter.topicId}/chapters/${chapter.id}`;
   const locked = phase.kind !== 'answering';
   const isHandwriting = exercise.type === 'handwriting';
+  /** Rechenweg (Schreibfläche oder Foto) gibt es bei allen Aufgaben außer Multiple Choice; Pflicht nur bei Handschrift-Aufgaben. */
+  const offersWork = exercise.type !== 'multiple-choice';
   const unit = exercise.answerFormat.kind === 'numeric' ? exercise.answerFormat.unit : undefined;
   const saved = phase.kind === 'saved';
   const hintsUsed = hints.length;
@@ -235,7 +246,9 @@ export default function ExercisePage() {
   function submit() {
     const hasDrawing = !isBlank(drawing);
     let submission: AttemptSubmission['submission'];
-    if (isHandwriting && hasDrawing) {
+    if (offersWork && photo) {
+      submission = { kind: 'photo', dataUrl: photo };
+    } else if (offersWork && hasDrawing) {
       const strokes = compactStrokes(visibleStrokes(drawing));
       let dataUrl: string | undefined;
       try {
@@ -281,7 +294,21 @@ export default function ExercisePage() {
     );
   })();
 
-  const canSubmit = phase.kind === 'answering' && (answer.trim() !== '' || (isHandwriting && !isBlank(drawing)));
+  const canSubmit = phase.kind === 'answering' && !photoBusy && (answer.trim() !== '' || (isHandwriting && (photo !== null || !isBlank(drawing))));
+
+  async function choosePhoto(file: File | undefined) {
+    if (!file) return;
+    setPhotoBusy(true);
+    setPhotoError(null);
+    try {
+      setPhoto(await preparePhoto(file));
+    } catch (e) {
+      setPhotoError(errorText(e));
+    } finally {
+      setPhotoBusy(false);
+      if (photoInput.current) photoInput.current.value = ''; // dasselbe Foto erneut wählbar
+    }
+  }
   const shownEvaluation = phase.kind === 'saved' ? phase.evaluation : null;
   const shownSolution = phase.kind === 'saved' ? phase.review.solution : solution;
   // Für den Score zählt, was der Bewertungsdienst protokolliert hat (record), nicht der Stand der Seite.
@@ -291,7 +318,7 @@ export default function ExercisePage() {
   const solutionShare = Math.round(SCORE_CONFIG.solutionViewedFactor * 100);
 
   return (
-    <div className={`mx-auto space-y-6 pb-16 ${isHandwriting ? 'max-w-5xl' : 'max-w-3xl'}`}>
+    <div className={`mx-auto space-y-6 pb-16 ${offersWork ? 'max-w-5xl' : 'max-w-3xl'}`}>
       <Link to={chapterUrl} onClick={leave} className="inline-flex min-h-11 items-center gap-2 font-medium text-indigo-700">
         <ArrowLeft aria-hidden="true" size={20} /> {chapter.title}
       </Link>
@@ -330,10 +357,36 @@ export default function ExercisePage() {
       </header>
 
       <section className="space-y-4" aria-label="Deine Lösung">
-        {isHandwriting && (
+        {offersWork && (
           <div className="space-y-2">
-            <p className="text-slate-600">Schreibe deinen Rechenweg mit Stift oder Finger auf das Kästchenpapier.</p>
-            <HandwritingCanvas history={drawing} onChange={setDrawing} disabled={locked} />
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-slate-600">
+                {photo
+                  ? 'Dein Foto vom Rechenweg:'
+                  : `Schreibe deinen Rechenweg${isHandwriting ? '' : ' (freiwillig)'} mit Stift oder Finger auf das Kästchenpapier – oder lade ein Foto aus deinem Heft hoch.`}
+              </p>
+              {!locked &&
+                (photo ? (
+                  <Button icon={<PenLine aria-hidden="true" size={18} />} onClick={() => setPhoto(null)}>
+                    Stattdessen schreiben
+                  </Button>
+                ) : (
+                  <Button loading={photoBusy} icon={<Camera aria-hidden="true" size={18} />} onClick={() => photoInput.current?.click()}>
+                    Foto hochladen
+                  </Button>
+                ))}
+              <input ref={photoInput} type="file" accept="image/*" className="hidden" aria-label="Foto vom Rechenweg" onChange={(e) => void choosePhoto(e.target.files?.[0])} />
+            </div>
+            {photoError && (
+              <p role="alert" className="text-sm text-red-700">
+                {photoError}
+              </p>
+            )}
+            {photo ? (
+              <img src={photo} alt="Dein Foto vom Rechenweg" className="max-h-[32rem] w-full rounded-2xl border border-slate-200 bg-white object-contain" />
+            ) : (
+              <HandwritingCanvas history={drawing} onChange={setDrawing} disabled={locked} />
+            )}
           </div>
         )}
         {exercise.type === 'multiple-choice' ? answerField : <div className="rounded-2xl border border-indigo-200 bg-indigo-50 p-6">{answerField}</div>}
