@@ -11,6 +11,7 @@ export const SCORE_CONFIG = {
   solutionViewedFactor: 0.25, // Musterlösung vor Abgabe angesehen ⇒ max. 25 %
   lastAttemptWeight: 0.7, // Stabilität: 70 % letzter, 30 % vorletzter Versuch
   windowSize: 15, // Beherrschung über die zuletzt bearbeiteten 15 Aufgaben eines Kapitels
+  testWeight: 1.5, // Aufgaben, deren letzter Versuch aus einem Kapitel-Test stammt, zählen 1,5-fach (ohne Hilfen gelöst)
   targetWeight: 12, // Mindest-Nenner: etwa 8 gemischte Aufgaben (bei kleineren Kapiteln: alle Aufgaben)
   masteryWeight: 0.8,
   coverageWeight: 0.2,
@@ -59,7 +60,9 @@ export function computeSubtopicProgress(subtopicId: string, exercises: ScoredExe
   const lastAt = (id: string) => byExercise.get(id)!.reduce((max, a) => (a.submittedAt > max ? a.submittedAt : max), '');
   const attemptedIds = [...byExercise.keys()].sort((x, y) => lastAt(y).localeCompare(lastAt(x)));
   const credit = new Map(attemptedIds.map((id) => [id, exerciseCredit(byExercise.get(id)!)]));
-  const weight = (id: string) => c.difficultyWeight[pool.get(id)!.difficulty];
+  const lastMode = (id: string) => byExercise.get(id)!.reduce((last, a) => (a.submittedAt >= last.submittedAt ? a : last)).mode;
+  /** Gewicht im Fenster: Schwierigkeit, im Kapitel-Test zusätzlich `testWeight`. */
+  const weight = (id: string) => c.difficultyWeight[pool.get(id)!.difficulty] * (lastMode(id) === 'test' ? c.testWeight : 1);
 
   const poolWeight = exercises.reduce((sum, e) => sum + c.difficultyWeight[e.difficulty], 0);
   const target = Math.min(c.targetWeight, poolWeight);
@@ -100,7 +103,7 @@ export function computeSubtopicProgress(subtopicId: string, exercises: ScoredExe
   else if (attempted >= 2 && windowAverage < c.needsPracticeBelow) status = 'needs_practice';
   else status = 'in_progress';
 
-  const attemptedWeight = attemptedIds.reduce((sum, id) => sum + weight(id), 0);
+  const attemptedWeight = attemptedIds.reduce((sum, id) => sum + c.difficultyWeight[pool.get(id)!.difficulty], 0); // Bearbeitet-Anteil ohne Testgewicht
   return {
     subtopicId,
     score,
@@ -111,6 +114,7 @@ export function computeSubtopicProgress(subtopicId: string, exercises: ScoredExe
     solvedExercises: solved,
     caps: attempted === 0 ? [] : caps,
     components: { mastery: round2(mastery), typeCoverage: round2(typeCoverage) },
+    lastActivityAt: attemptedIds.length ? lastAt(attemptedIds[0]) : undefined,
   };
 }
 
@@ -132,7 +136,10 @@ export function computeTopicProgress(
 ): TopicProgress {
   const subs = subtopics.map((s) => computeSubtopicProgress(s.id, s.exercises, attempts));
   const n = subs.length || 1;
-  const score = Math.round(subs.reduce((sum, s) => sum + s.score, 0) / n);
+  // Score nur über begonnene Kapitel: Wer Kapitel 1 sicher kann, steht nicht bei 17, nur weil fünf Kapitel noch fehlen.
+  // Wie viel vom Thema schon bearbeitet ist, zeigt completion (über alle Kapitel).
+  const started = subs.filter((s) => s.status !== 'not_started');
+  const score = started.length ? Math.round(started.reduce((sum, s) => sum + s.score, 0) / started.length) : 0;
   const own = attempts.filter((a) => a.topicId === topicId);
   let status: ChapterStatus = 'in_progress';
   if (subs.every((s) => s.status === 'not_started')) status = 'not_started';

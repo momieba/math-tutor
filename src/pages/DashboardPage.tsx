@@ -1,4 +1,4 @@
-import { ArrowRight, BookOpen, CircleCheck, CircleHelp, CircleX, Clock, History, Search, TriangleAlert } from 'lucide-react';
+import { ArrowRight, BookOpen, CircleCheck, CircleHelp, CircleX, Clock, History, Repeat, Search, TriangleAlert } from 'lucide-react';
 import { useCallback, useEffect, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { ScoreBadge } from '../components/ScoreBadge';
@@ -6,6 +6,7 @@ import { areaVisual } from '../components/topicVisuals';
 import { ButtonLink, EmptyState, SkeletonCard, useToast } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { recommendNext, timeAgo, VERDICT_LABEL, type Recommendation } from '../domain/progressView';
+import { recommendReviews, REVIEW_REASON_TEXT, type ReviewRecommendation } from '../domain/recommendations';
 import { searchTopics, type MatchCandidate } from '../domain/topicMatcher';
 import { services } from '../services';
 import type { AttemptRecord, TopicProgress, TopicSummary, Verdict } from '../types';
@@ -34,7 +35,8 @@ const VERDICT_ICON: Record<Verdict, { Icon: typeof CircleCheck; cls: string }> =
 
 /**
  * Schüler-Dashboard: Begrüßung, „Weiter, wo du aufgehört hast“, Themensuche mit Trefferliste beim Tippen,
- * Themenkacheln (Verständnis in Worten, Kapitel begonnen) und zuletzt bearbeitete Aufgaben.
+ * Wiederholungs-Empfehlungen (domain/recommendations.ts), Themenkacheln (Verständnis in Worten, Kapitel begonnen)
+ * und zuletzt bearbeitete Aufgaben.
  */
 export default function DashboardPage() {
   const { session } = useAuth();
@@ -47,6 +49,7 @@ export default function DashboardPage() {
   const [recent, setRecent] = useState<AttemptRecord[]>([]);
   const [recentCtx, setRecentCtx] = useState<Map<string, AttemptContext>>(new Map());
   const [recommendation, setRecommendation] = useState<Recommendation | undefined>();
+  const [reviews, setReviews] = useState<ReviewRecommendation[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -79,7 +82,10 @@ export default function DashboardPage() {
           return summary ? [{ topic: summary, progress }] : [];
         }),
       );
-      setRecommendation(recommendNext(valid.map(({ topic, progress }) => ({ topicId: topic.id, topicTitle: topic.title, subtopics: topic.subtopics, progress }))));
+      const pathEntries = valid.map(({ topic, progress }) => ({ topicId: topic.id, topicTitle: topic.title, subtopics: topic.subtopics, progress }));
+      const next = recommendNext(pathEntries);
+      setRecommendation(next);
+      setReviews(recommendReviews(pathEntries, new Date(), next?.subtopicId));
       setRecent(last);
       setRecentCtx(await resolveAttemptContexts(last));
       setError(null);
@@ -186,6 +192,31 @@ export default function DashboardPage() {
           >
             Weiter
           </ButtonLink>
+        </section>
+      )}
+
+      {reviews.length > 0 && (
+        <section aria-labelledby="review-heading" className="space-y-3">
+          <h2 id="review-heading" className="flex items-center gap-2 text-xl font-semibold">
+            <Repeat aria-hidden="true" size={20} className="text-indigo-700" /> Zum Wiederholen
+          </h2>
+          <ul className="grid gap-3 md:grid-cols-3">
+            {reviews.map((r) => (
+              <li key={r.subtopicId}>
+                <Link
+                  to={`/app/topics/${r.topicId}/chapters/${r.subtopicId}`}
+                  className="flex h-full flex-col gap-2 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-colors hover:border-indigo-300"
+                >
+                  <span className="text-sm text-slate-600">{r.topicTitle}</span>
+                  <span className="font-semibold text-slate-900">{r.subtopicTitle}</span>
+                  <span className="text-sm text-slate-700">{REVIEW_REASON_TEXT[r.reason]}</span>
+                  <span className="mt-auto inline-flex items-center gap-1 text-sm font-medium text-indigo-700">
+                    Wiederholen <ArrowRight aria-hidden="true" size={16} />
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
         </section>
       )}
 

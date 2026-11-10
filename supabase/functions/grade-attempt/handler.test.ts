@@ -201,6 +201,59 @@ Deno.test('ohne eingetipptes Ergebnis: Rückfrage, wenn nichts gelesen werden ka
   }
 });
 
+const blindReading = (finalAnswerRead: string, confidence = 0.9) => ({ readable: true, finalAnswerRead, confidence });
+const writtenOnly = () => post({ exerciseId: 'pyth-1', answerRaw: '', submission: { kind: 'canvas', dataUrl: PNG } });
+
+Deno.test('Gegenprobe ohne Musterlösung: gleiche Lesung ⇒ blinde Lesung wird bewertet und gespeichert (source = ai)', async () => {
+  const seen: { pngBase64: string }[] = [];
+  const { handler, calls } = setup({
+    gradeWork: async () => aiGrading({ finalAnswerRead: '15' }),
+    readAnswer: async (req) => (seen.push(req), blindReading('c = 15 cm')),
+  });
+  const body = await (await handler(writtenOnly())).json();
+  assert.equal(body.status, 'saved');
+  assert.equal(seen[0].pngBase64, PNG.slice('data:image/png;base64,'.length));
+  assert.equal(calls.recorded[0].answerRaw, 'c = 15 cm');
+  assert.equal(calls.recorded[0].correctionSource, 'ai');
+});
+
+Deno.test('Gegenprobe widerspricht der Korrektur (Musterlösung hineingelesen?) ⇒ Rückfrage, nichts gespeichert', async () => {
+  const { handler, calls } = setup({ gradeWork: async () => aiGrading({ finalAnswerRead: '15' }), readAnswer: async () => blindReading('16') });
+  const body = await (await handler(writtenOnly())).json();
+  assert.equal(body.status, 'unclear');
+  assert.match(body.evaluation.feedback, /nicht sicher lesen/);
+  assert.equal(calls.recorded.length, 0);
+});
+
+Deno.test('Korrektur unsicher, Gegenprobe lesbar ⇒ Endergebnis bewertet, Rechenweg bleibt gelb (source = auto)', async () => {
+  const { handler, calls } = setup({ gradeWork: async () => aiGrading({ confidence: 0.2 }), readAnswer: async () => blindReading('15') });
+  const body = await (await handler(writtenOnly())).json();
+  assert.equal(body.status, 'saved');
+  assert.equal(body.evaluation.verdict, 'correct');
+  assert.equal(body.evaluation.marks.at(-1).color, 'yellow');
+  assert.equal(calls.recorded[0].correctionSource, 'auto');
+});
+
+Deno.test('Gegenprobe fällt aus ⇒ Lesung der Korrektur zählt; mit eingetipptem Ergebnis keine Gegenprobe', async () => {
+  const orig = console.error;
+  console.error = () => {};
+  try {
+    const failing = setup({
+      gradeWork: async () => aiGrading({ finalAnswerRead: '15' }),
+      readAnswer: async () => {
+        throw new Error('Gemini 503');
+      },
+    });
+    assert.equal((await (await failing.handler(writtenOnly())).json()).evaluation.verdict, 'correct');
+  } finally {
+    console.error = orig;
+  }
+  let reads = 0;
+  const typed = setup({ gradeWork: async () => aiGrading(), readAnswer: async () => (reads++, blindReading('15')) });
+  await typed.handler(handwritingPost());
+  assert.equal(reads, 0);
+});
+
 Deno.test('Speichern schlägt fehl: Bild wird wieder entfernt, 500 ohne interne Details', async () => {
   const { handler, calls } = setup({
     loadContext: async () => context('handwriting'),

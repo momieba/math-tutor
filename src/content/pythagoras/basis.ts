@@ -1058,7 +1058,10 @@ export const pythagorasBasis: AuthoredTopic = {
             finalAnswer: '$x = 5$ (Seiten $5$, $12$, $13$)',
           },
           objectives: ['Pythagoras mit Gleichungen verbinden'],
-          commonMistakes: [{ description: 'Negative Lösung angegeben', feedback: 'Eine Seitenlänge kann nicht negativ sein.', answers: ['-12'] }],
+          commonMistakes: [
+            { description: 'Negative Lösung angegeben', feedback: 'Eine Seitenlänge kann nicht negativ sein.', answers: ['-12'] },
+            { description: 'Negative Lösung nicht ausgeschlossen', feedback: 'x = 5 stimmt. Aber eine Seitenlänge kann nicht negativ sein – beachte x > 0 und streiche x = −12.', answers: ['5; -12'], points: 0.5 },
+          ],
         },
         {
           id: 'pyth-gemischt-5',

@@ -87,6 +87,11 @@ export function createLocalLearnerRepository(): LocalLearnerRepository {
       const d = load(userId);
       return { activeTopics: d.activeTopics, attempts: d.attempts };
     },
+    // Lokal liegt der Lernpfad ohnehin im Browser (src/pages/pathStorage.ts); nichts zusätzlich zu speichern.
+    async getPathSeen() {
+      return null;
+    },
+    async markPathSeen() {},
     deleteUserData(userId) {
       removeKey(key(userId));
     },

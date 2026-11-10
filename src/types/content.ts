@@ -96,6 +96,8 @@ export interface CommonMistake {
   feedback: string;
   /** Typische falsche Eingaben, die genau diesen Fehler auslösen (optional). */
   answers?: string[];
+  /** Teilpunkte (0..1) für diese Eingaben statt der berechneten, z. B. 0,5 für „x = 5 oder x = −12“ bei x > 0. */
+  points?: number;
 }
 
 export interface ModelSolution {

@@ -125,11 +125,18 @@ await expectOk('bewerteten Versuch speichern', `select record_graded_attempt($1,
 await expectValue('Hilfen übernommen', `select hints_used || '/' || solution_viewed from attempts where id = $1`, '2/true', [A1]);
 await expectValue('Korrektur + Einreichung', `select (select count(*) from corrections where attempt_id = $1) || '/' || (select count(*) from submissions where attempt_id = $1)`, '1/1', [A1]);
 await expectValue('Bearbeitung beendet', `select count(*) from exercise_sessions where user_id = $1`, 0, [U1]);
+await expectValue('Übungsmodus und Quelle auto als Standard', `select a.mode || '/' || c.source from attempts a join corrections c on c.attempt_id = a.id where a.id = $1`, 'practice/auto', [A1]);
+const A2 = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+await expectOk('Testversuch mit KI-Korrektur speichern', `select record_graded_attempt($1, $2, $3, '15', 'correct', 1, '[]'::jsonb, '', null, null, null, null, 'test', 'ai')`, [U1, ex.id, A2]);
+await expectValue('Testmodus und Quelle ai gespeichert', `select a.mode || '/' || c.source from attempts a join corrections c on c.attempt_id = a.id where a.id = $1`, 'test/ai', [A2]);
+await expectDenied('Quelle „teacher“ über die Edge Function', `select record_graded_attempt($1, $2, gen_random_uuid(), '15', 'correct', 1, '[]'::jsonb, '', null, null, null, null, 'practice', 'teacher')`, [U1, ex.id]);
 await expectOk('Storage: Upload durch Server', `insert into storage.objects (bucket_id, name) values ('submissions', $1)`, [`${U1}/${A1}.png`]);
 
 console.log('Schüler U1 – nach der Abgabe:');
 await as(U1);
-await expectValue('eigene Versuche sichtbar', `select count(*) from attempts`, 1);
+await expectValue('eigene Versuche sichtbar', `select count(*) from attempts`, 2);
+await expectOk('Lernpfad: gesehen speichern (upsert)', `insert into learning_path_seen (user_id, subtopic_id, intro_seen) values ($1, $2, true) on conflict (user_id, subtopic_id) do update set user_id = excluded.user_id, subtopic_id = excluded.subtopic_id, intro_seen = excluded.intro_seen, explain_seen = excluded.explain_seen, updated_at = now() returning intro_seen`, [U1, ex.subtopic_id]);
+await expectDenied('Lernpfad: für andere speichern', `insert into learning_path_seen (user_id, subtopic_id, intro_seen) values ($1, $2, true)`, [U2, ex.subtopic_id]);
 await expectValue('Nachlesen nach Versuch', `select get_exercise_review($1) ?& array['hints','solution','commonMistakes']`, true, [ex.id]);
 await expectValue('neue Bearbeitung ohne Hilfen', `select jsonb_array_length(get_exercise_session($1)->'hints')`, 0, [ex.id]);
 await expectValue('Hinweis in neuer Bearbeitung', `select jsonb_array_length(reveal_hint($1, 1))`, 1, [ex.id]);
@@ -148,6 +155,7 @@ await expectValue('fremde Submissions sichtbar', `select count(*) from submissio
 await expectValue('fremde Profile sichtbar', `select count(*) from profiles`, 1);
 await expectValue('fremde Storage-Objekte', `select count(*) from storage.objects`, 0);
 await expectValue('fremde Bearbeitungen', `select count(*) from exercise_sessions`, 0);
+await expectValue('fremder Lernpfad', `select count(*) from learning_path_seen`, 0);
 await expectValue('Nachlesen fremder Aufgabe', `select get_exercise_review($1) is null`, true, [ex.id]);
 await expectValue('ohne Einwilligung', `select consent_version is null from profiles`, true);
 
@@ -155,6 +163,7 @@ console.log('Anonym:');
 await as(null, 'anon');
 await expectDenied('Inhalte lesen (anon)', `select count(*) from topics`);
 await expectDenied('Versuche lesen (anon)', `select count(*) from attempts`);
+await expectDenied('Lernpfad lesen (anon)', `select count(*) from learning_path_seen`);
 await expectDenied('Hinweis aufdecken (anon)', `select reveal_hint($1, 1)`, [ex.id]);
 await expectDenied('Bewerteten Versuch speichern (anon)', record, [U1, ex.id, A1]);
 

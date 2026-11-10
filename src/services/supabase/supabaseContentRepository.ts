@@ -134,7 +134,7 @@ function mapCurriculum(r: CurriculumRow): Curriculum {
 
 export function createSupabaseContentRepository(): ContentRepository {
   return createCatalogContentRepository(async () => {
-    const sb = getSupabase();
+    const sb = await getSupabase();
     const [curricula, topics] = await Promise.all([
       sb.from('curricula').select('id, state, school_type, grade_from, grade_to, version').returns<CurriculumRow[]>(),
       sb.from('topics').select(TOPIC_SELECT).order('position').returns<TopicRow[]>(),

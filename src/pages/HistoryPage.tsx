@@ -155,6 +155,7 @@ export default function HistoryPage() {
                   </span>
                   <span className="block text-sm text-slate-600 mt-1">
                     {fmtDate(a.submittedAt)} · {VERDICT_LABEL[v]} · {Math.round(a.points * 100)} %
+                    {a.mode === 'test' && ' · im Kapitel-Test'}
                     {a.hintsUsed > 0 && ` · ${a.hintsUsed} Hinweis${a.hintsUsed === 1 ? '' : 'e'}`}
                     {a.solutionViewed && ' · Lösung angesehen'}
                   </span>

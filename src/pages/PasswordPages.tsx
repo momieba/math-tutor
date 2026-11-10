@@ -1,10 +1,17 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router';
+import { AuthShell, authLink, FormMessage, TextField } from '../components/AuthLayout';
+import { Button } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { services } from '../services';
 
-const input = 'w-full rounded-lg border border-slate-300 px-3';
 const errorText = (err: unknown) => (err instanceof Error ? err.message : 'Unbekannter Fehler');
+
+const backToLogin = (
+  <Link to="/login" className={authLink}>
+    Zurück zur Anmeldung
+  </Link>
+);
 
 /** „Passwort vergessen“: schickt einen Link an die E-Mail-Adresse (Supabase leitet danach auf /reset-password weiter). */
 export function ForgotPasswordPage() {
@@ -28,26 +35,24 @@ export function ForgotPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
-      <form onSubmit={submit} className="w-full max-w-sm bg-white rounded-2xl shadow-sm p-6 space-y-4">
-        <h1 className="text-2xl font-bold">Passwort vergessen</h1>
-        {sent ? (
-          <p role="status" className="text-green-700">
-            Wenn es ein Konto mit dieser Adresse gibt, haben wir dir einen Link geschickt. Schau auch im Spam-Ordner nach.
-          </p>
-        ) : (
-          <>
-            <p className="text-slate-600 text-sm">Gib deine E-Mail-Adresse ein. Wir schicken dir einen Link, mit dem du ein neues Passwort festlegst.</p>
-            <label className="block">E-Mail<input className={input} type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" /></label>
-            {error && <p role="alert" className="text-red-700 text-sm">{error}</p>}
-            <button disabled={busy} className="w-full rounded-lg bg-indigo-600 text-white disabled:opacity-50">Link schicken</button>
-          </>
-        )}
-        <p className="text-sm text-center">
-          <Link to="/login" className="text-indigo-700 min-h-11 inline-flex items-center">Zurück zur Anmeldung</Link>
-        </p>
-      </form>
-    </div>
+    <AuthShell
+      title="Passwort vergessen"
+      subtitle={sent ? undefined : 'Gib deine E-Mail-Adresse ein. Wir schicken dir einen Link, mit dem du ein neues Passwort festlegst.'}
+      onSubmit={submit}
+      footer={backToLogin}
+    >
+      {sent ? (
+        <FormMessage tone="success">Wenn es ein Konto mit dieser Adresse gibt, haben wir dir einen Link geschickt. Schau auch im Spam-Ordner nach.</FormMessage>
+      ) : (
+        <>
+          <TextField label="E-Mail" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
+          {error && <FormMessage tone="error">{error}</FormMessage>}
+          <Button type="submit" variant="primary" loading={busy} className="w-full">
+            Link schicken
+          </Button>
+        </>
+      )}
+    </AuthShell>
   );
 }
 
@@ -74,23 +79,34 @@ export function ResetPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
-      <form onSubmit={submit} className="w-full max-w-sm bg-white rounded-2xl shadow-sm p-6 space-y-4">
-        <h1 className="text-2xl font-bold">Neues Passwort</h1>
-        {loading ? (
-          <p className="text-slate-500">Lade …</p>
-        ) : !session ? (
-          <p role="alert" className="text-red-700">
-            Der Link ist abgelaufen oder wurde schon benutzt. <Link to="/forgot-password" className="underline">Neuen Link anfordern</Link>
-          </p>
-        ) : (
-          <>
-            <label className="block">Neues Passwort<input className={input} type="password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" /></label>
-            {error && <p role="alert" className="text-red-700 text-sm">{error}</p>}
-            <button disabled={busy} className="w-full rounded-lg bg-indigo-600 text-white disabled:opacity-50">Passwort speichern</button>
-          </>
-        )}
-      </form>
-    </div>
+    <AuthShell title="Neues Passwort" onSubmit={submit} footer={backToLogin}>
+      {loading ? (
+        <p className="text-slate-500">Lade …</p>
+      ) : !session ? (
+        <FormMessage tone="error">
+          Der Link ist abgelaufen oder wurde schon benutzt.{' '}
+          <Link to="/forgot-password" className="font-semibold underline">
+            Neuen Link anfordern
+          </Link>
+        </FormMessage>
+      ) : (
+        <>
+          <TextField
+            label="Neues Passwort"
+            type="password"
+            required
+            minLength={8}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete="new-password"
+            hint="Mindestens 8 Zeichen."
+          />
+          {error && <FormMessage tone="error">{error}</FormMessage>}
+          <Button type="submit" variant="primary" loading={busy} className="w-full">
+            Passwort speichern
+          </Button>
+        </>
+      )}
+    </AuthShell>
   );
 }

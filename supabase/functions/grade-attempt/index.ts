@@ -3,7 +3,7 @@
 // KI-Auswertung des Rechenwegs (Prototyp) nur, wenn die Secrets GEMINI_API_KEY und AI_GRADING_USERS (kommagetrennte
 // Nutzer-IDs) gesetzt sind und der Nutzer in der Liste steht. Optional: GEMINI_MODEL.
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
-import { gradeWorkWithGemini } from '../_shared/services/ai/geminiGrader.ts';
+import { gradeWorkWithGemini, readFinalAnswerWithGemini } from '../_shared/services/ai/geminiGrader.ts';
 import { createGradeHandler, type GradingContext } from './handler.ts';
 
 const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
@@ -45,6 +45,8 @@ Deno.serve(
         p_submission_kind: a.submission?.kind ?? null,
         p_storage_path: a.submission?.storagePath ?? null,
         p_strokes: a.submission?.strokes ?? null,
+        p_mode: a.mode,
+        p_source: a.correctionSource,
       });
       if (error) throw new Error(error.message);
     },
@@ -60,6 +62,17 @@ Deno.serve(
         timeoutMs: 25_000,
       });
       return result.grading;
+    },
+    async readAnswer({ userId, exerciseId, pngBase64 }) {
+      if (!GEMINI_API_KEY || !AI_GRADING_USERS.has(userId)) return null;
+      const { data, error } = await admin.from('exercises').select('prompt').eq('id', exerciseId).single();
+      if (error) throw new Error(error.message);
+      const result = await readFinalAnswerWithGemini({ prompt: data.prompt }, { mimeType: 'image/png', base64: pngBase64 }, {
+        apiKey: GEMINI_API_KEY,
+        model: Deno.env.get('GEMINI_MODEL') || undefined,
+        timeoutMs: 25_000,
+      });
+      return result.reading;
     },
   }),
 );

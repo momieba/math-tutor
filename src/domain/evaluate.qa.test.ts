@@ -8,11 +8,12 @@
  * 6) Regression „Variable an Ziffer“: Einheiten, Indizes (x1/x2) und übliche Antworten bleiben unberührt.
  * 7) Regressionstests BUG-12, BUG-13 (Fix in 5137177, Re-Test durch Tester).
  * 8) Regression Strukturregel (hasMultipleStatements/STATEMENT_START): Ketten, Einheiten, Indizes, 1.125 bleiben
- *    unberührt; bewusste Grenzen (Einheitenwechsel, „→“) sind als gelbe Rückfrage dokumentiert.
+ *    unberührt; bewusste Grenze (Einheitenwechsel) ist als gelbe Rückfrage dokumentiert.
  * 9) Regressionstests BUG-14 (Beschriftung mit Doppelpunkt, „Fix BUG-14“). Derzeit keine offenen Befunde.
  *    Neue offene Befunde werden als `it.fails` mit Bug-ID markiert: Sie bleiben grün, solange der Fehler
  *    besteht, und schlagen an, sobald er behoben ist (dann `.fails` entfernen = Re-Test).
- *    Die `it.todo` „INHALT“ sind Inhaltsfragen für Req eng/Redaktion, keine Parserfehler.
+ * 10) Entscheidungen zu den früheren Inhaltsfragen: Freitext-Toleranz, Teilpunkte bei nicht ausgeschlossener
+ *    negativer Lösung, doppelte Lösung zweimal genannt, Herleitungspfeile.
  */
 import { describe, expect, it } from 'vitest';
 import { topics } from '../content';
@@ -241,10 +242,69 @@ describe('Regressionstests: behobene Befunde BUG-01 … BUG-06', () => {
     expect(r.marks).toHaveLength(1);
   });
 
-  // Inhaltliche Beobachtungen (keine Bugs im Code, Entscheidung Redaktion/Req eng): heute als FALSCH gewertet.
-  it.todo('INHALT: „Grundwert G“, „Seite c“, „Ja, es ist rechtwinklig“ – Antwortlisten (accepted) erweitern oder Freitext-Toleranz');
-  it.todo('INHALT: pyth-gemischt-4 „x = 5 oder x = −12“ ⇒ 0 Punkte/rot; Teilpunkt + Hinweis „x > 0 beachten“ wäre didaktisch fairer');
-  it.todo('INHALT: quad-pq-formel-4 „5; 5“ (doppelte Lösung zweimal genannt) ⇒ 0 Punkte/rot');
+});
+
+// ------------------------------------------------------------------ 10) Entscheidungen zu den Inhaltsfragen
+describe('ENTSCHEIDUNG Freitext-Toleranz', () => {
+  it.each<[string, string]>([
+    ['prozent-grundbegriffe-3', 'Grundwert G'],
+    ['prozent-grundbegriffe-3', 'Das ist der Grundwert.'],
+    ['pyth-grundlagen-4', 'Die Hypotenuse ist PR'],
+    ['pyth-umkehrung-4', 'Ja, es ist rechtwinklig'],
+    ['pyth-umkehrung-4', 'ja'],
+  ])('%s: %j ⇒ correct', (id, raw) => expect(verdict(id, raw)).toBe('correct'));
+
+  it('„Seite c“ wird als „c“ erkannt', () => {
+    const e = all.find((x) => x.answer.kind === 'text' && x.answer.accepted.includes('c'))!;
+    expect(evaluateAnswer(e, 'Seite c').verdict).toBe('correct');
+    expect(evaluateAnswer(e, 'Seite a oder c').verdict).not.toBe('correct'); // weiteres Inhaltswort
+  });
+
+  it.each<[string, string]>([
+    ['pyth-umkehrung-4', 'Nein, es ist nicht rechtwinklig'],
+    ['pyth-umkehrung-4', 'ja nicht'],
+    ['pyth-umkehrung-4', 'ja ja'],
+    ['prozent-grundbegriffe-3', 'Prozentwert'],
+    ['prozent-grundbegriffe-3', 'kein Grundwert'],
+    ['pyth-grundlagen-4', 'PQ und PR'],
+  ])('%s: %j ⇒ nicht correct', (id, raw) => expect(verdict(id, raw)).not.toBe('correct'));
+});
+
+describe('ENTSCHEIDUNG Lösungsmengen: doppelte Lösung und nicht ausgeschlossene Lösung', () => {
+  it('quad-pq-formel-4: „5; 5“ (doppelte Lösung zweimal genannt) ⇒ correct', () => {
+    expect(verdict('quad-pq-formel-4', '5; 5')).toBe('correct');
+    expect(verdict('quad-pq-formel-4', 'x1 = x2 = 5')).toBe('correct');
+  });
+
+  it('pyth-gemischt-4: „x = 5 oder x = −12“ ⇒ Teilpunkte mit Hinweis auf x > 0', () => {
+    const r = evaluateAnswer(ex('pyth-gemischt-4'), 'x = 5 oder x = −12');
+    expect(r.verdict).toBe('partial');
+    expect(r.points).toBe(0.5);
+    expect(r.feedback).toMatch(/negativ/);
+  });
+
+  it('nur die negative Lösung bleibt falsch', () => {
+    expect(verdict('pyth-gemischt-4', '-12')).toBe('incorrect');
+  });
+});
+
+describe('ENTSCHEIDUNG Herleitungspfeile → / ⇒: gewertet wird der Teil nach dem letzten Pfeil', () => {
+  it.each<[string, string]>([
+    ['pyth-hypotenuse-4', 'c² = 289 → c = 17'],
+    ['pyth-hypotenuse-4', 'c² = 289 ⇒ c = 17 cm'],
+    ['pyth-hypotenuse-4', 'c^2 = 289 => c = 17'],
+    ['pyth-hypotenuse-3', 'c = √65 ≈ 8,06 → 8,1'],
+    ['quad-reinquadratisch-1', 'x² = 49 ⇒ x = ±7'],
+    ['quad-reinquadratisch-4', '(x − 2)² = 16 ⇒ x − 2 = ±4 ⇒ 6; −2'],
+  ])('%s: %j ⇒ correct', (id, raw) => expect(verdict(id, raw)).toBe('correct'));
+
+  it('falsches Ergebnis nach dem Pfeil bleibt falsch', () => {
+    expect(verdict('pyth-hypotenuse-4', 'c² = 289 → c = 18')).toBe('incorrect');
+  });
+
+  it.each(['c = 17 cm → 0,17 m', 'c = 170 mm ⇒ 17 cm', 'c² = 289 →'])('Einheitenwechsel oder nichts nach dem Pfeil: %j ⇒ unclear', (raw) => {
+    expect(verdict('pyth-hypotenuse-4', raw)).toBe('unclear');
+  });
 });
 
 // ------------------------------------------------------------------ 4) Regressionslauf über alle Aufgaben
@@ -547,8 +607,9 @@ describe('Regression Strukturregel (5137177): Ketten, Einheiten, Indizes bleiben
   );
 
   // BEWUSSTE GRENZE (kein Bug, Entscheidung Entwickler1 in 5137177; ggf. Req eng):
-  // Ketten mit Einheitenwechsel, Herleitungspfeil oder Summen mit Einheit ergeben eine sichere gelbe Rückfrage statt Raten.
-  it.each(['c = 17 cm = 0,17 m', 'c² = 289 → c = 17', 'c² = 289 ⇒ c = 17', 'c = 15 cm + 2 cm = 17 cm', 'c = √a²+b² = 17', 'x = |−7| = 7'])(
+  // Ketten mit Einheitenwechsel oder Summen mit Einheit ergeben eine sichere gelbe Rückfrage statt Raten.
+  // (Herleitungspfeile werden seit der Entscheidung unter 10) ausgewertet.)
+  it.each(['c = 17 cm = 0,17 m', 'c = 15 cm + 2 cm = 17 cm', 'c = √a²+b² = 17', 'x = |−7| = 7'])(
     'Grenze (Hinweis): %j ⇒ gelb',
     (raw) => {
       expect(parseNumber(raw)).toBeNull();

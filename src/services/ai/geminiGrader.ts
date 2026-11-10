@@ -2,7 +2,17 @@
  * Aufruf der Gemini API für die KI-Auswertung des Rechenwegs. Nur `fetch`, läuft daher in Node (Testskript)
  * und in Deno (Edge Function `grade-attempt`, per `npm run functions:sync` kopiert).
  */
-import { AI_GRADING_SCHEMA, buildAiGradingPrompt, parseAiGrading, type AiGradableExercise, type AiGrading } from '../../domain/aiGrading';
+import {
+  AI_GRADING_SCHEMA,
+  AI_READING_SCHEMA,
+  buildAiGradingPrompt,
+  buildAiReadingPrompt,
+  parseAiGrading,
+  parseAiReading,
+  type AiGradableExercise,
+  type AiGrading,
+  type AiReading,
+} from '../../domain/aiGrading';
 
 export const GEMINI_API = 'https://generativelanguage.googleapis.com/v1beta';
 /**
@@ -47,14 +57,33 @@ export function modelList(model?: string): string[] {
   return list.length ? list : GEMINI_DEFAULT_MODELS;
 }
 
+export interface GeminiReadingResult {
+  reading: AiReading | null;
+  raw: string;
+  model: string;
+}
+
+type Image = { mimeType: string; base64: string };
+
 /** Schickt Aufgabe, Musterlösung und Bild an Gemini. Wirft den Fehler des letzten Modells, wenn keins antwortet. */
-export async function gradeWorkWithGemini(ex: AiGradableExercise, image: { mimeType: string; base64: string }, opts: GeminiOptions): Promise<GeminiResult> {
+export async function gradeWorkWithGemini(ex: AiGradableExercise, image: Image, opts: GeminiOptions): Promise<GeminiResult> {
+  const r = await generate(buildAiGradingPrompt(ex), AI_GRADING_SCHEMA, image, opts);
+  return { grading: parseAiGrading(r.raw), raw: r.raw, model: r.model, tokens: r.tokens };
+}
+
+/** Liest nur das Endergebnis, ohne Musterlösung (Gegenprobe zur Lesung in gradeWorkWithGemini). */
+export async function readFinalAnswerWithGemini(ex: Pick<AiGradableExercise, 'prompt'>, image: Image, opts: GeminiOptions): Promise<GeminiReadingResult> {
+  const r = await generate(buildAiReadingPrompt(ex), AI_READING_SCHEMA, image, opts);
+  return { reading: parseAiReading(r.raw), raw: r.raw, model: r.model };
+}
+
+async function generate(prompt: string, schema: unknown, image: Image, opts: GeminiOptions): Promise<{ raw: string; model: string; tokens?: number }> {
   const models = modelList(opts.model);
   const deadline = Date.now() + (opts.timeoutMs ?? 30_000);
   const body = JSON.stringify({
-    contents: [{ parts: [{ text: buildAiGradingPrompt(ex) }, { inline_data: { mime_type: image.mimeType, data: image.base64 } }] }],
+    contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: image.mimeType, data: image.base64 } }] }],
     // Wenig „Denken“: Antwort in wenigen Sekunden statt teils über 30 s, bei gleicher Qualität für diese Aufgabe (gemessen).
-    generationConfig: { responseMimeType: 'application/json', responseSchema: AI_GRADING_SCHEMA, temperature: 0, thinkingConfig: { thinkingLevel: 'low' } },
+    generationConfig: { responseMimeType: 'application/json', responseSchema: schema, temperature: 0, thinkingConfig: { thinkingLevel: 'low' } },
   });
   let lastError: unknown = new GeminiError(0, 'Kein Gemini-Modell konfiguriert.');
   for (const [i, model] of models.entries()) {
@@ -76,7 +105,7 @@ export async function gradeWorkWithGemini(ex: AiGradableExercise, image: { mimeT
       }
       const json = (await res.json()) as { candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] } }[]; usageMetadata?: { totalTokenCount?: number } };
       const raw = json.candidates?.[0]?.content?.parts?.filter((p) => !p.thought).map((p) => p.text ?? '').join('') ?? '';
-      return { grading: parseAiGrading(raw), raw, model, tokens: json.usageMetadata?.totalTokenCount };
+      return { raw, model, tokens: json.usageMetadata?.totalTokenCount };
     } catch (e) {
       if (e instanceof GeminiError) throw e;
       lastError = e; // Zeitüberschreitung oder Netzfehler: nächstes Modell

@@ -16,9 +16,9 @@
 import { readFileSync } from 'node:fs';
 import { extname } from 'node:path';
 import { topics } from '../src/content/index';
-import { aiGradingMarks, isTrustworthy } from '../src/domain/aiGrading';
+import { aiGradingMarks, chooseFinalAnswer, isTrustworthy } from '../src/domain/aiGrading';
 import { evaluateAnswer } from '../src/domain/evaluate';
-import { GEMINI_API, gradeWorkWithGemini, modelList } from '../src/services/ai/geminiGrader';
+import { GEMINI_API, gradeWorkWithGemini, modelList, readFinalAnswerWithGemini } from '../src/services/ai/geminiGrader';
 import type { AuthoredExercise } from '../src/types';
 
 const MIME: Record<string, string> = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' };
@@ -67,6 +67,8 @@ async function grade(exerciseId: string, imagePath: string) {
   const model = process.env.GEMINI_MODEL;
 
   const started = Date.now();
+  // Wie in der Edge Function: Korrektur und blindes Lesen (ohne Musterlösung) gleichzeitig.
+  const blindPromise = readFinalAnswerWithGemini(ex, { mimeType, base64 }, { apiKey: apiKey(), model }).catch(() => null);
   const result = await gradeWorkWithGemini(ex, { mimeType, base64 }, { apiKey: apiKey(), model }).catch((e: unknown) =>
     fail(`Keins der Modelle (${modelList(model).join(', ')}) hat geantwortet: ${e instanceof Error ? e.message : String(e)}
 Verfügbare Modelle: npm run ai:test -- --models`),
@@ -89,7 +91,11 @@ Verfügbare Modelle: npm run ai:test -- --models`),
   const gradable = { answer: ex.answer, commonMistakes: ex.commonMistakes };
   const typed = option('--answer');
   if (typed !== undefined) console.log(`Endergebnis eingetippt „${typed}“: ${evaluateAnswer(gradable, typed).verdict}`);
-  if (g.finalAnswerRead) console.log(`Endergebnis gelesen „${g.finalAnswerRead}“: ${evaluateAnswer(gradable, g.finalAnswerRead).verdict}`);
+  if (g.finalAnswerRead) console.log(`Endergebnis gelesen (mit Musterlösung) „${g.finalAnswerRead}“: ${evaluateAnswer(gradable, g.finalAnswerRead).verdict}`);
+  const blind = (await blindPromise)?.reading ?? null;
+  console.log(blind ? `Endergebnis blind gelesen „${blind.finalAnswerRead}“ (Sicherheit ${blind.confidence.toFixed(2)}): ${evaluateAnswer(gradable, blind.finalAnswerRead).verdict}` : 'Blindes Lesen: keine Antwort');
+  const chosen = chooseFinalAnswer(isTrustworthy(g) ? g : null, blind, (a) => evaluateAnswer(gradable, a).verdict);
+  console.log(`Bewertet würde: ${chosen === null ? 'Rückfrage (Lesung nicht sicher)' : `„${chosen}“`}`);
   console.log(`Musterlösung: ${ex.solution.finalAnswer}`);
 }
 

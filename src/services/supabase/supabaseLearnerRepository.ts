@@ -82,14 +82,15 @@ function fail(error: { message: string } | null): void {
 }
 
 export function createSupabaseLearnerRepository(): LearnerRepository {
-  const sb = getSupabase();
   return {
     async listActiveTopics(userId) {
+      const sb = await getSupabase();
       const { data, error } = await sb.from('student_topics').select('user_id, topic_id, added_at').eq('user_id', userId).order('added_at');
       fail(error);
       return (data ?? []).map((r) => ({ userId: r.user_id, topicId: r.topic_id, addedAt: r.added_at }) as StudentTopic);
     },
     async addActiveTopic(userId, topicId) {
+      const sb = await getSupabase();
       const { data, error } = await sb
         .from('student_topics')
         .upsert({ user_id: userId, topic_id: topicId }, { onConflict: 'user_id,topic_id', ignoreDuplicates: false })
@@ -99,10 +100,12 @@ export function createSupabaseLearnerRepository(): LearnerRepository {
       return { userId: data!.user_id, topicId: data!.topic_id, addedAt: data!.added_at };
     },
     async removeActiveTopic(userId, topicId) {
+      const sb = await getSupabase();
       const { error } = await sb.from('student_topics').delete().eq('user_id', userId).eq('topic_id', topicId);
       fail(error);
     },
     async listAttempts(userId, filter = {}) {
+      const sb = await getSupabase();
       let q = sb.from('attempts').select(SELECT).eq('user_id', userId).order('submitted_at', { ascending: false });
       if (filter.topicId) q = q.eq('topic_id', filter.topicId);
       if (filter.subtopicId) q = q.eq('subtopic_id', filter.subtopicId);
@@ -113,24 +116,41 @@ export function createSupabaseLearnerRepository(): LearnerRepository {
       return (data ?? []).map(mapAttempt);
     },
     async getAttempt(userId, attemptId) {
+      const sb = await getSupabase();
       const { data, error } = await sb.from('attempts').select(SELECT).eq('user_id', userId).eq('id', attemptId).maybeSingle<AttemptRow>();
       fail(error);
       return data ? mapAttempt(data) : null;
     },
     async getSubmissionImageUrl(submission) {
+      const sb = await getSupabase();
       if (!submission.imageRef) return null;
       const { data, error } = await sb.storage.from(SUBMISSIONS_BUCKET).createSignedUrl(submission.imageRef, 60 * 10);
       fail(error);
       return data?.signedUrl ?? null;
     },
     async exportData(userId) {
+      const sb = await getSupabase();
       const [profile, topics, attempts] = await Promise.all([
         sb.from('profiles').select('display_name, role, grade, curriculum_id, consent_version, consented_at, created_at').eq('id', userId).maybeSingle(),
         sb.from('student_topics').select('topic_id, added_at').eq('user_id', userId),
         sb.from('attempts').select(SELECT).eq('user_id', userId).order('submitted_at').returns<AttemptRow[]>(),
       ]);
-      fail(profile.error ?? topics.error ?? attempts.error);
-      return { profile: profile.data, activeTopics: topics.data ?? [], attempts: (attempts.data ?? []).map(mapAttempt) };
+      const path = await sb.from('learning_path_seen').select('subtopic_id, intro_seen, explain_seen, updated_at').eq('user_id', userId);
+      fail(profile.error ?? topics.error ?? attempts.error ?? path.error);
+      return { profile: profile.data, activeTopics: topics.data ?? [], attempts: (attempts.data ?? []).map(mapAttempt), learningPath: path.data ?? [] };
+    },
+    async getPathSeen(userId, subtopicId) {
+      const sb = await getSupabase();
+      const { data, error } = await sb.from('learning_path_seen').select('intro_seen, explain_seen').eq('user_id', userId).eq('subtopic_id', subtopicId).maybeSingle();
+      fail(error);
+      return data ? { intro: data.intro_seen, explain: data.explain_seen } : null;
+    },
+    async markPathSeen(userId, subtopicId, seen) {
+      const sb = await getSupabase();
+      const { error } = await sb
+        .from('learning_path_seen')
+        .upsert({ user_id: userId, subtopic_id: subtopicId, intro_seen: seen.intro, explain_seen: seen.explain, updated_at: new Date().toISOString() }, { onConflict: 'user_id,subtopic_id' });
+      fail(error);
     },
   };
 }

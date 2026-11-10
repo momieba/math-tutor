@@ -73,6 +73,16 @@ export interface LearnerRepository {
   getSubmissionImageUrl(submission: Submission): Promise<string | null>;
   /** Alle gespeicherten Lerndaten des Nutzers als JSON-taugliches Objekt (DSGVO Art. 15/20). */
   exportData(userId: string): Promise<Record<string, unknown>>;
+  /** Lernpfad: Einstieg/Erklärung des Kapitels gesehen? null, wenn nichts gespeichert ist (lokal: immer null, dort zählt der Browser). */
+  getPathSeen(userId: string, subtopicId: string): Promise<PathSeen | null>;
+  /** Speichert den Stand (nur zunehmend: einmal gesehen bleibt gesehen). */
+  markPathSeen(userId: string, subtopicId: string, seen: PathSeen): Promise<void>;
+}
+
+/** Im Lernpfad gesehene bzw. übersprungene Schritte eines Kapitels. */
+export interface PathSeen {
+  intro: boolean;
+  explain: boolean;
 }
 
 /** Ergebnis einer Bewertung: Rückfrage (nichts gespeichert) oder gespeicherter Versuch mit Lösung zum Nachlesen. */

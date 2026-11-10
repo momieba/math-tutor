@@ -3,7 +3,7 @@
  * Vertrag zwischen Client und Edge Function `grade-attempt` (supabase/functions/grade-attempt).
  * Wird per `npm run functions:sync` zusammen mit evaluate.ts nach supabase/functions/_shared kopiert.
  */
-import type { ExerciseReview, SubmissionKind } from '../types/index.ts';
+import type { AttemptMode, ExerciseReview, SubmissionKind } from '../types/index.ts';
 import type { EvaluationResult } from './evaluate.ts';
 
 export interface GradeRequest {
@@ -11,6 +11,8 @@ export interface GradeRequest {
   answerRaw: string;
   startedAt: string;
   submission?: { kind: SubmissionKind; dataUrl?: string; strokes?: unknown };
+  /** Kapitel-Test oder Üben (Standard). */
+  mode?: AttemptMode;
 }
 
 export type GradeResponse =

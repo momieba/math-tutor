@@ -19,12 +19,13 @@ const LegalPage = lazy(() => import('./pages/LegalPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 const ForgotPasswordPage = lazy(() => import('./pages/PasswordPages').then((m) => ({ default: m.ForgotPasswordPage })));
 const ResetPasswordPage = lazy(() => import('./pages/PasswordPages').then((m) => ({ default: m.ResetPasswordPage })));
+const TestPage = lazy(() => import('./pages/TestPage'));
 const TopicPage = lazy(() => import('./pages/TopicPage'));
 
 /**
  * Routen
  *  öffentlich: /  /login  /register  /forgot-password  /reset-password  /legal/:page
- *  geschützt:  /app  /app/topics/:topicId  /app/topics/:topicId/chapters/:subtopicId  /app/exercises/:exerciseId  /app/history  /app/account
+ *  geschützt:  /app  /app/topics/:topicId  /app/topics/:topicId/chapters/:subtopicId(/test)  /app/exercises/:exerciseId  /app/history  /app/account
  */
 export default function App() {
   if (configError) return <ConfigErrorPage message={configError} />;
@@ -45,6 +46,7 @@ export default function App() {
               <Route index element={<DashboardPage />} />
               <Route path="topics/:topicId" element={<TopicPage />} />
               <Route path="topics/:topicId/chapters/:subtopicId" element={<ChapterPage />} />
+              <Route path="topics/:topicId/chapters/:subtopicId/test" element={<TestPage />} />
               <Route path="exercises/:exerciseId" element={<ExercisePage />} />
               <Route path="history" element={<HistoryPage />} />
               <Route path="account" element={<AccountPage />} />

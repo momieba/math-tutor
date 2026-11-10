@@ -1,16 +1,17 @@
 /**
  * Bewertet eine Abgabe serverseitig und speichert sie (Konzept: Score nicht fälschbar, Lösung nie vor der Abgabe im Browser).
  * Ablauf: Nutzer prüfen → Eingabe validieren → Lösungsschlüssel laden → evaluate.ts (identisch zum lokalen Modus)
- * → mit Rechenweg-Bild: KI-Auswertung (nur freigegebene Testnutzer); ohne eingetipptes Ergebnis liest die KI das Endergebnis,
- *   geprüft wird es trotzdem deterministisch mit evaluate.ts → bei `unclear` nur Rückfrage
+ * → mit Rechenweg-Bild: KI-Auswertung (nur freigegebene Testnutzer); ohne eingetipptes Ergebnis liest die KI das Endergebnis –
+ *   parallel ein zweites Mal OHNE Musterlösung (Gegenprobe, siehe chooseFinalAnswer), geprüft wird es trotzdem
+ *   deterministisch mit evaluate.ts → bei `unclear` nur Rückfrage
  * → Bild hochladen + record_graded_attempt (übernimmt die protokollierten Hilfen).
  * Ohne Deno-Abhängigkeiten; die echte Verdrahtung steht in index.ts.
  */
-import { isTrustworthy, READ_MESSAGES, withAiWork, type AiGrading } from '../_shared/domain/aiGrading.ts';
+import { chooseFinalAnswer, isTrustworthy, READ_MESSAGES, withAiWork, type AiGrading, type AiReading } from '../_shared/domain/aiGrading.ts';
 import { evaluateSubmission, type EvaluationResult } from '../_shared/domain/evaluate.ts';
 import { GRADE_LIMITS, type GradeRequest, type GradeResponse } from '../_shared/domain/gradingContract.ts';
 import { HttpError, json, requireUser, serveJson, type ResolveUser } from '../_shared/http.ts';
-import type { CommonMistake, ExerciseReview, ExerciseType, ExpectedAnswer, SubmissionKind } from '../_shared/types/index.ts';
+import type { AttemptMode, CommonMistake, ExerciseReview, ExerciseType, ExpectedAnswer, SubmissionKind } from '../_shared/types/index.ts';
 
 export interface GradingContext {
   exercise: { id: string; type: ExerciseType };
@@ -25,7 +26,10 @@ export interface GradedAttempt {
   answerRaw: string;
   evaluation: EvaluationResult;
   startedAt: string | null;
+  mode: AttemptMode;
   submission: { kind: SubmissionKind; storagePath: string | null; strokes: unknown } | null;
+  /** 'ai', wenn die Markierungen des Rechenwegs von der KI stammen (corrections.source). */
+  correctionSource: 'auto' | 'ai';
 }
 
 export interface GradeDeps {
@@ -40,6 +44,8 @@ export interface GradeDeps {
    * Fehler und Zeitüberschreitung führen nie zu einer fehlgeschlagenen Abgabe – dann bleibt der Rechenweg ungeprüft (gelb).
    */
   gradeWork?(req: { userId: string; exerciseId: string; review: ExerciseReview; commonMistakes: CommonMistake[]; pngBase64: string }): Promise<AiGrading | null>;
+  /** Liest nur das Endergebnis, ohne Musterlösung (Gegenprobe). null, wenn nicht freigeschaltet. Fehler ⇒ wie nicht verfügbar. */
+  readAnswer?(req: { userId: string; exerciseId: string; pngBase64: string }): Promise<AiReading | null>;
 }
 
 const SUBMISSION_KINDS: SubmissionKind[] = ['canvas', 'photo', 'text'];
@@ -54,6 +60,7 @@ function parseRequest(body: unknown): GradeRequest {
   if (typeof b.exerciseId !== 'string' || !b.exerciseId || b.exerciseId.length > 100) throw invalid();
   if (typeof b.answerRaw !== 'string') throw invalid();
   if (b.answerRaw.length > GRADE_LIMITS.answerChars) throw invalid('Die Antwort ist zu lang. Bitte gib nur das Ergebnis ein.');
+  if (b.mode !== undefined && b.mode !== 'practice' && b.mode !== 'test') throw invalid();
   if (b.startedAt !== undefined && (typeof b.startedAt !== 'string' || Number.isNaN(Date.parse(b.startedAt)))) throw invalid();
   if (b.submission !== undefined && b.submission !== null) {
     const s = b.submission;
@@ -61,7 +68,7 @@ function parseRequest(body: unknown): GradeRequest {
     if (s.dataUrl !== undefined && (typeof s.dataUrl !== 'string' || !s.dataUrl.startsWith(PNG_PREFIX))) throw invalid();
     if (s.strokes !== undefined && JSON.stringify(s.strokes).length > GRADE_LIMITS.strokesChars) throw invalid('Der Rechenweg ist zu groß zum Speichern.');
   }
-  return { exerciseId: b.exerciseId, answerRaw: b.answerRaw.trim(), startedAt: b.startedAt ?? '', submission: b.submission ?? undefined };
+  return { exerciseId: b.exerciseId, answerRaw: b.answerRaw.trim(), startedAt: b.startedAt ?? '', submission: b.submission ?? undefined, mode: b.mode ?? 'practice' };
 }
 
 function decodePng(dataUrl: string): Uint8Array {
@@ -87,26 +94,35 @@ export function createGradeHandler(deps: GradeDeps): (req: Request) => Promise<R
     if (!ctx) throw new HttpError(404, 'Diese Aufgabe gibt es nicht.');
 
     const png = input.submission?.dataUrl ? decodePng(input.submission.dataUrl) : null;
-    let ai: AiGrading | null = null;
-    if (png && ctx.exercise.type !== 'multiple-choice' && deps.gradeWork) {
-      ai = await deps
-        .gradeWork({ userId, exerciseId: input.exerciseId, review: ctx.review, commonMistakes: ctx.key.commonMistakes, pngBase64: input.submission!.dataUrl!.slice(PNG_PREFIX.length) })
-        .catch((e) => {
-          console.error('KI-Auswertung fehlgeschlagen', e);
-          return null;
-        });
-    }
+    const gradable = { answer: ctx.key.answer, commonMistakes: ctx.key.commonMistakes };
+    const usesAi = png && ctx.exercise.type !== 'multiple-choice';
+    const needsReading = usesAi && !input.answerRaw;
+    const pngBase64 = input.submission?.dataUrl?.slice(PNG_PREFIX.length) ?? '';
+    const logged = <T,>(label: string) => (e: unknown): T | null => {
+      console.error(label, e);
+      return null;
+    };
+    // Korrektur und blindes Lesen gleichzeitig: die Gegenprobe kostet keine zusätzliche Wartezeit.
+    const [ai, blind] = await Promise.all([
+      usesAi && deps.gradeWork
+        ? deps.gradeWork({ userId, exerciseId: input.exerciseId, review: ctx.review, commonMistakes: ctx.key.commonMistakes, pngBase64 }).catch(logged<AiGrading>('KI-Auswertung fehlgeschlagen'))
+        : null,
+      needsReading && deps.readAnswer ? deps.readAnswer({ userId, exerciseId: input.exerciseId, pngBase64 }).catch(logged<AiReading>('KI-Lesung fehlgeschlagen')) : null,
+    ]);
     const trusted = isTrustworthy(ai) ? ai : null;
 
     // Kein Ergebnis eingetippt (Aufgaben mit Schreibfläche): Endergebnis aus der Handschrift lesen.
     let answerRaw = input.answerRaw;
     if (!answerRaw && ctx.exercise.type !== 'multiple-choice') {
-      const message = !png ? READ_MESSAGES.noWork : !ai ? READ_MESSAGES.unavailable : !trusted?.finalAnswerRead ? READ_MESSAGES.unreadable : null;
-      if (message) return json({ status: 'unclear', evaluation: { verdict: 'unclear', points: 0, feedback: message, marks: [{ color: 'yellow', message }] } } satisfies GradeResponse);
-      answerRaw = trusted!.finalAnswerRead.slice(0, GRADE_LIMITS.answerChars);
+      const read = png ? chooseFinalAnswer(trusted, blind, (a) => evaluateSubmission(gradable, ctx.exercise.type, a, true).verdict) : null;
+      const message = !png ? READ_MESSAGES.noWork : !ai && !blind ? READ_MESSAGES.unavailable : !read ? READ_MESSAGES.unreadable : null;
+      if (message || !read) {
+        const text = message ?? READ_MESSAGES.unreadable;
+        return json({ status: 'unclear', evaluation: { verdict: 'unclear', points: 0, feedback: text, marks: [{ color: 'yellow', message: text }] } } satisfies GradeResponse);
+      }
+      answerRaw = read.slice(0, GRADE_LIMITS.answerChars);
     }
 
-    const gradable = { answer: ctx.key.answer, commonMistakes: ctx.key.commonMistakes };
     let evaluation = evaluateSubmission(gradable, ctx.exercise.type, answerRaw, input.submission !== undefined);
     if (evaluation.verdict === 'unclear') return json({ status: 'unclear', evaluation } satisfies GradeResponse);
     if (trusted) evaluation = withAiWork(evaluation, trusted);
@@ -122,7 +138,9 @@ export function createGradeHandler(deps: GradeDeps): (req: Request) => Promise<R
         answerRaw,
         evaluation,
         startedAt: input.startedAt || null,
+        mode: input.mode ?? 'practice',
         submission: input.submission ? { kind: input.submission.kind, storagePath, strokes: input.submission.strokes ?? null } : null,
+        correctionSource: trusted ? 'ai' : 'auto',
       });
     } catch (e) {
       if (storagePath) await deps.removeImage(storagePath).catch(() => {}); // kein verwaistes Bild

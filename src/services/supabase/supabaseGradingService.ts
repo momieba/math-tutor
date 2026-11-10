@@ -3,22 +3,21 @@
  * - Hinweise/Lösung über RPCs (security definer), die jede Nutzung in `exercise_sessions` protokollieren.
  * - Bewertung + Speichern in der Edge Function `grade-attempt` (service_role, gleiche evaluate.ts wie lokal).
  */
-import { FunctionsFetchError, FunctionsHttpError } from '@supabase/supabase-js';
 import type { GradeRequest, GradeResponse } from '../../domain/gradingContract';
 import type { ExerciseReview, ExerciseSessionState, ModelSolution } from '../../types';
 import type { GradingService, LearnerRepository } from '../types';
-import { getSupabase } from './client';
+import { getSupabase, isFunctionsError } from './client';
 
 async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
-  const { data, error } = await getSupabase().rpc(fn, args);
+  const { data, error } = await (await getSupabase()).rpc(fn, args);
   if (error) throw new Error(error.message);
   return data as T;
 }
 
 /** Fehlermeldung der Edge Function (`{ error }`) bzw. Netzwerkfehler in eine verständliche Meldung übersetzen. */
 async function functionError(error: unknown): Promise<Error> {
-  if (error instanceof FunctionsFetchError) return new TypeError('fetch failed'); // → „Keine Verbindung zum Server“
-  if (error instanceof FunctionsHttpError) {
+  if (isFunctionsError(error, 'FunctionsFetchError')) return new TypeError('fetch failed'); // → „Keine Verbindung zum Server“
+  if (isFunctionsError(error, 'FunctionsHttpError')) {
     const body = (await (error.context as Response).json().catch(() => null)) as { error?: string } | null;
     if (body?.error) return new Error(body.error);
   }
@@ -43,8 +42,8 @@ export function createSupabaseGradingService(learner: LearnerRepository): Gradin
       return rpc<ExerciseReview | null>('get_exercise_review', { p_exercise: exerciseId });
     },
     async grade(input) {
-      const body: GradeRequest = { exerciseId: input.exerciseId, answerRaw: input.answerRaw, startedAt: input.startedAt, submission: input.submission };
-      const { data, error } = await getSupabase().functions.invoke<GradeResponse>('grade-attempt', { body });
+      const body: GradeRequest = { exerciseId: input.exerciseId, answerRaw: input.answerRaw, startedAt: input.startedAt, submission: input.submission, mode: input.mode };
+      const { data, error } = await (await getSupabase()).functions.invoke<GradeResponse>('grade-attempt', { body });
       if (error || !data) throw await functionError(error);
       if (data.status === 'unclear') return data;
       const record = await learner.getAttempt(input.userId, data.attemptId);

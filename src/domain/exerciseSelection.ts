@@ -59,7 +59,7 @@ export function currentLevel(pool: SelectableExercise[], attempts: Attempt[]): D
 }
 
 /** Deterministischer Zufallswert in [0, 1) aus einem String (gleiche Eingabe ⇒ gleiche Reihenfolge). */
-function hash01(s: string): number {
+export function hash01(s: string): number {
   let h = 2166136261;
   for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
   return (h >>> 0) / 4294967296;

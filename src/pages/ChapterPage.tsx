@@ -1,15 +1,16 @@
-import { ArrowRight, BookOpen, Lightbulb, PlayCircle, RotateCcw, Trophy } from 'lucide-react';
+import { ArrowRight, BookOpen, ClipboardCheck, Lightbulb, PlayCircle, RotateCcw, Trophy } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { MathText } from '../components/MathText';
 import { StepBar } from '../components/StepBar';
 import { Button, ButtonLink } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
+import { canOfferTest, TEST_CONFIG } from '../domain/chapterTest';
 import { needsReview, PATH_STEP_LABEL, type PathStep } from '../domain/learningPath';
 import { followingChapter } from '../domain/progressView';
 import { services } from '../services';
 import type { AttemptRecord, Subtopic, SubtopicProgress, Topic } from '../types';
-import { markSeen } from './pathStorage';
+import { markSeen, syncSeen } from './pathStorage';
 import { pathFor } from './practice';
 
 const STEP_TEXT: Partial<Record<PathStep, string>> = {
@@ -48,6 +49,7 @@ export default function ChapterPage() {
             services.progress.getSubtopicProgress(userId, s.id).catch(() => null),
             services.learner.listAttempts(userId, { subtopicId: s.id }).catch(() => []),
             services.content.getTopic(s.topicId).catch(() => null),
+            syncSeen(userId, s.id), // Lernpfad-Stand vom Server (anderes Gerät) in den Browser übernehmen
           ])
         : [null, [], null];
       if (!active) return;
@@ -266,6 +268,20 @@ export default function ChapterPage() {
         </section>
       )}
 
+      {(step === 'practice' || step === 'done') && canOfferTest(chapter.exercises) && (
+        <section className="flex flex-wrap items-center gap-4 rounded-2xl border border-indigo-200 bg-indigo-50 p-5" aria-labelledby="test-heading">
+          <ClipboardCheck aria-hidden="true" size={28} className="flex-none text-indigo-700" />
+          <div className="min-w-48 flex-1">
+            <h2 id="test-heading" className="font-semibold">
+              Kapitel-Test
+            </h2>
+            <p className="text-sm text-slate-700">{TEST_CONFIG.size} gemischte Aufgaben ohne Hilfen – zeig, was du kannst. Zählt stärker für deinen Score.</p>
+          </div>
+          <ButtonLink to={`/app/topics/${chapter.topicId}/chapters/${chapter.id}/test`} variant="secondary">
+            Test starten
+          </ButtonLink>
+        </section>
+      )}
     </article>
   );
 }

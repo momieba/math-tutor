@@ -83,7 +83,7 @@ export function createLocalGradingService(learner: LocalLearnerRepository): Grad
         exerciseId: e.id,
         subtopicId: e.subtopicId,
         topicId,
-        mode: 'practice',
+        mode: input.mode ?? 'practice',
         answerRaw: input.answerRaw,
         hintsUsed: session?.hintsUsed ?? 0,
         solutionViewed: session?.solutionViewed ?? false,

@@ -96,6 +96,8 @@ export interface AttemptSubmission {
   answerRaw: string;
   startedAt: string;
   submission?: { kind: SubmissionKind; dataUrl?: string; strokes?: unknown };
+  /** 'test' im Kapitel-Test (zählt im Score stärker); fehlt ⇒ 'practice'. */
+  mode?: AttemptMode;
 }
 
 /** Bewerteter Versuch, wie ihn der lokale Bewertungsdienst speichert (intern, lokaler Modus). */
@@ -134,6 +136,8 @@ export interface SubtopicProgress {
   /** Transparenz für den Schüler: aktive Deckel / Gründe. */
   caps: ScoreCap[];
   components: { mastery: number; typeCoverage: number };
+  /** Zeitpunkt der letzten Abgabe im Kapitel (ISO), fehlt ohne Versuch. Für Wiederholungs-Empfehlungen. */
+  lastActivityAt?: string;
 }
 
 export interface TopicProgress {

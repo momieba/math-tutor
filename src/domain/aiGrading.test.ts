@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { pythagoras } from '../content/pythagoras';
-import { aiGradingMarks, buildAiGradingPrompt, isTrustworthy, parseAiGrading, plainAnswer, withAiWork } from './aiGrading';
+import { aiGradingMarks, buildAiGradingPrompt, buildAiReadingPrompt, chooseFinalAnswer, isTrustworthy, parseAiGrading, parseAiReading, plainAnswer, withAiWork, type AiGrading } from './aiGrading';
 import { evaluateHandwriting, evaluateSubmission, UNCHECKED_WORK_MESSAGE } from './evaluate';
+import type { Verdict } from '../types';
 
 const valid = {
   readable: true,
@@ -132,5 +133,45 @@ describe('plainAnswer', () => {
   it('LaTeX-Ergebnis wird nach dem Übersetzen richtig bewertet', () => {
     const ex = { answer: { kind: 'numeric' as const, value: 17, tolerance: 0, unit: 'cm' }, commonMistakes: [] };
     expect(evaluateSubmission(ex, 'handwriting', parseAiGrading({ ...valid, finalAnswerRead: String.raw`$c = 17\text{ cm}$` })!.finalAnswerRead, true).verdict).toBe('correct');
+  });
+});
+
+describe('Endergebnis blind lesen (ohne Musterlösung)', () => {
+  const ex = pythagoras.subtopics.flatMap((s) => s.exercises).find((e) => e.id === 'pyth-hypotenuse-4')!;
+  const graded = (finalAnswerRead: string) => ({ ...parseAiGrading(valid)!, finalAnswerRead }) as AiGrading;
+  const blind = (finalAnswerRead: string, confidence = 0.9) => ({ readable: true, finalAnswerRead, confidence });
+  const verdictOf = (a: string): Verdict => (a.includes('17') ? 'correct' : 'incorrect');
+
+  it('der Prompt enthält die Aufgabe, aber weder Musterlösung noch Endergebnis', () => {
+    const prompt = buildAiReadingPrompt(ex);
+    expect(prompt).toContain('a = 8');
+    expect(prompt).not.toContain('Musterlösung');
+    expect(prompt).not.toContain(ex.solution.finalAnswer);
+    expect(prompt).not.toMatch(/\b17\b/);
+  });
+
+  it('parseAiReading prüft das Schema und entfernt LaTeX', () => {
+    expect(parseAiReading(JSON.stringify({ readable: true, finalAnswerRead: String.raw`$c = 17\text{ cm}$`, confidence: 2 }))).toEqual({ readable: true, finalAnswerRead: 'c = 17 cm', confidence: 1 });
+    expect(parseAiReading({ readable: 'ja', finalAnswerRead: '17' })).toBeNull();
+    expect(parseAiReading('kaputt')).toBeNull();
+  });
+
+  it('bevorzugt die blinde Lesung, wenn beide zum gleichen Urteil kommen', () => {
+    expect(chooseFinalAnswer(graded('c = 17'), blind('c = 17 cm'), verdictOf)).toBe('c = 17 cm');
+  });
+
+  it('unterschiedliches Urteil (Musterlösung „hineingelesen“?) ⇒ Rückfrage', () => {
+    expect(chooseFinalAnswer(graded('c = 17 cm'), blind('c = 18 cm'), verdictOf)).toBeNull();
+  });
+
+  it('blinde Lesung unsicher oder unlesbar ⇒ Rückfrage', () => {
+    expect(chooseFinalAnswer(graded('c = 17 cm'), blind('c = 17 cm', 0.3), verdictOf)).toBeNull();
+    expect(chooseFinalAnswer(graded('c = 17 cm'), { readable: false, finalAnswerRead: '', confidence: 0.9 }, verdictOf)).toBeNull();
+  });
+
+  it('ohne Korrektur reicht die blinde Lesung; ohne blinde Lesung zählt die der Korrektur', () => {
+    expect(chooseFinalAnswer(null, blind('c = 18 cm'), verdictOf)).toBe('c = 18 cm');
+    expect(chooseFinalAnswer(graded('c = 17 cm'), null, verdictOf)).toBe('c = 17 cm');
+    expect(chooseFinalAnswer(null, null, verdictOf)).toBeNull();
   });
 });

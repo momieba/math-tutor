@@ -1,6 +1,7 @@
 import { Download, KeyRound, Trash2, UserRound } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router';
+import { TextField } from '../components/AuthLayout';
 import { Button, Dialog, useToast } from '../components/ui';
 import { PRODUCT_NAME } from '../config/brand';
 import { useAuth } from '../context/AuthContext';
@@ -93,18 +94,17 @@ export default function AccountPage() {
         <h2 id="password-heading" className="flex items-center gap-2 text-xl font-semibold">
           <KeyRound aria-hidden="true" size={20} /> Passwort ändern
         </h2>
-        <label className="block max-w-sm">
-          Neues Passwort
-          <input
-            className="w-full rounded-lg border border-slate-300 px-3"
-            type="password"
-            required
-            minLength={8}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete="new-password"
-          />
-        </label>
+        <TextField
+          className="max-w-sm"
+          label="Neues Passwort"
+          type="password"
+          required
+          minLength={8}
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          autoComplete="new-password"
+          hint="Mindestens 8 Zeichen."
+        />
         {pwError && (
           <p role="alert" className="text-sm text-red-700">
             {pwError}

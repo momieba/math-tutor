@@ -1,7 +1,7 @@
-import { FunctionsHttpError, type AuthError, type Session as SbSession } from '@supabase/supabase-js';
+import type { AuthError, Session as SbSession } from '@supabase/supabase-js';
 import type { Profile, Role, Session } from '../../types';
 import type { AuthService } from '../types';
-import { getSupabase } from './client';
+import { getSupabase, isFunctionsError } from './client';
 
 interface ProfileRow {
   id: string;
@@ -36,7 +36,7 @@ function fail(error: AuthError | null): void {
 
 async function toSession(s: SbSession | null): Promise<Session | null> {
   if (!s) return null;
-  const sb = getSupabase();
+  const sb = await getSupabase();
   // Profil wird per DB-Trigger (handle_new_user) beim Sign-up angelegt.
   const { data } = await sb
     .from('profiles')
@@ -56,21 +56,32 @@ async function toSession(s: SbSession | null): Promise<Session | null> {
 }
 
 export function createSupabaseAuthService(): AuthService {
-  const sb = getSupabase();
   return {
     mode: 'supabase',
     async getSession() {
+      const sb = await getSupabase();
       const { data } = await sb.auth.getSession();
       return toSession(data.session);
     },
     onAuthChange(cb) {
-      const { data } = sb.auth.onAuthStateChange((_event, session) => {
-        // Supabase empfiehlt, im Callback keine weiteren Supabase-Aufrufe synchron auszuführen.
-        setTimeout(() => void toSession(session).then(cb), 0);
+      // Der Client wird asynchron geladen; wer sich vorher abmeldet, wird nicht mehr angemeldet.
+      let unsubscribe: (() => void) | null = null;
+      let cancelled = false;
+      void getSupabase().then((sb) => {
+        if (cancelled) return;
+        const { data } = sb.auth.onAuthStateChange((_event, session) => {
+          // Supabase empfiehlt, im Callback keine weiteren Supabase-Aufrufe synchron auszuführen.
+          setTimeout(() => void toSession(session).then(cb), 0);
+        });
+        unsubscribe = () => data.subscription.unsubscribe();
       });
-      return () => data.subscription.unsubscribe();
+      return () => {
+        cancelled = true;
+        unsubscribe?.();
+      };
     },
     async signUpWithEmail(email, password, displayName, consentVersion) {
+      const sb = await getSupabase();
       const { data, error } = await sb.auth.signUp({
         email,
         password,
@@ -80,26 +91,32 @@ export function createSupabaseAuthService(): AuthService {
       return toSession(data.session); // null ⇒ Bestätigungs-E-Mail erforderlich
     },
     async signInWithEmail(email, password) {
+      const sb = await getSupabase();
       const { data, error } = await sb.auth.signInWithPassword({ email, password });
       fail(error);
       return (await toSession(data.session))!;
     },
     async signInWithGoogle() {
+      const sb = await getSupabase();
       const { error } = await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: `${window.location.origin}/app` } });
       fail(error);
     },
     async signOut() {
+      const sb = await getSupabase();
       await sb.auth.signOut();
     },
     async requestPasswordReset(email) {
+      const sb = await getSupabase();
       const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: `${window.location.origin}/reset-password` });
       fail(error);
     },
     async updatePassword(password) {
+      const sb = await getSupabase();
       const { error } = await sb.auth.updateUser({ password });
       fail(error);
     },
     async acceptTerms(version) {
+      const sb = await getSupabase();
       const { error } = await sb.rpc('accept_terms', { p_version: version });
       if (error) throw new Error(error.message);
       const { data } = await sb.auth.getSession();
@@ -108,9 +125,10 @@ export function createSupabaseAuthService(): AuthService {
       return session;
     },
     async deleteAccount() {
+      const sb = await getSupabase();
       const { error } = await sb.functions.invoke('delete-account', { method: 'POST' });
       if (error) {
-        const body = error instanceof FunctionsHttpError ? ((await (error.context as Response).json().catch(() => null)) as { error?: string } | null) : null;
+        const body = isFunctionsError(error, 'FunctionsHttpError') ? ((await (error.context as Response).json().catch(() => null)) as { error?: string } | null) : null;
         throw new Error(body?.error ?? 'Das Konto konnte nicht gelöscht werden. Bitte versuche es später erneut.');
       }
       // Der Nutzer existiert nicht mehr; nur noch die lokale Sitzung entfernen.

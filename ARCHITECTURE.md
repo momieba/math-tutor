@@ -91,14 +91,14 @@ Lokal setzt `localGradingService` dieselben Regeln im Browser um.
 Pro Versuch: `credit = points × f`, mit `f = 0,25`, wenn die Musterlösung vor der Abgabe angesehen wurde, sonst `f = 1 − 0,15 × hintsUsed` (0–3 Hinweise ⇒ 1 / 0,85 / 0,70 / 0,55).
 Pro Aufgabe e (Stabilität): `q_e = 0,7 × credit(letzter) + 0,3 × credit(vorletzter)`. Bei nur einem Versuch ist `q_e = credit`, ohne Versuch `q_e = 0`.
 Pro Kapitel (Aufgabenpool, niemand muss alle Aufgaben bearbeiten):
-- `M = Σ w_e·q_e / max(Σ w_e, Z)` über die **zuletzt bearbeiteten 15 Aufgaben** (Fenster), mit `w = {1: 1, 2: 1,5, 3: 2}` je Schwierigkeit und Zielgewicht `Z = min(12, Gewicht aller Aufgaben)` (≈ 8 gemischte Aufgaben; kleine Kapitel: alle Aufgaben). Alte Fehler fallen so aus dem Fenster.
+- `M = Σ w_e·q_e / max(Σ w_e, Z)` über die **zuletzt bearbeiteten 15 Aufgaben** (Fenster), mit `w = {1: 1, 2: 1,5, 3: 2}` je Schwierigkeit (× 1,5, wenn der letzte Versuch aus einem Kapitel-Test stammt, `testWeight`) und Zielgewicht `Z = min(12, Gewicht aller Aufgaben)` (≈ 8 gemischte Aufgaben; kleine Kapitel: alle Aufgaben). Alte Fehler fallen so aus dem Fenster.
 - `T = |Anforderungsarten mit q_e ≥ 0,6| / |Anforderungsarten im Kapitel|` (Wissen, Rechnen, Sachaufgabe, Begründen, Zeichnen & Ablesen)
 - `roh = 100 × (0,8·M + 0,2·T)`
 - **Deckel** (es gilt das Minimum): `T < 1` ⇒ **max. 79** · keine Aufgabe höchster Schwierigkeit mit q ≥ 0,8 gelöst ⇒ **max. 89** · keine Bestätigung (gleiche Aufgabe zweimal mit credit ≥ 0,8 im Abstand von ≥ 20 h) ⇒ **max. 94**
 - `score = round(min(roh, Deckel))`, `completion = min(1, Gewicht der bearbeiteten Aufgaben / Z)`
 - Status: kein Versuch ⇒ `not_started` · score ≥ 80 und T = 1 ⇒ `mastered` · ≥ 2 Aufgaben bearbeitet und Ø q im Fenster < 0,5 ⇒ `needs_practice` · sonst `in_progress`
 
-Thema: `score = round(Ø Kapitel-Scores)` (ungewichtet), `completion = Ø Kapitel-completion`. Status: alle `not_started` ⇒ `not_started`, alle `mastered` ⇒ `mastered`, eins `needs_practice` ⇒ `needs_practice`, sonst `in_progress`.
+Thema: `score = round(Ø Kapitel-Scores der begonnenen Kapitel)` (ungewichtet; ohne begonnenes Kapitel 0), `completion = Ø Kapitel-completion` über alle Kapitel. Status: alle `not_started` ⇒ `not_started`, alle `mastered` ⇒ `mastered`, eins `needs_practice` ⇒ `needs_practice`, sonst `in_progress`.
 Die aktiven Deckel erklärt `CAP_EXPLANATION` dem Schüler.
 
 ### Aufgabenpools und adaptives Üben (`domain/exerciseSelection.ts`)
@@ -113,7 +113,7 @@ Kapitel haben 50–100 Aufgaben. Geübt wird mit „Nächste Aufgabe“; `nextEx
 
 ### Lernpfad (`domain/learningPath.ts`)
 Jedes Kapitel folgt demselben Schema mit einem Hauptbutton je Bildschirm: **1. Einstieg** (Lernziel, Video) · **2. Erklärung** (Regeln, Beispiel schrittweise) · **3. Formel-Check** (3 Aufgaben mit `checkpoint`, Formel vor Begriff) · **4. Erste Übungen** (3 leichte Rechenaufgaben) · **5. Üben** (`nextExercise`) · **6. Geschafft** (Score ≥ 80, Zusammenfassung, nächstes Kapitel).
-- Der Schritt wird aus den Versuchen abgeleitet (keine eigene Tabelle). „Einstieg/Erklärung gesehen bzw. übersprungen“ merkt sich der Browser (`pages/pathStorage.ts`).
+- Der Schritt wird aus den Versuchen abgeleitet (keine eigene Tabelle). „Einstieg/Erklärung gesehen bzw. übersprungen“ merkt sich der Browser (`pages/pathStorage.ts`), im Supabase-Modus zusätzlich die Tabelle `learning_path_seen` (Abgleich beim Öffnen des Kapitels, gesehen bleibt gesehen).
 - Zurück-Vorschlag: In Schritt 4/5 mit mindestens 3 Fehlschlägen unter den letzten 4 Versuchen empfiehlt die App Erklärung bzw. Video.
 - Formel-Check: `exercises.checkpoint` (`formula` | `concept`). Je Pool-Kapitel ≥ 3 Check-Aufgaben, ≥ 2 zur Formel, wenn das Kapitel Formeln hat (`content.test.ts`). Geschrieben werden sie je Thema in `checks.ts` mit `formulaChoice`/`formulaText` (`src/content/checkpoints.ts`).
 - Themenseite: „Weiter lernen“ ins nächste nicht beherrschte Kapitel; Kapitelliste zugeklappt mit Status-Ringen. Kapitel- und Aufgabenseite zeigen Details (Score-Erklärung, alle Aufgaben) nur unter „Mehr“.
@@ -132,10 +132,11 @@ Jedes Kapitel folgt demselben Schema mit einem Hauptbutton je Bildschirm: **1. E
 ## 10. Erweiterungspunkte
 | Feature | Ansatz |
 |---|---|
-| **KI-Korrektur Handschrift** (Ph. 2) | Prototyp in `grade-attempt` (siehe §5). Offen: eigener Anbieter mit EU-Verarbeitung und AV-Vertrag, `source='ai'`, KI-Urteil in die Punkte einbeziehen. |
+| **KI-Korrektur Handschrift** (Ph. 2) | Prototyp in `grade-attempt` (siehe §5), Korrekturen mit KI-Markierungen werden mit `source = 'ai'` gespeichert; das Endergebnis wird zusätzlich ohne Musterlösung gelesen (Gegenprobe). Offen: eigener Anbieter mit EU-Verarbeitung und AV-Vertrag, KI-Urteil in die Punkte einbeziehen. |
+| **Kapitel-Test** (Ph. 2) | `src/domain/chapterTest.ts` + `pages/TestPage.tsx`: 8 gemischte Aufgaben ohne Hilfen, Rückmeldung am Ende; Versuche mit `mode = 'test'`, im Score × 1,5. `tests`/`test_results` bleiben ungenutzt (Tests werden aus dem Pool gezogen). |
 | **Eltern/Lehrer** (Ph. 3) | Edge Function schreibt `parent_child` bzw. `teacher_student` (Einladungscode + Einwilligung). Zusätzliche Lese-Policies über `is_approved_parent_of(uid)` / `is_approved_teacher_of(uid)`. `progress` wird dann serverseitig befüllt. |
 | **Abos** (Ph. 3) | Stripe Checkout/Portal über Edge Function, Webhook schreibt `subscriptions`. Zugriff über `has_active_subscription(uid)`. Keine Zahlungsdaten in der DB. |
 | **Kapitelseiten aus Blöcken** | Tabelle `subtopic_blocks` (`block_type` + `content jsonb`, z. B. intro, rules, video, example, exercise_set, summary) und eine Block-Registry in der `ChapterPage`. Damit lassen sich neue Themen ohne Code-Änderung anlegen. |
-| **Wiederholung** (Ph. 4) | `RecommendationService` aus Domain-Logik; Bausteine: `attempts.submitted_at`, Deckel `no-confirmation`. |
+| **Wiederholung** (Ph. 4) | Umgesetzt in `src/domain/recommendations.ts` (Dashboard „Zum Wiederholen“): schwache Kapitel, fehlende Bestätigung (Deckel `no-confirmation`), lange nicht geübt (`lastActivityAt` je Kapitel). |
 
 Offene Aufgaben und Entscheidungen: [docs/TODO.md](./docs/TODO.md).

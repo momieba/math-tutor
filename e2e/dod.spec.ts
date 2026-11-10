@@ -134,7 +134,7 @@ test.describe('DoD 2+3 – Thema über Texteingabe finden und zuordnen', () => {
     await searchBox(page).fill('Gitarre spielen');
     await expect(page.getByText(/kein passendes Thema im Lehrplan gefunden/)).toBeVisible();
     await page.getByRole('button', { name: 'Alle Themen zeigen' }).click();
-    await expect(page.getByRole('option')).toHaveCount(6);
+    await expect(page.getByRole('option')).toHaveCount(7); // alle Themen der Wissensbasis
     // Es wurde nichts ungefragt angelegt
     expect((await learnerData(page)).activeTopics).toHaveLength(0);
   });

@@ -1,29 +1,73 @@
 import { GRADE_LIMITS } from '../../domain/gradingContract';
 
 /**
- * Foto vom Heft für den Upload aufbereiten: verkleinern, in Graustufen umwandeln und den Kontrast anheben,
+ * Foto vom Heft für den Upload aufbereiten: verkleinern, in Graustufen umwandeln und den Kontrast örtlich anheben,
  * sodass Papier weiß und Schrift dunkel wird. Das Ergebnis ist ein PNG, weil Speicher und Edge Function nur PNG annehmen;
  * mit weißem Papier bleibt es trotz Foto klein. Ist es noch zu groß, wird stufenweise weiter verkleinert.
  */
 export const PHOTO_SIDES = [1600, 1300, 1000, 800];
 
-/** Tonwertkorrektur relativ zur Papierhelligkeit (Median): bis 45 % ⇒ schwarz, ab 90 % ⇒ weiß. */
-export function enhanceForPng(data: Uint8ClampedArray): void {
-  const lum = new Uint8Array(data.length / 4);
-  const histogram = new Array<number>(256).fill(0);
-  for (let i = 0, p = 0; i < data.length; i += 4, p++) {
-    lum[p] = Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]);
-    histogram[lum[p]]++;
+export const ENHANCE_CONFIG = {
+  /** Kacheln je längerer Bildseite, in denen die Papierhelligkeit getrennt geschätzt wird (Schatten, schräges Licht). */
+  tilesPerSide: 16,
+  /** Papierhelligkeit einer Kachel = dieses Perzentil (Papier ist heller als Schrift und überwiegt fast immer). */
+  paperPercentile: 0.9,
+  /** Relativ zur örtlichen Papierhelligkeit: bis hier ⇒ schwarz, ab hier ⇒ weiß. */
+  blackAt: 0.45,
+  whiteAt: 0.88,
+};
+
+/**
+ * Tonwertkorrektur relativ zur örtlichen Papierhelligkeit: Das Bild wird in Kacheln geteilt, je Kachel wird die
+ * Papierhelligkeit geschätzt und zwischen den Kachelmitten bilinear interpoliert. So wird Papier auch im Schatten
+ * oder bei schrägem Licht weiß, ohne dass Schrift in hellen Bereichen ausbleicht.
+ */
+export function enhanceForPng(data: Uint8ClampedArray, width: number, height = data.length / 4 / width): void {
+  const { tilesPerSide, paperPercentile, blackAt, whiteAt } = ENHANCE_CONFIG;
+  const lum = new Uint8Array(width * height);
+  for (let i = 0, p = 0; p < lum.length; i += 4, p++) lum[p] = Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]);
+
+  const tile = Math.max(8, Math.ceil(Math.max(width, height) / tilesPerSide));
+  const cols = Math.ceil(width / tile);
+  const rows = Math.ceil(height / tile);
+  const paper = new Float32Array(cols * rows);
+  const histogram = new Uint32Array(256);
+  for (let ty = 0; ty < rows; ty++) {
+    for (let tx = 0; tx < cols; tx++) {
+      histogram.fill(0);
+      const x1 = Math.min(width, (tx + 1) * tile);
+      const y1 = Math.min(height, (ty + 1) * tile);
+      for (let y = ty * tile; y < y1; y++) for (let x = tx * tile; x < x1; x++) histogram[lum[y * width + x]]++;
+      const target = (x1 - tx * tile) * (y1 - ty * tile) * paperPercentile;
+      let v = 0;
+      for (let count = histogram[0]; v < 255 && count < target; ) count += histogram[++v];
+      paper[ty * cols + tx] = Math.max(v, 40);
+    }
   }
-  let median = 0;
-  for (let count = 0; median < 255 && count + histogram[median] < lum.length / 2; median++) count += histogram[median];
-  const white = Math.max(median * 0.9, 40);
-  const black = Math.min(median * 0.45, white - 20);
-  for (let i = 0, p = 0; i < data.length; i += 4, p++) {
-    const y = lum[p];
-    const v = y <= black ? 0 : y >= white ? 255 : Math.round(((y - black) * 255) / (white - black));
-    data[i] = data[i + 1] = data[i + 2] = v;
-    data[i + 3] = 255;
+
+  for (let y = 0; y < height; y++) {
+    // Position zwischen den Kachelmitten (am Rand konstant fortgesetzt)
+    const gy = Math.min(Math.max((y + 0.5) / tile - 0.5, 0), rows - 1);
+    const r0 = Math.floor(gy);
+    const r1 = Math.min(r0 + 1, rows - 1);
+    const fy = gy - r0;
+    for (let x = 0; x < width; x++) {
+      const gx = Math.min(Math.max((x + 0.5) / tile - 0.5, 0), cols - 1);
+      const c0 = Math.floor(gx);
+      const c1 = Math.min(c0 + 1, cols - 1);
+      const fx = gx - c0;
+      const top = paper[r0 * cols + c0] * (1 - fx) + paper[r0 * cols + c1] * fx;
+      const bottom = paper[r1 * cols + c0] * (1 - fx) + paper[r1 * cols + c1] * fx;
+      const local = top * (1 - fy) + bottom * fy;
+      const white = local * whiteAt;
+      const black = Math.min(local * blackAt, white - 20);
+      const p = y * width + x;
+      const l = lum[p];
+      const out = l <= black ? 0 : l >= white ? 255 : Math.round(((l - black) * 255) / (white - black));
+      const i = p * 4;
+      data[i] = data[i + 1] = data[i + 2] = out;
+      data[i + 3] = 255;
+    }
   }
 }
 
@@ -59,7 +103,7 @@ export async function preparePhoto(file: File): Promise<string> {
     canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
     const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    enhanceForPng(pixels.data);
+    enhanceForPng(pixels.data, canvas.width, canvas.height);
     ctx.putImageData(pixels, 0, 0);
     const dataUrl = canvas.toDataURL('image/png');
     if (dataUrlBytes(dataUrl) <= GRADE_LIMITS.imageBytes * 0.95) return dataUrl;

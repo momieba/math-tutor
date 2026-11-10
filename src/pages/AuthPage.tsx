@@ -1,8 +1,19 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
+import { AuthShell, authLink, FormMessage, OrDivider, TextField } from '../components/AuthLayout';
 import { ConsentCheckbox } from '../components/ConsentCheckbox';
+import { Button } from '../components/ui';
 import { CONSENT_VERSION } from '../config/legal';
 import { services } from '../services';
+
+/** „G“ von Google als neutrales Zeichen (kein Markenlogo), damit der Button auch ohne Bild erkennbar ist. */
+function GoogleMark() {
+  return (
+    <span aria-hidden="true" className="flex h-5 w-5 items-center justify-center rounded-full border border-slate-300 text-xs font-bold text-slate-700">
+      G
+    </span>
+  );
+}
 
 /** Login und Registrierung (E-Mail + Google). Registrierung nur mit Einwilligung (Version in src/config/legal.ts). */
 export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
@@ -15,15 +26,16 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const register = mode === 'register';
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError(null);
     try {
-      if (mode === 'register') {
+      if (register) {
         const s = await services.auth.signUpWithEmail(email, password, name, CONSENT_VERSION);
-        if (!s) return setInfo('Bitte bestätige deine E-Mail-Adresse über den Link in deinem Postfach.');
+        if (!s) return setInfo('Fast geschafft! Bitte bestätige deine E-Mail-Adresse über den Link in deinem Postfach.');
       } else {
         await services.auth.signInWithEmail(email, password);
       }
@@ -45,31 +57,49 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
     }
   }
 
-  const input = 'w-full rounded-lg border border-slate-300 px-3';
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
-      <form onSubmit={submit} className="w-full max-w-sm bg-white rounded-2xl shadow-sm p-6 space-y-4">
-        <h1 className="text-2xl font-bold">{mode === 'login' ? 'Anmelden' : 'Konto erstellen'}</h1>
-        {services.mode === 'local' && <p className="text-sm text-amber-700 bg-amber-50 rounded p-2">Lokaler Modus: Daten bleiben nur in diesem Browser.</p>}
-        {mode === 'register' && (
-          <label className="block">Name<input className={input} value={name} onChange={(e) => setName(e.target.value)} autoComplete="nickname" /></label>
-        )}
-        <label className="block">E-Mail<input className={input} type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" /></label>
-        <label className="block">Passwort<input className={input} type="password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} /></label>
-        {mode === 'login' && (
-          <p className="text-sm -mt-2">
-            <Link to="/forgot-password" className="text-indigo-700 min-h-11 inline-flex items-center">Passwort vergessen?</Link>
+    <AuthShell
+      title={register ? 'Konto erstellen' : 'Anmelden'}
+      subtitle={register ? 'Kostenlos und in einer Minute startklar.' : 'Schön, dass du wieder da bist.'}
+      onSubmit={submit}
+      footer={
+        <Link to={register ? '/login' : '/register'} className="inline-flex min-h-11 items-center gap-1 text-slate-600 hover:text-slate-900">
+          {register ? 'Schon ein Konto?' : 'Noch kein Konto?'} <span className="font-semibold text-indigo-700 underline-offset-2 hover:underline">{register ? 'Anmelden' : 'Registrieren'}</span>
+        </Link>
+      }
+    >
+      {services.mode === 'local' && <FormMessage tone="info">Lokaler Modus: Daten bleiben nur in diesem Browser.</FormMessage>}
+      {register && <TextField label="Name" value={name} onChange={(e) => setName(e.target.value)} autoComplete="nickname" hint="Wird nur dir angezeigt, z. B. dein Vorname." />}
+      <TextField label="E-Mail" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
+      <div>
+        <TextField
+          label="Passwort"
+          type="password"
+          required
+          minLength={8}
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          autoComplete={register ? 'new-password' : 'current-password'}
+          hint={register ? 'Mindestens 8 Zeichen.' : undefined}
+        />
+        {!register && (
+          <p className="text-right text-sm">
+            <Link to="/forgot-password" className={authLink}>
+              Passwort vergessen?
+            </Link>
           </p>
         )}
-        {mode === 'register' && <ConsentCheckbox checked={consent} onChange={setConsent} required />}
-        {error && <p role="alert" className="text-red-700 text-sm">{error}</p>}
-        {info && <p role="status" className="text-green-700 text-sm">{info}</p>}
-        <button disabled={busy} className="w-full rounded-lg bg-indigo-600 text-white disabled:opacity-50">{mode === 'login' ? 'Anmelden' : 'Registrieren'}</button>
-        <button type="button" onClick={() => void google()} className="w-full rounded-lg border border-slate-300">Mit Google fortfahren</button>
-        <p className="text-sm text-center">
-          {mode === 'login' ? <Link to="/register" className="text-indigo-700 min-h-11 inline-flex items-center">Noch kein Konto? Registrieren</Link> : <Link to="/login" className="text-indigo-700 min-h-11 inline-flex items-center">Schon ein Konto? Anmelden</Link>}
-        </p>
-      </form>
-    </div>
+      </div>
+      {register && <ConsentCheckbox checked={consent} onChange={setConsent} required />}
+      {error && <FormMessage tone="error">{error}</FormMessage>}
+      {info && <FormMessage tone="success">{info}</FormMessage>}
+      <Button type="submit" variant="primary" loading={busy} className="w-full">
+        {register ? 'Registrieren' : 'Anmelden'}
+      </Button>
+      <OrDivider />
+      <Button onClick={() => void google()} variant="secondary" icon={<GoogleMark />} className="w-full">
+        Mit Google fortfahren
+      </Button>
+    </AuthShell>
   );
 }

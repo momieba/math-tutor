@@ -296,12 +296,69 @@ export function parseNumberSet(raw: string): number[] | null {
 
 const close = (a: number, b: number, tolerance: number) => Math.abs(a - b) <= tolerance + 1e-9;
 
+/** Folgerungspfeile in Herleitungen: „√65 ≈ 8,06 → 8,1“, „x² = 49 ⇒ x = ±7“, auch „->“ und „=>“. */
+const ARROW = /→|⇒|⟹|⟶|=>|->/;
+/** Einheit am Ende eines Abschnitts („8,06 cm“ → „cm“, „17 m²“ → „m^2“). */
+const TRAILING_UNIT = /\d[^\d]*?(\p{L}+(?:\^-?\d+)?)\s*[.!]?\s*$/u;
+
+/**
+ * Bei einer Herleitung mit Pfeilen zählt, was nach dem letzten Pfeil steht („c = √65 ≈ 8,06 → 8,1“ ⇒ „8,1“).
+ * Wechselt dabei die Einheit („17 cm → 0,17 m“), ist unklar, welches Ergebnis gemeint ist ⇒ `null` (Rückfrage).
+ * Ohne Pfeil bleibt die Eingabe unverändert.
+ */
+export function afterLastArrow(raw: string): string | null {
+  const parts = preprocess(raw).split(ARROW);
+  if (parts.length === 1) return raw;
+  const last = parts[parts.length - 1].trim();
+  if (!last) return null;
+  const unitBefore = TRAILING_UNIT.exec(parts[parts.length - 2])?.[1]?.toLowerCase();
+  const unitAfter = TRAILING_UNIT.exec(last)?.[1]?.toLowerCase();
+  if (unitBefore && unitAfter && unitBefore !== unitAfter) return null;
+  return last;
+}
+
+/** Wörter, die neben einer Freitext-Antwort stehen dürfen („Die Hypotenuse ist PR“, „Ja, es ist rechtwinklig“). */
+const TEXT_FILLERS = new Set([
+  'der', 'die', 'das', 'den', 'dem', 'des', 'ein', 'eine', 'es', 'ist', 'sind', 'heißt', 'lautet', 'also', 'nämlich',
+  'antwort', 'lösung', 'ergebnis', 'fachbegriff', 'begriff', 'seite', 'strecke', 'hypotenuse', 'kathete',
+  'dreieck', 'rechtwinklig', 'rechtwinkliges', 'zahl',
+]);
+const NEGATIONS = new Set(['nicht', 'kein', 'keine', 'nein']);
+
+/**
+ * Freitext-Antwort: genau gleich (normalisiert) oder die Antwort steht als eigenes Wort in einem kurzen Satz aus
+ * Füllwörtern („Seite c“, „Die Hypotenuse ist PR“, „Ja, es ist rechtwinklig“). Erlaubt ist zusätzlich ein
+ * großgeschriebenes Formelzeichen hinter einem Fachbegriff („Grundwert G“). Verneinungen („nicht“, „kein“) oder
+ * weitere Inhaltswörter („a oder c“) ⇒ keine Übereinstimmung.
+ */
+export function textMatches(accepted: string[], raw: string): boolean {
+  const normalized = accepted.map(normalizeText);
+  if (normalized.includes(normalizeText(raw))) return true;
+  const words = preprocess(raw).split(/[^\p{L}\d^+]+/u).filter(Boolean);
+  const lower = words.map((w) => w.toLowerCase());
+  for (const a of normalized) {
+    const hits = lower.filter((w) => w === a).length;
+    if (hits !== 1) continue;
+    if (a !== 'nein' && lower.some((w) => NEGATIONS.has(w))) continue;
+    const rest = words.filter((_, i) => lower[i] !== a);
+    const symbolAfterTerm = (w: string) => a.length > 2 && /^\p{Lu}$/u.test(w);
+    if (rest.every((w) => TEXT_FILLERS.has(w.toLowerCase()) || symbolAfterTerm(w))) return true;
+  }
+  return false;
+}
+
 /** Bedeuten zwei Eingaben für das Antwortformat dasselbe? (Für typische Fehler, z. B. „(3|2)“ = „x = 3; y = 2“.) */
 function sameInput(kind: ExpectedAnswer['kind'], a: string, b: string): boolean {
   if (normalizeText(a) === normalizeText(b)) return true;
   if (kind === 'numeric') {
     const [x, y] = [parseNumber(a), parseNumber(b)];
     return x !== null && x === y;
+  }
+  if (kind === 'numeric-set') {
+    const [x, y] = [parseNumberSet(a), parseNumberSet(b)];
+    if (x === null || y === null) return false;
+    const [ux, uy] = [unique(x, 0), unique(y, 0)].map((v) => v.sort((m, n) => m - n));
+    return ux.length === uy.length && ux.every((v, i) => close(v, uy[i], 0));
   }
   if (kind === 'point') {
     const [p, q] = [parsePoint(a), parsePoint(b)];
@@ -312,6 +369,11 @@ function sameInput(kind: ExpectedAnswer['kind'], a: string, b: string): boolean 
     return f !== null && g !== null && close(f.m, g.m, 0) && close(f.b, g.b, 0);
   }
   return false;
+}
+
+/** Werte ohne Wiederholungen: „5; 5“ (doppelte Lösung zweimal genannt) zählt wie „5“. */
+function unique(values: number[], tolerance: number): number[] {
+  return values.filter((v, i) => values.findIndex((w) => close(v, w, tolerance)) === i);
 }
 
 function matchMistake(ex: GradableExercise, raw: string) {
@@ -351,6 +413,11 @@ export function evaluateAnswer(ex: GradableExercise, raw: string): EvaluationRes
   const a = ex.answer;
   const unclear = (msg: string): EvaluationResult => ({ verdict: 'unclear', points: 0, feedback: msg, marks: [{ color: 'yellow', message: msg }] });
   if (!raw.trim()) return unclear('Keine Antwort erkannt.');
+  if (a.kind !== 'choice' && a.kind !== 'text') {
+    const derived = afterLastArrow(raw);
+    if (derived === null) return unclear('Nach dem Pfeil ändert sich die Einheit. Bitte gib nur ein Ergebnis mit einer Einheit an.');
+    raw = derived;
+  }
 
   let points = 0;
   switch (a.kind) {
@@ -364,8 +431,9 @@ export function evaluateAnswer(ex: GradableExercise, raw: string): EvaluationRes
       break;
     }
     case 'numeric-set': {
-      const got = parseNumberSet(raw);
-      if (got === null) return unclear('Bitte gib die Lösungen als Zahlen getrennt durch Semikolon ein, z. B. 3; -5.');
+      const parsed = parseNumberSet(raw);
+      if (parsed === null) return unclear('Bitte gib die Lösungen als Zahlen getrennt durch Semikolon ein, z. B. 3; -5.');
+      const got = unique(parsed, a.tolerance);
       const remaining = [...a.values];
       let hits = 0;
       let extras = 0;
@@ -380,7 +448,7 @@ export function evaluateAnswer(ex: GradableExercise, raw: string): EvaluationRes
       break;
     }
     case 'text':
-      points = a.accepted.map(normalizeText).includes(normalizeText(raw)) ? 1 : 0;
+      points = textMatches(a.accepted, raw) ? 1 : 0;
       break;
     case 'point': {
       const p = parsePoint(raw);
@@ -398,6 +466,7 @@ export function evaluateAnswer(ex: GradableExercise, raw: string): EvaluationRes
 
   if (points === 1) return { verdict: 'correct', points, feedback: 'Richtig!', marks: [{ color: 'green', message: 'Ergebnis korrekt.' }] };
   const mistake = matchMistake(ex, raw);
+  if (mistake?.points !== undefined) points = Math.min(Math.max(mistake.points, 0), 0.99); // Teilpunkte laut Redaktion
   const feedback = mistake?.feedback ?? (points > 0 ? 'Teilweise richtig – es fehlt noch etwas.' : 'Das stimmt noch nicht. Nutze einen Hinweis oder prüfe deinen Rechenweg.');
   return {
     verdict: points > 0 ? 'partial' : 'incorrect',
