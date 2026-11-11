@@ -185,8 +185,8 @@ Deno.test('ohne eingetipptes Ergebnis: Rückfrage, wenn nichts gelesen werden ka
       [{ gradeWork: async () => null }, { kind: 'canvas', dataUrl: PNG }, /gerade nicht automatisch gelesen/], // KI nicht freigeschaltet
       [{}, { kind: 'canvas', dataUrl: PNG }, /gerade nicht automatisch gelesen/], // keine KI konfiguriert
       [{ gradeWork: async () => { throw new Error('Gemini 503'); } }, { kind: 'canvas', dataUrl: PNG }, /gerade nicht automatisch gelesen/],
-      [{ gradeWork: async () => aiGrading({ confidence: 0.3 }) }, { kind: 'photo', dataUrl: PNG }, /nicht sicher lesen/],
-      [{ gradeWork: async () => aiGrading({ finalAnswerRead: '' }) }, { kind: 'canvas', dataUrl: PNG }, /nicht sicher lesen/],
+      [{ gradeWork: async () => aiGrading({ confidence: 0.3 }) }, { kind: 'photo', dataUrl: PNG }, /kein Ergebnis erkennen/],
+      [{ gradeWork: async () => aiGrading({ finalAnswerRead: '' }) }, { kind: 'canvas', dataUrl: PNG }, /kein Ergebnis erkennen/],
     ];
     for (const [over, submission, message] of cases) {
       const { handler, calls } = setup(over);
@@ -221,7 +221,7 @@ Deno.test('Gegenprobe widerspricht der Korrektur (Musterlösung hineingelesen?) 
   const { handler, calls } = setup({ gradeWork: async () => aiGrading({ finalAnswerRead: '15' }), readAnswer: async () => blindReading('16') });
   const body = await (await handler(writtenOnly())).json();
   assert.equal(body.status, 'unclear');
-  assert.match(body.evaluation.feedback, /nicht sicher lesen/);
+  assert.match(body.evaluation.feedback, /kein Ergebnis erkennen/);
   assert.equal(calls.recorded.length, 0);
 });
 

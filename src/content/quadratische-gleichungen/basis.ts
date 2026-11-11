@@ -59,7 +59,7 @@ export const quadratischBasis: AuthoredTopic = {
           type: 'equation',
           requirement: 'calculation',
           difficulty: 1,
-          prompt: 'Löse $x^2 = 49$. Gib alle Lösungen getrennt durch Semikolon an (z. B. `2; -2`).',
+          prompt: 'Bestimme alle Lösungen der Gleichung $x^2 = 49$.',
           answer: { kind: 'numeric-set', values: [7, -7], tolerance: 0 },
           hints: ['Welche Zahl mal sich selbst ergibt $49$?', 'Denke auch an negative Zahlen.', '$(-7) \\cdot (-7) = 49$'],
           solution: { steps: [{ text: 'Wurzel ziehen:', math: 'x = \\pm\\sqrt{49} = \\pm 7' }], finalAnswer: '$L = \\{-7;\\, 7\\}$' },
@@ -91,7 +91,7 @@ export const quadratischBasis: AuthoredTopic = {
           type: 'equation',
           requirement: 'calculation',
           difficulty: 2,
-          prompt: 'Löse $3x^2 - 75 = 0$. Lösungen durch Semikolon trennen.',
+          prompt: 'Bestimme alle Lösungen der Gleichung $3x^2 - 75 = 0$.',
           answer: { kind: 'numeric-set', values: [5, -5], tolerance: 0 },
           hints: ['Bringe $75$ auf die andere Seite.', 'Teile durch $3$: $x^2 = 25$.', 'Ziehe die Wurzel – zwei Lösungen!'],
           solution: {
@@ -111,7 +111,7 @@ export const quadratischBasis: AuthoredTopic = {
           type: 'handwriting',
           requirement: 'calculation',
           difficulty: 2,
-          prompt: 'Löse schriftlich $(x - 2)^2 = 16$. Gib beide Lösungen durch Semikolon getrennt ein.',
+          prompt: 'Löse schriftlich $(x - 2)^2 = 16$. Gib beide Lösungen an.',
           answer: { kind: 'numeric-set', values: [6, -2], tolerance: 0 },
           hints: ['Ziehe auf beiden Seiten die Wurzel – mit $\\pm$.', '$x - 2 = 4$ oder $x - 2 = -4$.', 'Addiere jeweils $2$.'],
           solution: {
@@ -157,7 +157,7 @@ export const quadratischBasis: AuthoredTopic = {
           type: 'equation',
           requirement: 'calculation',
           difficulty: 1,
-          prompt: 'Löse $(x - 3)(x + 4) = 0$. Lösungen durch Semikolon trennen.',
+          prompt: 'Löse $(x - 3)(x + 4) = 0$. Gib alle Lösungen an.',
           answer: { kind: 'numeric-set', values: [3, -4], tolerance: 0 },
           hints: ['Wann ist ein Produkt null?', 'Setze jeden Faktor einzeln gleich null.', '$x - 3 = 0$ oder $x + 4 = 0$.'],
           solution: {
@@ -176,7 +176,7 @@ export const quadratischBasis: AuthoredTopic = {
           type: 'equation',
           requirement: 'calculation',
           difficulty: 2,
-          prompt: 'Löse $x^2 + 6x = 0$. Lösungen durch Semikolon trennen.',
+          prompt: 'Löse $x^2 + 6x = 0$. Gib alle Lösungen an.',
           answer: { kind: 'numeric-set', values: [0, -6], tolerance: 0 },
           hints: ['Welcher Faktor steckt in beiden Summanden?', 'Klammere $x$ aus: $x(x + 6) = 0$.', 'Wende den Satz vom Nullprodukt an.'],
           solution: {
@@ -220,7 +220,7 @@ export const quadratischBasis: AuthoredTopic = {
           type: 'handwriting',
           requirement: 'calculation',
           difficulty: 3,
-          prompt: 'Löse schriftlich $2x^2 - 8x = 0$ durch Ausklammern. Gib alle Lösungen durch Semikolon getrennt ein.',
+          prompt: 'Löse schriftlich $2x^2 - 8x = 0$ durch Ausklammern. Gib alle Lösungen an.',
           answer: { kind: 'numeric-set', values: [0, 4], tolerance: 0 },
           hints: ['Klammere den größten gemeinsamen Faktor aus.', '$2x(x - 4) = 0$', 'Wann ist $2x = 0$, wann $x - 4 = 0$?'],
           solution: {
@@ -270,7 +270,7 @@ export const quadratischBasis: AuthoredTopic = {
           type: 'equation',
           requirement: 'calculation',
           difficulty: 2,
-          prompt: 'Löse $x^2 + 2x - 15 = 0$ mit der pq-Formel. Lösungen durch Semikolon trennen.',
+          prompt: 'Löse $x^2 + 2x - 15 = 0$ mit der pq-Formel. Gib alle Lösungen an.',
           answer: { kind: 'numeric-set', values: [3, -5], tolerance: 0 },
           hints: ['Lies ab: $p = 2$, $q = -15$.', '$-\\frac{p}{2} = -1$ und $\\left(\\frac{p}{2}\\right)^2 - q = 1 + 15 = 16$.', '$x = -1 \\pm 4$'],
           solution: {
@@ -318,7 +318,7 @@ export const quadratischBasis: AuthoredTopic = {
           type: 'equation',
           requirement: 'calculation',
           difficulty: 3,
-          prompt: 'Löse $2x^2 - 4x - 6 = 0$. Lösungen durch Semikolon trennen.',
+          prompt: 'Löse $2x^2 - 4x - 6 = 0$. Gib alle Lösungen an.',
           answer: { kind: 'numeric-set', values: [3, -1], tolerance: 0 },
           hints: ['Die Gleichung ist noch nicht in Normalform.', 'Teile durch $2$: $x^2 - 2x - 3 = 0$.', '$x = 1 \\pm \\sqrt{1 + 3}$'],
           solution: {
@@ -338,7 +338,7 @@ export const quadratischBasis: AuthoredTopic = {
           type: 'handwriting',
           requirement: 'calculation',
           difficulty: 3,
-          prompt: 'Löse schriftlich $x^2 - 10x + 25 = 0$ mit der pq-Formel. Gib alle Lösungen ein (bei mehreren durch Semikolon getrennt).',
+          prompt: 'Löse schriftlich $x^2 - 10x + 25 = 0$ mit der pq-Formel. Gib alle Lösungen an.',
           answer: { kind: 'numeric-set', values: [5], tolerance: 0 },
           hints: ['$p = -10$, $q = 25$.', '$D = 25 - 25 = 0$.', 'Bei $D = 0$ gibt es genau eine Lösung: $x = -\\frac{p}{2}$.'],
           solution: {

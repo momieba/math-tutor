@@ -3,7 +3,7 @@ import type { AuthoredExercise } from '../../types';
 import { fromTemplate, linearTerm, num, round, shuffledChoices, txt } from '../templates';
 
 const OBJ = ['Quadratische Gleichungen lösen'];
-const SET_HINT = 'Gib alle Lösungen getrennt durch Semikolon an.';
+const SET_HINT = 'Gib alle Lösungen an.';
 const COUNT = [
   { id: 'a', label: 'keine Lösung' },
   { id: 'b', label: 'genau eine Lösung' },

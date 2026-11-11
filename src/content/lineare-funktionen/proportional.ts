@@ -239,7 +239,7 @@ export const proportional: AuthoredSubtopic = {
       build: ([p, q]) => {
         const m = p / q;
         return {
-          prompt: `Die abgebildete Ursprungsgerade geht durch $P(${q}\\,|\\,${p})$. Lies ihre Gleichung ab und gib sie in der Form $y = mx$ ein.`,
+          prompt: `Die abgebildete Ursprungsgerade geht durch $P(${q}\\,|\\,${p})$. Lies ihre Gleichung ab und gib sie in der Form $y = mx$ an.`,
           figure: plane(`Koordinatensystem mit einer Geraden durch den Ursprung und den Punkt (${q}|${p}).`, [{ m, b: 0 }], [{ x: q, y: p, label: `P(${q}|${p})` }]),
           answer: { kind: 'linear', m, b: 0, tolerance: 0.001 },
           hints: ['Die Gerade geht durch den Ursprung, also $y = mx$.', `Vom Ursprung zu $P$: $${q}$ nach rechts und $${p}$ nach ${p > 0 ? 'oben' : 'unten'}.`, `$m = \\frac{${p}}{${q}}$`],

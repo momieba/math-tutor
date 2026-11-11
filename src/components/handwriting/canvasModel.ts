@@ -114,7 +114,46 @@ export function exportSize(maxSide: number, world: { width: number; height: numb
   return { width: Math.round(world.width * scale), height: Math.round(world.height * scale), scale };
 }
 
-/** Bildschirmkoordinate → Papierkoordinate (berücksichtigt Zoom/Skalierung des Elements). */
+// ---------------------------------------------------------------- Papier, Ansicht und Zoom
+
+/**
+ * Das Papier ist größer als eine Seite (WORLD): eine Seite nach links, eine nach rechts und drei Seiten nach unten.
+ * Die Startseite liegt bei (0, 0) – alte Striche (nur eine Seite) bleiben so gültig.
+ */
+export const PAPER = { minX: -WORLD.width, maxX: 2 * WORLD.width, minY: 0, maxY: 3 * WORLD.height } as const;
+export const PAPER_SIZE = { width: PAPER.maxX - PAPER.minX, height: PAPER.maxY - PAPER.minY } as const;
+
+export const ZOOM_MIN = 0.5;
+export const ZOOM_MAX = 3;
+/** Stufen für die Zoom-Buttons; mit zwei Fingern ist jeder Wert dazwischen möglich. */
+export const ZOOM_LEVELS = [0.5, 0.75, 1, 1.5, 2, 3] as const;
+
+export const clampZoom = (z: number) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z));
+
+export function nextZoom(current: number, direction: 1 | -1): number {
+  if (direction > 0) return ZOOM_LEVELS.find((z) => z > current + 1e-6) ?? ZOOM_MAX;
+  return [...ZOOM_LEVELS].reverse().find((z) => z < current - 1e-6) ?? ZOOM_MIN;
+}
+
+/** Sichtbarer Ausschnitt: Bildschirmpixel je Papiereinheit und Scrollposition (in Bildschirmpixeln). */
+export interface View {
+  scale: number;
+  scrollLeft: number;
+  scrollTop: number;
+}
+
+/** Bildschirmpunkt relativ zur linken oberen Ecke der Ansicht → Papierkoordinate. */
+export function viewToWorld(px: number, py: number, v: View): { x: number; y: number } {
+  return { x: (px + v.scrollLeft) / v.scale + PAPER.minX, y: (py + v.scrollTop) / v.scale + PAPER.minY };
+}
+
+/** Scrollposition nach einem Zoom, sodass der Papierpunkt unter (px, py) an derselben Stelle bleibt. */
+export function zoomAround(v: View, newScale: number, px: number, py: number): View {
+  const w = viewToWorld(px, py, v);
+  return { scale: newScale, scrollLeft: (w.x - PAPER.minX) * newScale - px, scrollTop: (w.y - PAPER.minY) * newScale - py };
+}
+
+/** Bildschirmkoordinate → Papierkoordinate für ein Element, das genau eine Seite (WORLD) zeigt (Export, Tests). */
 export function toWorld(clientX: number, clientY: number, rect: { left: number; top: number; width: number; height: number }): { x: number; y: number } {
   return {
     x: ((clientX - rect.left) / rect.width) * WORLD.width,
@@ -122,10 +161,23 @@ export function toWorld(clientX: number, clientY: number, rect: { left: number; 
   };
 }
 
-export const ZOOM_LEVELS = [1, 1.5, 2, 3] as const;
-
-export function nextZoom(current: number, direction: 1 | -1): number {
-  const i = ZOOM_LEVELS.findIndex((z) => z >= current);
-  const idx = Math.min(ZOOM_LEVELS.length - 1, Math.max(0, (i < 0 ? ZOOM_LEVELS.length - 1 : i) + direction));
-  return ZOOM_LEVELS[idx];
+/**
+ * Bereich, der exportiert wird: alle sichtbaren Stift- und Linienstriche plus Rand, mindestens 600 × 400 Einheiten,
+ * auf das Papier begrenzt. Ohne Striche: die Startseite. So wird nicht das ganze (große, meist leere) Papier verschickt.
+ */
+export function strokeBounds(strokes: Stroke[], margin = 40): { x: number; y: number; width: number; height: number } {
+  const pts = strokes.filter((s) => s.tool !== 'eraser').flatMap((s) => s.points);
+  if (pts.length === 0) return { x: 0, y: 0, width: WORLD.width, height: WORLD.height };
+  let x0 = Math.min(...pts.map((p) => p.x)) - margin;
+  let x1 = Math.max(...pts.map((p) => p.x)) + margin;
+  let y0 = Math.min(...pts.map((p) => p.y)) - margin;
+  let y1 = Math.max(...pts.map((p) => p.y)) + margin;
+  const grow = (lo: number, hi: number, min: number): [number, number] => (hi - lo >= min ? [lo, hi] : [(lo + hi - min) / 2, (lo + hi + min) / 2]);
+  [x0, x1] = grow(x0, x1, 600);
+  [y0, y1] = grow(y0, y1, 400);
+  x0 = Math.max(PAPER.minX, x0);
+  y0 = Math.max(PAPER.minY, y0);
+  x1 = Math.min(PAPER.maxX, x1);
+  y1 = Math.min(PAPER.maxY, y1);
+  return { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
 }

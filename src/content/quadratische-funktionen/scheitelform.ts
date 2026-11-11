@@ -123,7 +123,7 @@ export const scheitelform: AuthoredSubtopic = {
       build: ({ a, d, e }) => ({
         prompt: `Gib den Scheitelpunkt der Parabel $${fx(vertexTerm(a, d, e))}$ an.`,
         answer: { kind: 'point', x: d, y: e, tolerance: 0.001 },
-        hints: ['Vergleiche mit $a(x - d)^2 + e$.', d < 0 ? `$(x + ${num(-d)}) = (x - (${num(d)}))$` : `In der Klammer steht $x - ${num(d)}$.`, `Eingabe z. B. als $(${num(d)}|${num(e)})$.`],
+        hints: ['Vergleiche mit $a(x - d)^2 + e$.', d < 0 ? `$(x + ${num(-d)}) = (x - (${num(d)}))$` : `In der Klammer steht $x - ${num(d)}$.`, `Schreibe den Scheitelpunkt als $S(${num(d)}\\,|\\,${num(e)})$.`],
         solution: { steps: [{ text: `Aus der Klammer: $d = ${num(d)}$, der Summand hinten: $e = ${num(e)}$.` }], finalAnswer: `$${pt(d, e)}$` },
         commonMistakes: [
           { description: 'Vorzeichen in der Klammer übernommen', feedback: 'In der Form $(x - d)$ dreht sich das Vorzeichen: $(x + 2)^2 \\Rightarrow d = -2$.', answers: [ptInput(-d, e)] },

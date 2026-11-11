@@ -119,6 +119,7 @@ await expectDenied('Abo selbst anlegen', `insert into subscriptions (user_id, pl
 console.log('Edge Function (service_role):');
 await as(null, 'service_role');
 await expectValue('Bewertungskontext', `select grading_context($1) -> 'key' ? 'answer'`, true, [ex.id]);
+await expectValue('Ausführliche Lösung im Bewertungskontext', `select jsonb_array_length(grading_context('pyth-hypotenuse-1') -> 'review' -> 'solution' -> 'detailed') >= 5`, true);
 await expectDenied('unklare Abgabe speichern', `select record_graded_attempt($1, $2, $3, '?', 'unclear', 0, '[]'::jsonb, '')`, [U1, ex.id, A1]);
 await expectDenied('fremder Speicherpfad', `select record_graded_attempt($1, $2, $3, '15', 'correct', 1, '[]'::jsonb, '', null, 'canvas', $4)`, [U1, ex.id, A1, `${U2}/${A1}.png`]);
 await expectOk('bewerteten Versuch speichern', `select record_graded_attempt($1, $2, $3, '15', 'correct', 1, '[]'::jsonb, 'Richtig!', null, 'canvas', $4)`, [U1, ex.id, A1, `${U1}/${A1}.png`]);

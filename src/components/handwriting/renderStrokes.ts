@@ -1,4 +1,4 @@
-import { exportSize, segmentWidth, type Stroke } from './canvasModel';
+import { exportSize, segmentWidth, strokeBounds, type Stroke } from './canvasModel';
 
 /**
  * Zeichnet Striche in Papierkoordinaten. Der Aufrufer setzt vorher die Transformation (Zoom, Pixeldichte).
@@ -32,11 +32,12 @@ export function renderStroke(ctx: CanvasRenderingContext2D, s: Stroke): void {
 }
 
 /**
- * Exportiert die sichtbaren Striche verkleinert als PNG-data-URL auf weißem Grund.
+ * Exportiert den beschriebenen Bereich des Papiers (strokeBounds) verkleinert als PNG-data-URL auf weißem Grund.
  * PNG, weil der Supabase-Upload `image/png` erwartet; Handschrift auf weißem Grund komprimiert gut.
  */
-export function exportStrokesAsPng(strokes: Stroke[], maxSide = 1000): string {
-  const { width, height, scale } = exportSize(maxSide);
+export function exportStrokesAsPng(strokes: Stroke[], maxSide = 1600): string {
+  const area = strokeBounds(strokes);
+  const { width, height, scale } = exportSize(maxSide, area);
   const layer = document.createElement('canvas');
   layer.width = width;
   layer.height = height;
@@ -46,7 +47,7 @@ export function exportStrokesAsPng(strokes: Stroke[], maxSide = 1000): string {
   out.height = height;
   const octx = out.getContext('2d');
   if (!lctx || !octx) throw new Error('Canvas wird von diesem Browser nicht unterstützt.');
-  lctx.setTransform(scale, 0, 0, scale, 0, 0);
+  lctx.setTransform(scale, 0, 0, scale, -area.x * scale, -area.y * scale);
   renderStrokes(lctx, strokes);
   octx.fillStyle = '#ffffff';
   octx.fillRect(0, 0, width, height);

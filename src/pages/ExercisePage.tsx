@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, BookOpen, Camera, Eye, Lightbulb, Maximize2, Minimize2, PenLine, RotateCcw, Send, TrendingDown, TrendingUp, TriangleAlert } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BookOpen, Camera, Eye, Lightbulb, Maximize2, Minimize2, PenLine, RotateCcw, Send, TriangleAlert } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { ChoiceInput, MathInput, NumericInput } from '../components/AnswerInputs';
@@ -12,7 +12,6 @@ import { MathText } from '../components/MathText';
 import { ProgressBar } from '../components/ProgressBar';
 import { ScoreBadge } from '../components/ScoreBadge';
 import { SolutionView } from '../components/SolutionView';
-import { StatusBadge } from '../components/StatusBadge';
 import { Button, ButtonLink, Dialog, EmptyState, Skeleton, useToast } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import type { EvaluationResult } from '../domain/evaluate';
@@ -20,8 +19,8 @@ import { needsReview, stepOfExercise } from '../domain/learningPath';
 import { DIFFICULTY_LABEL, REQUIREMENT_LABEL } from '../domain/progressView';
 import { SCORE_CONFIG } from '../domain/score';
 import { services, type PendingAttempt } from '../services';
-import type { Attempt, AttemptRecord, AttemptSubmission, Difficulty, Exercise, ExerciseReview, ModelSolution, Subtopic, SubtopicProgress } from '../types';
-import { pathFor, pickNext } from './practice';
+import type { Attempt, AttemptRecord, AttemptSubmission, Exercise, ExerciseReview, ModelSolution, Subtopic, SubtopicProgress } from '../types';
+import { pathFor } from './practice';
 
 type Phase =
   | { kind: 'answering' }
@@ -59,9 +58,6 @@ export default function ExercisePage() {
   /** Ziel von „Weiter“ im Lernpfad (nächste Aufgabe oder – wenn geschafft – die Kapitelseite) und Zurück-Vorschlag. */
   const [pathNext, setPathNext] = useState<string | null>(null);
   const [review, setReview] = useState(false);
-  /** Nächste Aufgabe der Übungsfolge (adaptiv) und die Stufe vor bzw. nach der Abgabe. */
-  const [next, setNext] = useState<{ id: string; level: Difficulty } | null>(null);
-  const [levelBefore, setLevelBefore] = useState<Difficulty | null>(null);
   const [previousCount, setPreviousCount] = useState(0);
   const [pending, setPending] = useState<PendingAttempt | null>(null);
   /** Kapitel-Score vor der Abgabe, um nach der Abgabe die Veränderung zu zeigen („62 → 66“). */
@@ -126,9 +122,6 @@ export default function ExercisePage() {
       setSub(s);
       setPathNext(s && e ? pathTarget(userId, s, chapterAttempts, before?.score ?? 0, e.id) : null);
       setReview(false);
-      const pick = s && e ? pickNext(userId, s, chapterAttempts, e.id) : null;
-      setNext(pick ? { id: pick.exercise.id, level: pick.level } : null);
-      setLevelBefore(pick?.level ?? null);
       setPreviousCount(chapterAttempts.filter((a) => a.exerciseId === e?.id).length);
       setScoreBefore(before?.score ?? null);
       setHints(help?.hints ?? []);
@@ -229,8 +222,6 @@ export default function ExercisePage() {
     Promise.all([services.progress.getSubtopicProgress(userId, chapter.id), services.learner.listAttempts(userId, { subtopicId: chapter.id })]).then(
       ([progress, attempts]) => {
         setChapterProgress(progress);
-        const pick = pickNext(userId, chapter, attempts, exercise.id);
-        setNext(pick ? { id: pick.exercise.id, level: pick.level } : null);
         setPathNext(pathTarget(userId, chapter, attempts, progress.score, exercise.id));
         setReview(stepOfExercise(chapter.exercises, exercise.id) !== 'check' && needsReview(attempts));
       },
@@ -334,8 +325,6 @@ export default function ExercisePage() {
   const shownEvaluation = phase.kind === 'saved' ? phase.evaluation : null;
   const shownSolution = phase.kind === 'saved' ? phase.review.solution : solution;
   // Für den Score zählt, was der Bewertungsdienst protokolliert hat (record), nicht der Stand der Seite.
-  const usedHints = phase.kind === 'saved' ? phase.record.hintsUsed : hintsUsed;
-  const usedSolution = phase.kind === 'saved' ? phase.record.solutionViewed : solutionViewed;
   const solutionShare = Math.round(SCORE_CONFIG.solutionViewedFactor * 100);
 
   const chapterScore = chapterProgress?.score ?? scoreBefore;
@@ -358,6 +347,60 @@ export default function ExercisePage() {
       <span className="hidden xl:inline">Foto hochladen</span>
     </Button>
   );
+
+  const fullscreenButton = (
+    <button
+      type="button"
+      onClick={() => setFullscreen((v) => !v)}
+      aria-label={fullscreen ? 'Vollbild beenden' : 'Schreibfläche im Vollbild'}
+      title={fullscreen ? 'Vollbild beenden' : 'Vollbild'}
+      aria-pressed={fullscreen}
+      className="flex h-11 w-11 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 transition-colors hover:bg-slate-100 active:scale-95"
+    >
+      {fullscreen ? <Minimize2 aria-hidden="true" size={22} /> : <Maximize2 aria-hidden="true" size={22} />}
+    </button>
+  );
+
+  /** Aufgabe als Karte oben mittig auf dem Kästchenpapier (bei Schreibfläche); sonst klassisch über der Eingabe. */
+  const onPaper = offersWork && !photo;
+  const meta = `${REQUIREMENT_LABEL[exercise.requirement]} · ${DIFFICULTY_LABEL[exercise.difficulty]}${previousCount > 0 ? ` · bisher ${previousCount} Versuch${previousCount === 1 ? '' : 'e'}` : ''}`;
+  const hintBlock =
+    !saved && (hintsUsed > 0 || helpError) ? (
+      <div className="space-y-2" aria-label="Hilfe">
+        <ol className="space-y-2">
+          {hints.map((h, i) => (
+            <li key={i} className="rounded-lg border border-sky-200 bg-sky-50 p-[0.8em] animate-slide-up">
+              <strong className="text-sky-800">Hinweis {i + 1}:</strong> <MathText text={h} />
+            </li>
+          ))}
+        </ol>
+        {helpError && (
+          <p role="alert" className="text-red-700">
+            {helpError}
+          </p>
+        )}
+      </div>
+    ) : null;
+  // Schriftgrößen in em: Die Karte skaliert mit dem Zoom der Schreibfläche.
+  const promptCard = (
+    <div className="space-y-[0.6em] rounded-xl border border-slate-200 bg-white p-[1em] shadow-sm">
+      <p className="text-[0.8em] text-slate-500">{meta}</p>
+      <h1 className="text-[1.1em] leading-snug font-semibold text-slate-900">
+        <MathText text={exercise.prompt} />
+      </h1>
+      {exercise.figure && <ExerciseFigure figure={exercise.figure} />}
+      {hintBlock && <div className="text-[0.85em]">{hintBlock}</div>}
+    </div>
+  );
+
+  /** Nach „Ergebnis nicht erkennbar“: Schreibfläche bzw. Foto leeren und neu anfangen (Hilfen bleiben angerechnet). */
+  function startOver() {
+    setDrawing(emptyHistory());
+    setPhoto(null);
+    setAnswer('');
+    setNotice(null);
+  }
+  const unreadable = notice?.verdict === 'unclear' && offersWork && !typesAnswer;
 
   return (
     <div className={`mx-auto space-y-6 pb-16 ${offersWork ? 'max-w-6xl' : 'max-w-3xl'}`}>
@@ -413,50 +456,20 @@ export default function ExercisePage() {
           // Vollbild: so breit, dass das ganze Blatt (Seitenverhältnis 3:2) auf den Bildschirm passt – sonst müsste man zum Scrollen neben das Papier wischen.
           style={fullscreen ? { maxWidth: 'max(36rem, calc((100dvh - 19rem) * 1.5))' } : undefined}
         >
-          <header className="flex flex-wrap items-start gap-4 p-6">
-            <div className="flex-1 min-w-64 space-y-3">
-              <p className="text-sm text-slate-500">
-                {REQUIREMENT_LABEL[exercise.requirement]} · {DIFFICULTY_LABEL[exercise.difficulty]}
-                {previousCount > 0 && ` · bisher ${previousCount} Versuch${previousCount === 1 ? '' : 'e'}`}
-              </p>
-              <h1 className="text-2xl leading-relaxed font-semibold text-slate-900">
-                <MathText text={exercise.prompt} />
-              </h1>
-              {exercise.figure && <ExerciseFigure figure={exercise.figure} />}
-            </div>
-            <div className="ml-auto flex items-center gap-2">
-              {helpButton}
-              {offersWork && !photo && (
-                <button
-                  type="button"
-                  onClick={() => setFullscreen((v) => !v)}
-                  aria-label={fullscreen ? 'Vollbild beenden' : 'Schreibfläche im Vollbild'}
-                  title={fullscreen ? 'Vollbild beenden' : 'Vollbild'}
-                  aria-pressed={fullscreen}
-                  className="flex h-11 w-11 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 transition-colors hover:bg-slate-100 active:scale-95"
-                >
-                  {fullscreen ? <Minimize2 aria-hidden="true" size={22} /> : <Maximize2 aria-hidden="true" size={22} />}
-                </button>
-              )}
-            </div>
-          </header>
-
-          {!saved && (hintsUsed > 0 || helpError) && (
-            <div className="space-y-2 px-6 pb-4" aria-label="Hilfe">
-              <ol className="space-y-2">
-                {hints.map((h, i) => (
-                  <li key={i} className="rounded-lg border border-sky-200 bg-sky-50 p-4 animate-slide-up">
-                    <strong className="text-sky-800">Hinweis {i + 1}:</strong> <MathText text={h} />
-                  </li>
-                ))}
-              </ol>
-              {helpError && (
-                <p role="alert" className="text-sm text-red-700">
-                  {helpError}
-                </p>
-              )}
-            </div>
+          {!onPaper && (
+            <header className="flex flex-wrap items-start gap-4 p-6">
+              <div className="flex-1 min-w-64 space-y-3">
+                <p className="text-sm text-slate-500">{meta}</p>
+                <h1 className="text-2xl leading-relaxed font-semibold text-slate-900">
+                  <MathText text={exercise.prompt} />
+                </h1>
+                {exercise.figure && <ExerciseFigure figure={exercise.figure} />}
+              </div>
+              <div className="ml-auto flex items-center gap-2">{helpButton}</div>
+            </header>
           )}
+
+          {!onPaper && hintBlock && <div className="px-6 pb-4">{hintBlock}</div>}
 
           {offersWork ? (
             <>
@@ -479,7 +492,20 @@ export default function ExercisePage() {
                   <img src={photo} alt="Dein Foto vom Rechenweg" className="max-h-[40rem] w-full rounded-b-2xl bg-white object-contain" />
                 </div>
               ) : (
-                <HandwritingCanvas history={drawing} onChange={setDrawing} disabled={locked} toolbarEnd={photoButton} />
+                <HandwritingCanvas
+                  history={drawing}
+                  onChange={setDrawing}
+                  disabled={locked}
+                  overlay={promptCard}
+                  height={fullscreen ? 'calc(100dvh - 12rem)' : undefined}
+                  toolbarEnd={
+                    <>
+                      {helpButton}
+                      {photoButton}
+                      {fullscreenButton}
+                    </>
+                  }
+                />
               )}
               {typesAnswer && (
                 <div className="space-y-2 rounded-b-2xl border-t border-slate-200 bg-indigo-50 p-6">
@@ -494,7 +520,23 @@ export default function ExercisePage() {
         </div>
 
         <div ref={noticeRef} className="scroll-mt-24">
-          {notice && <FeedbackPanel verdict={notice.verdict} points={0} feedback={notice.feedback} marks={notice.marks} />}
+          {notice && (
+            <div className="space-y-3">
+              <FeedbackPanel
+                verdict={notice.verdict}
+                points={0}
+                feedback={notice.feedback}
+                marks={notice.marks}
+                title={unreadable ? 'Ergebnis nicht erkennbar' : undefined}
+                subtitle={unreadable ? 'Diese Abgabe zählt nicht – mach die Aufgabe bitte noch einmal.' : undefined}
+              />
+              {unreadable && (
+                <Button variant="secondary" icon={<RotateCcw aria-hidden="true" size={20} />} onClick={startOver}>
+                  Neu anfangen
+                </Button>
+              )}
+            </div>
+          )}
         </div>
 
         {(phase.kind === 'answering' || phase.kind === 'saving') && (
@@ -545,20 +587,6 @@ export default function ExercisePage() {
             mistake={shownEvaluation.mistake}
             commonMistakes={phase.kind === 'saved' ? phase.review.commonMistakes : undefined}
           />
-          {saved && next && levelBefore !== null && next.level !== levelBefore && (
-            <p className="flex items-center gap-3 rounded-2xl border border-indigo-200 bg-indigo-50 p-4 animate-slide-up" role="status">
-              {next.level > levelBefore ? (
-                <TrendingUp aria-hidden="true" size={24} className="flex-none text-indigo-700" />
-              ) : (
-                <TrendingDown aria-hidden="true" size={24} className="flex-none text-indigo-700" />
-              )}
-              <span>
-                {next.level > levelBefore
-                  ? `Super – jetzt kommen ${next.level === 3 ? 'schwere' : 'mittlere'} Aufgaben!`
-                  : 'Wir üben erst einmal mit etwas leichteren Aufgaben weiter. Das ist ganz normal.'}
-              </span>
-            </p>
-          )}
           {saved && review && (
             <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 flex flex-wrap items-center gap-3" role="status">
               <Lightbulb aria-hidden="true" size={22} className="flex-none text-amber-700" />
@@ -566,30 +594,6 @@ export default function ExercisePage() {
               <ButtonLink to={chapterUrl} variant="secondary" icon={<BookOpen aria-hidden="true" size={20} />}>
                 Zur Erklärung
               </ButtonLink>
-            </div>
-          )}
-          {saved && (chapterProgress || usedHints > 0 || usedSolution) && (
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-3">
-              {chapterProgress && (
-                <div className="flex flex-wrap items-center gap-3">
-                  <span className="font-semibold">Kapitel „{chapter.title}“:</span>
-                  {scoreBefore !== null && scoreBefore !== chapterProgress.score && (
-                    <span className="tabular-nums text-slate-600" aria-label={`Score vorher ${scoreBefore}, jetzt ${chapterProgress.score}`}>
-                      {scoreBefore} → {chapterProgress.score}
-                    </span>
-                  )}
-                  <ScoreBadge score={chapterProgress.score} />
-                  <StatusBadge status={chapterProgress.status} />
-                </div>
-              )}
-              {(usedHints > 0 || usedSolution) && (
-                <p className="text-sm text-slate-600">
-                  Für den Verständnis-Score zählt diese Abgabe{' '}
-                  {usedSolution
-                    ? `${solutionShare} %, weil du die Lösung vorher angesehen hast.`
-                    : `${Math.round((1 - SCORE_CONFIG.hintPenaltyPerHint * usedHints) * 100)} %, weil du ${usedHints} Hinweis${usedHints === 1 ? '' : 'e'} genutzt hast.`}
-                </p>
-              )}
             </div>
           )}
         </div>

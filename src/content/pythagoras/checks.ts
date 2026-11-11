@@ -9,7 +9,7 @@ const CHECKS: Record<string, Parameters<typeof withChecks>[1]> = {
       formulaText({
         id: 'pyth-gl-fc-1',
         subtopicId: 'pyth-grundlagen',
-        prompt: 'Schreibe den Satz des Pythagoras als Formel auf. Die Hypotenuse heißt $c$, die Katheten $a$ und $b$. (Schreibweise z. B. `a^2` für $a^2$)',
+        prompt: 'Schreibe den Satz des Pythagoras als Formel auf. Die Hypotenuse heißt $c$, die Katheten $a$ und $b$.',
         accepted: ['a^2+b^2=c^2', 'b^2+a^2=c^2', 'c^2=a^2+b^2', 'c^2=b^2+a^2'],
         finalAnswer: '$a^2 + b^2 = c^2$',
         hints: ['Es geht um die Quadrate der Seiten.', 'Die beiden Kathetenquadrate zusammen …', '… ergeben das Hypotenusenquadrat.'],

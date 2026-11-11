@@ -1,6 +1,7 @@
-import { BookOpen, ChevronDown, ListChecks } from 'lucide-react';
+import { BookOpen, ChevronDown, Lightbulb, ListChecks } from 'lucide-react';
 import { useState } from 'react';
-import type { ModelSolution, SolutionStep } from '../types';
+import type { DetailedStep, ModelSolution, SolutionStep } from '../types';
+import { ExerciseFigure } from './figures/ExerciseFigure';
 import { MathText } from './MathText';
 import { Button } from './ui/Button';
 
@@ -27,8 +28,46 @@ function Steps({ steps, visible = steps.length }: { steps: SolutionStep[]; visib
   );
 }
 
+/** Ausführliche Lösung: jeder Denkschritt mit Überschrift, Erklärung, optional Rechnung und Skizze. Zugeklappt. */
+function DetailedSolution({ steps }: { steps: DetailedStep[] }) {
+  return (
+    <details className="group rounded-lg border border-indigo-200 bg-indigo-50/40 p-4">
+      <summary className="flex min-h-11 cursor-pointer items-center gap-2 font-semibold text-indigo-800">
+        <Lightbulb aria-hidden="true" size={20} />
+        Ausführliche Lösung mit allen Denkschritten
+      </summary>
+      <ol className="mt-4 space-y-4">
+        {steps.map((s, i) => (
+          <li key={i} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <p className="text-sm font-semibold uppercase tracking-wide text-indigo-700">
+              <span className="sr-only">Denkschritt {i + 1}: </span>
+              <span aria-hidden="true">{i + 1}. </span>
+              <MathText text={s.title} />
+            </p>
+            <div className="mt-2 flex flex-wrap items-start gap-4">
+              <div className="min-w-56 flex-1 space-y-2">
+                <MathText text={s.text} />
+                {s.math && (
+                  <div className="overflow-x-auto rounded-lg bg-slate-50 px-4 py-2">
+                    <MathText text={s.math} display />
+                  </div>
+                )}
+              </div>
+              {s.figure && (
+                <div className="flex-none">
+                  <ExerciseFigure figure={s.figure} />
+                </div>
+              )}
+            </div>
+          </li>
+        ))}
+      </ol>
+    </details>
+  );
+}
+
 /**
- * Schrittweise Musterlösung aus der geprüften Aufgabenbibliothek (inkl. optionaler Alternative).
+ * Schrittweise Musterlösung aus der geprüften Aufgabenbibliothek (inkl. optionaler Alternative und ausführlicher Lösung).
  * `stepwise`: Schritte werden nacheinander aufgedeckt („Nächster Schritt“), damit der Schüler mitdenkt.
  */
 export function SolutionView({ solution, stepwise = false }: { solution: ModelSolution; stepwise?: boolean }) {
@@ -66,6 +105,7 @@ export function SolutionView({ solution, stepwise = false }: { solution: ModelSo
           <strong>Ergebnis:</strong> <MathText text={solution.finalAnswer} />
         </p>
       )}
+      {complete && solution.detailed && solution.detailed.length > 0 && <DetailedSolution steps={solution.detailed} />}
       {complete && solution.alternative && solution.alternative.length > 0 && (
         <details className="rounded-lg border border-slate-200 p-4">
           <summary className="cursor-pointer min-h-11 flex items-center font-semibold">Alternativer Lösungsweg</summary>

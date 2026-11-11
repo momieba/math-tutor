@@ -478,7 +478,7 @@ export function evaluateAnswer(ex: GradableExercise, raw: string): EvaluationRes
 }
 
 export const UNCHECKED_WORK_MESSAGE =
-  'Dein Rechenweg ist gespeichert, wird im MVP aber noch nicht automatisch geprüft. Vergleiche ihn selbst mit der Musterlösung.';
+  'Deinen Rechenweg konnte ich diesmal nicht automatisch prüfen – bewertet wurde nur dein Ergebnis. Vergleiche deinen Weg selbst mit der Musterlösung.';
 
 /**
  * Handschrift-Aufgaben (Phase 1): Geprüft wird nur das eingetippte Endergebnis.

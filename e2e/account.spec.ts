@@ -18,7 +18,6 @@ test('Genutzte Hinweise bleiben nach dem Neuladen sichtbar und werden angerechne
   await answerInput(page).fill('15');
   await submitButton(page).click();
   await expect(feedbackPanel(page)).toContainText('Richtig');
-  await expect(page.getByText(/zählt diese Abgabe 85 %, weil du 1 Hinweis genutzt hast/)).toBeVisible();
   expect((await learnerData(page)).attempts[0]).toMatchObject({ hintsUsed: 1, solutionViewed: false });
 
   // Neue Runde: Hilfen beginnen wieder bei null

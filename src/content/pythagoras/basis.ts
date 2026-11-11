@@ -161,7 +161,7 @@ export const pythagorasBasis: AuthoredTopic = {
           type: 'text',
           requirement: 'knowledge',
           difficulty: 2,
-          prompt: 'Im Dreieck $PQR$ liegt der rechte Winkel bei $Q$. Wie heißt die Hypotenuse? (Antwort z. B. als „AB“)',
+          prompt: 'Im Dreieck $PQR$ liegt der rechte Winkel bei $Q$. Wie heißt die Hypotenuse? Benenne sie mit ihren beiden Endpunkten.',
           answer: { kind: 'text', accepted: ['pr', 'rp'] },
           hints: [
             'Die Hypotenuse liegt dem rechten Winkel gegenüber.',
@@ -405,7 +405,7 @@ export const pythagorasBasis: AuthoredTopic = {
           requirement: 'reasoning',
           difficulty: 3,
           prompt:
-            'Ergänzungsbeweis: Vereinfache den Term $(a+b)^2 - 4 \\cdot \\frac{a \\cdot b}{2}$ so weit wie möglich. (Schreibweise z. B. `a^2+b^2`)',
+            'Ergänzungsbeweis: Vereinfache den Term $(a+b)^2 - 4 \\cdot \\frac{a \\cdot b}{2}$ so weit wie möglich.',
           answer: { kind: 'text', accepted: ['a^2+b^2', 'b^2+a^2'] },
           hints: [
             'Löse zuerst die Klammer mit der 1. binomischen Formel auf.',
@@ -554,7 +554,7 @@ export const pythagorasBasis: AuthoredTopic = {
           type: 'handwriting',
           requirement: 'calculation',
           difficulty: 2,
-          prompt: 'Schreibe deinen Rechenweg auf: Berechne $c$ für $a = 8$ cm und $b = 15$ cm. Gib danach das Ergebnis (in cm) ein.',
+          prompt: 'Schreibe deinen Rechenweg auf: Berechne $c$ für $a = 8$ cm und $b = 15$ cm. Gib das Ergebnis in cm an.',
           answer: { kind: 'numeric', value: 17, tolerance: 0, unit: 'cm' },
           hints: ['Schreibe zuerst die Formel auf.', '$8^2 = 64$, $15^2 = 225$.', '$\\sqrt{289} = \\;?$'],
           solution: {
@@ -677,7 +677,7 @@ export const pythagorasBasis: AuthoredTopic = {
           requirement: 'calculation',
           difficulty: 3,
           prompt:
-            'Ein rechtwinkliges Dreieck hat die Hypotenuse $c = 25$ cm und die Kathete $a = 7$ cm. Berechne zuerst $b$ und dann den Umfang des Dreiecks. Gib den Umfang (in cm) ein.',
+            'Ein rechtwinkliges Dreieck hat die Hypotenuse $c = 25$ cm und die Kathete $a = 7$ cm. Berechne zuerst $b$ und dann den Umfang des Dreiecks. Gib den Umfang in cm an.',
           answer: { kind: 'numeric', value: 56, tolerance: 0, unit: 'cm' },
           hints: ['Berechne zuerst die fehlende Kathete $b$.', '$b^2 = 625 - 49 = 576$, also $b = 24$.', 'Umfang $u = a + b + c$.'],
           solution: {
@@ -804,7 +804,7 @@ export const pythagorasBasis: AuthoredTopic = {
           type: 'handwriting',
           requirement: 'reasoning',
           difficulty: 3,
-          prompt: 'Ein Dreieck hat die Seiten $12$ cm, $35$ cm und $37$ cm. Prüfe schriftlich mit der Umkehrung, ob es rechtwinklig ist. Gib „ja“ oder „nein“ ein.',
+          prompt: 'Ein Dreieck hat die Seiten $12$ cm, $35$ cm und $37$ cm. Prüfe schriftlich mit der Umkehrung, ob es rechtwinklig ist, und antworte mit „ja“ oder „nein“.',
           answer: { kind: 'text', accepted: ['ja'] },
           hints: ['Die längste Seite ist $37$ cm.', 'Berechne $12^2 + 35^2$.', 'Vergleiche $144 + 1225$ mit $37^2 = 1369$.'],
           solution: {

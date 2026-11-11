@@ -1,6 +1,7 @@
 /** Aufgabenpool Satz des Pythagoras: Vorlagen je Kapitel (die handgeschriebenen Aufgaben stehen in basis.ts). */
 import type { AuthoredExercise } from '../../types';
 import { fromTemplate, num, round, type Rng, shuffledChoices, txt } from '../templates';
+import { hypDetailed, legDetailed } from './detailed';
 
 const OBJ = ['Satz des Pythagoras anwenden'];
 const YES_NO = [
@@ -414,7 +415,7 @@ function hypTemplate(id: string, sub: string, difficulty: 1 | 2 | 3, count: numb
         prompt: `Berechne die Hypotenuse $c$ für $a = ${num(a)}$ ${unit} und $b = ${num(b)}$ ${unit}.${exact ? '' : ' Runde auf eine Nachkommastelle.'}`,
         answer: { kind: 'numeric', value: c, tolerance: exact ? 0.001 : 0.06, unit },
         hints: ['$c = \\sqrt{a^2 + b^2}$', `$${sq(a)} + ${sq(b)} = ${num(a * a + b * b)}$`, 'Wurzel ziehen.'],
-        solution: { steps: [{ text: 'Satz des Pythagoras:', math: `c = \\sqrt{${sq(a)} + ${sq(b)}} = \\sqrt{${num(a * a + b * b)}} ${exact ? `= ${num(c)}` : `\\approx ${num(round(c, 1), 1)}`}` }], finalAnswer: `$c ${exact ? '=' : '\\approx'} ${num(round(c, 1), 1)}$ ${unit}` },
+        solution: { steps: [{ text: 'Satz des Pythagoras:', math: `c = \\sqrt{${sq(a)} + ${sq(b)}} = \\sqrt{${num(a * a + b * b)}} ${exact ? `= ${num(c)}` : `\\approx ${num(round(c, 1), 1)}`}` }], finalAnswer: `$c ${exact ? '=' : '\\approx'} ${num(round(c, 1), 1)}$ ${unit}`, detailed: hypDetailed(a, b, { unit }) },
         commonMistakes: [{ description: 'Wurzel vergessen', feedback: '$a^2 + b^2$ ist $c^2$ – zieh noch die Wurzel.', answers: [txt(a * a + b * b)] }, { description: 'Seiten addiert', feedback: 'Die Hypotenuse ist nicht $a + b$.', answers: [txt(a + b)] }],
       };
     },
@@ -439,7 +440,7 @@ function legTemplate(id: string, sub: string, difficulty: 1 | 2 | 3, count: numb
         prompt: `Gegeben sind die Hypotenuse $c = ${num(c)}$ ${unit} und die Kathete $a = ${num(a)}$ ${unit}. Berechne $b$.${exact ? '' : ' Runde auf eine Nachkommastelle.'}`,
         answer: { kind: 'numeric', value: b, tolerance: exact ? 0.001 : 0.06, unit },
         hints: ['$b = \\sqrt{c^2 - a^2}$', `$${sq(c)} - ${sq(a)} = ${num(c * c - a * a)}$`, 'Wurzel ziehen.'],
-        solution: { steps: [{ text: 'Umgestellter Satz:', math: `b = \\sqrt{${sq(c)} - ${sq(a)}} = \\sqrt{${num(c * c - a * a)}} ${exact ? `= ${num(b)}` : `\\approx ${num(round(b, 1), 1)}`}` }], finalAnswer: `$b ${exact ? '=' : '\\approx'} ${num(round(b, 1), 1)}$ ${unit}` },
+        solution: { steps: [{ text: 'Umgestellter Satz:', math: `b = \\sqrt{${sq(c)} - ${sq(a)}} = \\sqrt{${num(c * c - a * a)}} ${exact ? `= ${num(b)}` : `\\approx ${num(round(b, 1), 1)}`}` }], finalAnswer: `$b ${exact ? '=' : '\\approx'} ${num(round(b, 1), 1)}$ ${unit}`, detailed: legDetailed(c, a, { unit }) },
         commonMistakes: [{ description: 'Addiert statt subtrahiert', feedback: 'Für eine Kathete wird subtrahiert: $b^2 = c^2 - a^2$.', answers: [txt(round(Math.sqrt(c * c + a * a), 1))] }],
       };
     },
@@ -477,7 +478,9 @@ const hypotenuse: AuthoredExercise[] = [
         prompt: `${thing} hat die Seitenlängen $${a}$ ${unit} und $${b}$ ${unit}. Wie lang ist die Diagonale (in ${unit})?`,
         answer: { kind: 'numeric', value: c, tolerance: 0.001, unit },
         hints: ['Die Diagonale teilt das Rechteck in zwei rechtwinklige Dreiecke.', 'Sie ist die Hypotenuse.', `$d = \\sqrt{${sq(a)} + ${sq(b)}}$`],
-        solution: { steps: [{ text: 'Pythagoras:', math: `d = \\sqrt{${sq(a)} + ${sq(b)}} = \\sqrt{${a * a + b * b}} = ${num(c)}` }], finalAnswer: `$${num(c)}$ ${unit}` },
+        solution: { steps: [{ text: 'Pythagoras:', math: `d = \\sqrt{${sq(a)} + ${sq(b)}} = \\sqrt{${a * a + b * b}} = ${num(c)}` }], finalAnswer: `$${num(c)}$ ${unit}`,
+          detailed: hypDetailed(a, b, { unit, meaning: 'die Diagonale', context: 'Die Diagonale teilt das Rechteck in zwei rechtwinklige Dreiecke. In jedem davon sind die beiden Rechteckseiten die Katheten (sie stehen senkrecht aufeinander) und die Diagonale ist die Hypotenuse.' }),
+        },
         commonMistakes: [{ description: 'Wurzel vergessen', feedback: 'Zieh am Ende die Wurzel.', answers: [String(a * a + b * b)] }],
       };
     },
@@ -495,7 +498,13 @@ const hypotenuse: AuthoredExercise[] = [
       prompt: `Ein rechteckiger Platz ist $${a}$ m lang und $${b}$ m breit. Wie viele Meter spart man, wenn man diagonal über den Platz geht statt außen an zwei Seiten entlang?`,
       answer: { kind: 'numeric', value: a + b - c, tolerance: 0.001, unit: 'm' },
       hints: [`Außen herum: $${a} + ${b} = ${a + b}$ m`, `Diagonal: $\\sqrt{${sq(a)} + ${sq(b)}}$`, 'Differenz bilden.'],
-      solution: { steps: [{ text: 'Diagonale:', math: `d = \\sqrt{${sq(a)} + ${sq(b)}} = ${c}` }, { text: 'Ersparnis:', math: `${a + b} - ${c} = ${a + b - c}` }], finalAnswer: `$${a + b - c}$ m` },
+      solution: { steps: [{ text: 'Diagonale:', math: `d = \\sqrt{${sq(a)} + ${sq(b)}} = ${c}` }, { text: 'Ersparnis:', math: `${a + b} - ${c} = ${a + b - c}` }],
+        finalAnswer: `$${a + b - c}$ m`,
+        detailed: [
+          ...hypDetailed(a, b, { unit: 'm', meaning: 'der Weg quer über den Platz', context: 'Der Weg außen herum geht an zwei Seiten des Rechtecks entlang, die einen rechten Winkel bilden. Zusammen mit dem Weg quer über den Platz (der Diagonale) entsteht ein rechtwinkliges Dreieck: Die beiden Seiten sind die Katheten, die Diagonale ist die Hypotenuse.' }),
+          { title: 'Ersparnis berechnen', text: 'Gefragt ist nicht die Diagonale, sondern wie viel kürzer sie ist als der Weg außen herum. Also: Umweg minus Diagonale.', math: `${a} + ${b} - ${c} = ${a + b - c}` },
+        ],
+      },
       commonMistakes: [{ description: 'Nur die Diagonale berechnet', feedback: 'Gefragt ist die Ersparnis: Umweg minus Diagonale.', answers: [String(c)] }],
     }),
   }),
@@ -519,7 +528,11 @@ const hypotenuse: AuthoredExercise[] = [
         prompt: `Wie weit sind die Punkte $A(${x1}\\,|\\,${y1})$ und $B(${x2}\\,|\\,${y2})$ im Koordinatensystem voneinander entfernt (in Längeneinheiten)?`,
         answer: { kind: 'numeric', value: d, tolerance: 0.001 },
         hints: ['Zeichne ein Steigungsdreieck – es ist rechtwinklig.', `Katheten: $|${x2} - ${x1 < 0 ? `(${x1})` : x1}| = ${Math.abs(x2 - x1)}$ und $|${y2} - ${y1 < 0 ? `(${y1})` : y1}| = ${Math.abs(y2 - y1)}$`, 'Die Strecke $AB$ ist die Hypotenuse.'],
-        solution: { steps: [{ text: 'Pythagoras:', math: `\\overline{AB} = \\sqrt{${sq(Math.abs(x2 - x1))} + ${sq(Math.abs(y2 - y1))}} = ${num(d)}` }], finalAnswer: `$${num(d)}$` },
+        solution: {
+          steps: [{ text: 'Pythagoras:', math: `\\overline{AB} = \\sqrt{${sq(Math.abs(x2 - x1))} + ${sq(Math.abs(y2 - y1))}} = ${num(d)}` }],
+          finalAnswer: `$${num(d)}$`,
+          detailed: hypDetailed(Math.abs(x2 - x1), Math.abs(y2 - y1), { unit: 'LE', meaning: 'die Strecke $AB$', context: `Gehe von $A$ aus waagerecht bis unter bzw. über $B$ und dann senkrecht bis $B$. So entsteht ein rechtwinkliges Dreieck (Steigungsdreieck): Die waagerechte Strecke ist $${Math.abs(x2 - x1)}$ LE lang (Unterschied der $x$-Werte), die senkrechte $${Math.abs(y2 - y1)}$ LE (Unterschied der $y$-Werte). Die Strecke $AB$ ist die Hypotenuse.` }),
+        },
         commonMistakes: [{ description: 'Differenzen addiert', feedback: 'Die Entfernung ist die Hypotenuse, nicht die Summe der Katheten.', answers: [String(Math.abs(x2 - x1) + Math.abs(y2 - y1))] }],
       };
     },
@@ -551,7 +564,7 @@ const kathete: AuthoredExercise[] = [
         prompt: `Eine $${L}$ m lange Leiter lehnt an einer Wand. Ihr Fuß steht $${num(a)}$ m von der Wand entfernt. In welcher Höhe berührt sie die Wand? Runde auf zwei Nachkommastellen.`,
         answer: { kind: 'numeric', value: h, tolerance: 0.006, unit: 'm' },
         hints: ['Die Leiter ist die Hypotenuse.', `$h = \\sqrt{${sq(L)} - ${sq(a)}}$`, `$${L * L} - ${num(a * a)} = ${num(L * L - a * a)}$`],
-        solution: { steps: [{ text: 'Kathete berechnen:', math: `h = \\sqrt{${sq(L)} - ${sq(a)}} = \\sqrt{${num(L * L - a * a)}} \\approx ${num(round(h, 2))}` }], finalAnswer: `$\\approx ${num(round(h, 2))}$ m` },
+        solution: { steps: [{ text: 'Kathete berechnen:', math: `h = \\sqrt{${sq(L)} - ${sq(a)}} = \\sqrt{${num(L * L - a * a)}} \\approx ${num(round(h, 2))}` }], finalAnswer: `$\\approx ${num(round(h, 2))}$ m`, detailed: legDetailed(L, a, { unit: 'm', digits: 2, meaning: 'die Höhe an der Wand', context: 'Wand und Boden stehen senkrecht aufeinander. Die Leiter ist die schräge Seite und damit die Hypotenuse. Der Abstand des Fußes zur Wand und die gesuchte Höhe an der Wand sind die Katheten.' }) },
         commonMistakes: [{ description: 'Addiert', feedback: 'Die Leiter ist die längste Seite – subtrahieren.', answers: [txt(round(Math.sqrt(L * L + a * a), 2))] }],
       };
     },
@@ -571,7 +584,7 @@ const kathete: AuthoredExercise[] = [
         prompt: `Eine Rampe ist $${s}$ m lang (schräge Fläche) und überwindet $${num(h)}$ m Höhe. Wie weit reicht sie waagerecht? Runde auf zwei Nachkommastellen.`,
         answer: { kind: 'numeric', value: w, tolerance: 0.006, unit: 'm' },
         hints: ['Die schräge Rampe ist die Hypotenuse.', `$w = \\sqrt{${sq(s)} - ${sq(h)}}$`, 'Wurzel ziehen und runden.'],
-        solution: { steps: [{ text: 'Kathete:', math: `w = \\sqrt{${sq(s)} - ${sq(h)}} \\approx ${num(round(w, 2))}` }], finalAnswer: `$\\approx ${num(round(w, 2))}$ m` },
+        solution: { steps: [{ text: 'Kathete:', math: `w = \\sqrt{${sq(s)} - ${sq(h)}} \\approx ${num(round(w, 2))}` }], finalAnswer: `$\\approx ${num(round(w, 2))}$ m`, detailed: legDetailed(s, h, { unit: 'm', digits: 2, meaning: 'die waagerechte Länge', context: 'Die schräge Rampe, die Höhe und die waagerechte Strecke bilden ein rechtwinkliges Dreieck. Die schräge Rampe ist die längste Seite – die Hypotenuse.' }) },
         commonMistakes: [{ description: 'Höhe einfach abgezogen', feedback: 'Es werden die Quadrate abgezogen, nicht die Längen.', answers: [txt(s - h)] }],
       };
     },

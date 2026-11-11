@@ -488,7 +488,7 @@ test.describe('DoD 6 – Aufgaben bearbeiten und einreichen', () => {
     await submitButton(page).click();
     const fb = feedbackPanel(page);
     await expect(fb).toContainText('Richtig');
-    await expect(fb).toContainText('wird im MVP aber noch nicht automatisch geprüft');
+    await expect(fb).toContainText('nicht automatisch prüfen');
     const { attempts } = await learnerData(page);
     expect(attempts).toHaveLength(1);
     expect(attempts[0].submission?.imageRef).toMatch(/^data:image\/png;base64,/);
@@ -496,17 +496,24 @@ test.describe('DoD 6 – Aufgaben bearbeiten und einreichen', () => {
     await expect(canvas).toBeVisible(); // Schreibfläche bleibt nach Abgabe sichtbar (gesperrt)
   });
 
-  test('Handschrift: Zoom ändert die Darstellungsgröße, Striche bleiben erhalten', async ({ page }) => {
+  test('Handschrift: Zoom vergrößert das Papier im Ausschnitt, Striche bleiben erhalten, Papier ist scrollbar', async ({ page }) => {
     await register(page);
     await openExercise(page, 'pyth-hypotenuse-4');
     const canvas = page.locator('canvas');
-    await drawWithMouse(page, canvas, [0.2, 0.2], [0.6, 0.6]);
-    const w1 = (await canvas.boundingBox())!.width;
+    await drawWithMouse(page, canvas, [0.2, 0.5], [0.6, 0.8]);
+    const ink1 = await inkPixels(page);
     await page.getByRole('button', { name: 'Vergrößern' }).click();
-    await expect(page.getByText('150 %').or(page.getByText('125 %')).or(page.getByText('200 %'))).toBeVisible();
-    const w2 = (await canvas.boundingBox())!.width;
-    expect(w2).toBeGreaterThan(w1);
-    expect(await inkPixels(page)).toBeGreaterThan(0);
+    await expect(page.getByText('150 %')).toBeVisible();
+    await expect.poll(() => inkPixels(page), { message: 'Striche werden größer gezeichnet' }).toBeGreaterThan(ink1);
+    await page.getByRole('button', { name: 'Verkleinern' }).click();
+    await page.getByRole('button', { name: 'Verkleinern' }).click();
+    await expect(page.getByText('75 %')).toBeVisible();
+    // Das Papier reicht über den Ausschnitt hinaus (nach unten und zur Seite scrollbar)
+    const scroll = await canvas.evaluate((c) => {
+      const s = c.previousElementSibling as HTMLElement;
+      return { down: s.scrollHeight > s.clientHeight, side: s.scrollWidth > s.clientWidth };
+    });
+    expect(scroll).toEqual({ down: true, side: true });
     // Kein horizontales Scrollen der GANZEN Seite beim Zoom (nur der Container scrollt)
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   });
@@ -536,7 +543,6 @@ test('DoD 7 – 3 gestufte Hinweise, Rückfrage vor „Lösung anzeigen“, Feed
   await submitButton(page).click();
   await expect(feedbackPanel(page)).toContainText('Richtig');
   await expect(feedbackPanel(page)).toHaveClass(/emerald/);
-  await expect(page.getByText(/zählt diese Abgabe 25 %, weil du die Lösung vorher angesehen hast/)).toBeVisible();
   const { attempts } = await learnerData(page);
   expect(attempts[0]).toMatchObject({ hintsUsed: 3, solutionViewed: true });
 

@@ -57,10 +57,13 @@ interface Props {
   mistake?: string;
   /** Typische Fehler der Aufgabe, als aufklappbare Liste bei nicht korrekter Lösung. */
   commonMistakes?: CommonMistake[];
+  /** Eigene Überschrift bzw. Unterzeile statt der Standardtexte (z. B. „Ergebnis nicht erkennbar“). */
+  title?: string;
+  subtitle?: string;
 }
 
 /** Rückmeldung grün/gelb/rot mit Überschrift in Worten, Markierungen und typischen Fehlern. */
-export function FeedbackPanel({ verdict, points, feedback, marks, mistake, commonMistakes = [] }: Props) {
+export function FeedbackPanel({ verdict, points, feedback, marks, mistake, commonMistakes = [], title, subtitle }: Props) {
   const s = STYLE[verdict];
   return (
     <section className={`rounded-2xl border p-6 space-y-4 shadow-sm animate-slide-up ${s.panel}`} role="status" aria-live="polite">
@@ -70,10 +73,9 @@ export function FeedbackPanel({ verdict, points, feedback, marks, mistake, commo
         </span>
         <div className="flex-1 min-w-0">
           <h2 className="text-2xl font-bold text-slate-900">
-            {VERDICT_LABEL[verdict]}
-            {verdict === 'correct' ? '!' : ''}
+            {title ?? `${VERDICT_LABEL[verdict]}${verdict === 'correct' ? '!' : ''}`}
           </h2>
-          <p className="text-slate-700">{s.lead}</p>
+          <p className="text-slate-700">{subtitle ?? s.lead}</p>
         </div>
         {verdict !== 'unclear' && (
           <span className="flex-none rounded-full bg-white px-3 py-1 text-sm font-semibold tabular-nums text-slate-700 border border-slate-200">

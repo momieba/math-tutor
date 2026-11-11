@@ -41,7 +41,7 @@ export interface AiGrading {
 export const READ_MESSAGES = {
   noWork: 'Schreib deinen Rechenweg und dein Ergebnis auf die Schreibfläche oder lade ein Foto hoch.',
   unavailable: 'Deine Handschrift kann gerade nicht automatisch gelesen werden. Bitte versuche es später noch einmal.',
-  unreadable: 'Ich konnte dein Endergebnis nicht sicher lesen. Schreib es bitte deutlich in die letzte Zeile, z. B. „c = 25 cm“.',
+  unreadable: 'Ich kann auf deiner Schreibfläche kein Ergebnis erkennen. Bitte mach die Aufgabe noch einmal neu: Schreib deinen Rechenweg deutlich auf und dein Ergebnis in die letzte Zeile, z. B. „c = 25 cm“.',
 };
 
 export const AI_GRADING_CONFIG = {

@@ -102,6 +102,23 @@ describe('Aufgabenpools', () => {
     }
   });
 
+  it('ausführliche Lösungen: jeder Denkschritt hat Überschrift und Erklärung, Skizzen haben einen Alternativtext', () => {
+    for (const e of topics.flatMap((t) => t.subtopics.flatMap((s) => s.exercises))) {
+      for (const d of e.solution.detailed ?? []) {
+        expect(d.title.trim(), e.id).not.toBe('');
+        expect(d.text.trim().length, e.id).toBeGreaterThan(10);
+        if (d.figure) expect(d.figure.alt.trim(), e.id).not.toBe('');
+      }
+    }
+  });
+
+  it('Pythagoras: alle Rechenaufgaben zu Hypotenuse und Kathete haben eine ausführliche Lösung', () => {
+    const pyth = topics.find((t) => t.id === 'pythagoras')!;
+    const calc = pyth.subtopics.filter((s) => s.id === 'pyth-hypotenuse' || s.id === 'pyth-kathete').flatMap((s) => s.exercises.filter((e) => e.answer.kind === 'numeric' && e.requirement === 'calculation'));
+    expect(calc.length).toBeGreaterThan(40);
+    for (const e of calc) expect(e.solution.detailed?.length, e.id).toBeGreaterThanOrEqual(5);
+  });
+
   it('jede Aufgabe wird mit ihrer eigenen Soll-Antwort als richtig gewertet', () => {
     for (const e of poolTopics.flatMap((t) => t.subtopics.flatMap((s) => s.exercises))) {
       expect(evaluateAnswer(e, canonicalAnswer(e.answer)).verdict, `${e.id}: ${canonicalAnswer(e.answer)}`).toBe('correct');

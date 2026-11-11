@@ -197,7 +197,7 @@ export const nullstellen: AuthoredSubtopic = {
       build: ({ m, b }) => ({
         prompt: `Gib den Schnittpunkt des Graphen von $${fx(m, b)}$ mit der $y$-Achse an.`,
         answer: { kind: 'point', x: 0, y: b, tolerance: 0.001 },
-        hints: ['Auf der $y$-Achse gilt $x = 0$.', 'Berechne $f(0)$.', `Eingabe z. B. als $(0|${b})$.`],
+        hints: ['Auf der $y$-Achse gilt $x = 0$.', 'Berechne $f(0)$.', `Schreibe den Punkt als $(0\\,|\\,${b})$.`],
         solution: { steps: [{ text: `$f(0) = ${b}$ ⇒ $S_y(0\\,|\\,${b})$` }], finalAnswer: `$S_y(0\\,|\\,${b})$` },
         commonMistakes: [{ description: 'Koordinaten vertauscht', feedback: 'Zuerst kommt die $x$-Koordinate ($0$), dann die $y$-Koordinate.', answers: [`(${b}|0)`] }],
       }),

@@ -5,6 +5,7 @@ import type { Figure } from '../../types';
 export function ExerciseFigure({ figure }: { figure: Figure }) {
   if (figure.kind === 'coordinate-plane') return <CoordinatePlane figure={figure} />;
   if (figure.kind === 'circle') return <CircleFigure figure={figure} />;
+  if (figure.kind === 'right-triangle') return <RightTriangle figure={figure} />;
   if (figure.src) return <img src={figure.src} alt={figure.alt} className="max-h-80 rounded-xl border border-slate-200" />;
   return <p className="text-sm text-slate-600 italic">Abbildung: {figure.alt}</p>;
 }
@@ -85,6 +86,25 @@ function CoordinatePlane({ figure }: { figure: Extract<Figure, { kind: 'coordina
             </g>
           );
         })}
+        {(figure.parabolas ?? []).map((p, i) => {
+          // Polylinie in kleinen Schritten, auf den sichtbaren Ausschnitt begrenzt
+          const pts: string[] = [];
+          for (let k = 0; k <= 200; k++) {
+            const x = x0 + ((x1 - x0) * k) / 200;
+            const y = p.a * (x - p.d) ** 2 + p.e;
+            if (y >= y0 - 0.5 && y <= y1 + 0.5) pts.push(`${sx(x).toFixed(1)},${sy(Math.min(y1 + 0.5, Math.max(y0 - 0.5, y))).toFixed(1)}`);
+          }
+          return (
+            <g key={`q${i}`} className={LINE_COLORS[(i + (figure.lines?.length ?? 0)) % LINE_COLORS.length]}>
+              <polyline points={pts.join(' ')} fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinejoin="round" />
+              {p.label && (
+                <text x={sx(p.d) + 6} y={sy(p.e) + (p.a > 0 ? 16 : -8)} fill="currentColor" className="text-[12px] font-semibold">
+                  {p.label}
+                </text>
+              )}
+            </g>
+          );
+        })}
         {(figure.points ?? []).map((p, i) => (
           <g key={`p${i}`} className="text-rose-700">
             <circle cx={sx(p.x)} cy={sy(p.y)} r={4} fill="currentColor" />
@@ -160,6 +180,51 @@ function CircleFigure({ figure }: { figure: Extract<Figure, { kind: 'circle' }> 
               {figure.labels.inner}
             </text>
           </>
+        )}
+      </svg>
+      <figcaption className="sr-only">{figure.alt}</figcaption>
+    </figure>
+  );
+}
+
+/** Rechtwinkliges Dreieck als Skizze: rechter Winkel unten links, a senkrecht, b waagerecht, c schräg (Hypotenuse). */
+function RightTriangle({ figure }: { figure: Extract<Figure, { kind: 'right-triangle' }> }) {
+  const [ra, rb] = figure.ratio ?? [3, 4];
+  const k = 150 / Math.max(ra, rb);
+  const h = ra * k; // senkrechte Kathete a
+  const w = rb * k; // waagerechte Kathete b
+  const pad = { left: 70, right: 30, top: 24, bottom: 34 };
+  const C = { x: pad.left, y: pad.top + h };
+  const A = { x: pad.left + w, y: pad.top + h };
+  const B = { x: pad.left, y: pad.top };
+  const width = pad.left + w + pad.right + 40;
+  const height = pad.top + h + pad.bottom;
+  const side = (s: 'a' | 'b' | 'c') => (figure.highlight === s ? 'stroke-indigo-700' : 'stroke-slate-800');
+  const sw = (s: 'a' | 'b' | 'c') => (figure.highlight === s ? 4 : 2.5);
+  const label = (s: 'a' | 'b' | 'c') => (figure.highlight === s ? 'fill-indigo-800 font-bold' : 'fill-slate-900 font-semibold');
+  const q = 14; // Kantenlänge des Rechter-Winkel-Zeichens
+  return (
+    <figure>
+      <svg viewBox={`0 0 ${width} ${height}`} width={width} height={height} role="img" aria-label={figure.alt} className="max-w-full h-auto">
+        <path d={`M ${C.x} ${C.y - q} h ${q} v ${q}`} className="fill-none stroke-slate-600" strokeWidth={1.5} />
+        <circle cx={C.x + q / 2} cy={C.y - q / 2} r={1.8} className="fill-slate-600" />
+        <line x1={C.x} y1={C.y} x2={B.x} y2={B.y} className={side('a')} strokeWidth={sw('a')} strokeLinecap="round" />
+        <line x1={C.x} y1={C.y} x2={A.x} y2={A.y} className={side('b')} strokeWidth={sw('b')} strokeLinecap="round" />
+        <line x1={A.x} y1={A.y} x2={B.x} y2={B.y} className={side('c')} strokeWidth={sw('c')} strokeLinecap="round" />
+        {figure.labels.a && (
+          <text x={C.x - 8} y={(C.y + B.y) / 2 + 4} textAnchor="end" className={`text-[14px] ${label('a')}`}>
+            {figure.labels.a}
+          </text>
+        )}
+        {figure.labels.b && (
+          <text x={(C.x + A.x) / 2} y={C.y + 22} textAnchor="middle" className={`text-[14px] ${label('b')}`}>
+            {figure.labels.b}
+          </text>
+        )}
+        {figure.labels.c && (
+          <text x={(A.x + B.x) / 2 + 10} y={(A.y + B.y) / 2 - 8} className={`text-[14px] ${label('c')}`}>
+            {figure.labels.c}
+          </text>
         )}
       </svg>
       <figcaption className="sr-only">{figure.alt}</figcaption>

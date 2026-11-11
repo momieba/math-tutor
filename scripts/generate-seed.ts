@@ -74,7 +74,7 @@ topics.forEach((t, ti) => {
       });
       // Lösungsschlüssel getrennt: für Clients nicht lesbar (0002_production.sql)
       upsert('exercise_keys', ['exercise_id'], { exercise_id: e.id, answer: { json: e.answer }, common_mistakes: { json: e.commonMistakes } });
-      upsert('solutions', ['exercise_id'], { exercise_id: e.id, steps: { json: e.solution.steps }, final_answer: e.solution.finalAnswer, alternative: { json: e.solution.alternative } });
+      upsert('solutions', ['exercise_id'], { exercise_id: e.id, steps: { json: e.solution.steps }, final_answer: e.solution.finalAnswer, alternative: { json: e.solution.alternative }, detailed: { json: e.solution.detailed } });
       e.hints.forEach((h, hi) => upsert('hints', ['exercise_id', 'level'], { exercise_id: e.id, level: hi + 1, text: h }));
     });
   }

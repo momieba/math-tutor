@@ -105,6 +105,16 @@ export interface ModelSolution {
   steps: SolutionStep[];
   finalAnswer: string;
   alternative?: SolutionStep[];
+  /** Ausführliche Lösung mit allen Denkschritten (optional, wird zusätzlich zur knappen Musterlösung angeboten). */
+  detailed?: DetailedStep[];
+}
+
+/** Ein Denkschritt der ausführlichen Lösung: Überschrift („Was ist gesucht?“), Erklärung, optional Rechnung und Skizze. */
+export interface DetailedStep {
+  title: string;
+  text: string;
+  math?: string;
+  figure?: Figure;
 }
 
 /** Eingabeformat einer Aufgabe – ohne die Lösung (für das Antwortfeld: Zahl mit Einheit, Lösungsmenge, …). */
@@ -145,6 +155,19 @@ export type Figure =
       y: [number, number];
       lines?: { m: number; b: number; label?: string }[];
       points?: { x: number; y: number; label?: string }[];
+      /** Parabeln in Scheitelpunktform y = a(x − d)² + e. */
+      parabolas?: { a: number; d: number; e: number; label?: string }[];
+    }
+  | {
+      /** Rechtwinkliges Dreieck (rechter Winkel unten links): a senkrecht, b waagerecht, c Hypotenuse. */
+      kind: 'right-triangle';
+      alt: string;
+      /** Beschriftung der Seiten, z. B. { a: 'a = 8 cm', c: 'c = ?' }. */
+      labels: { a?: string; b?: string; c?: string };
+      /** Hervorgehobene (gesuchte) Seite. */
+      highlight?: 'a' | 'b' | 'c';
+      /** Seitenverhältnis der Katheten a : b für die Zeichnung (Standard 3 : 4). */
+      ratio?: [number, number];
     }
   | {
       kind: 'circle';

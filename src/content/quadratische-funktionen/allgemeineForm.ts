@@ -127,7 +127,7 @@ export const allgemeineForm: AuthoredSubtopic = {
       build: ({ a, b, c }) => ({
         prompt: `Gib den Schnittpunkt des Graphen von $${fx(generalTerm(a, b, c))}$ mit der $y$-Achse an.`,
         answer: { kind: 'point', x: 0, y: c, tolerance: 0.001 },
-        hints: ['Auf der $y$-Achse ist $x = 0$.', 'Berechne $f(0)$.', `Eingabe z. B. als $(0|${num(c)})$.`],
+        hints: ['Auf der $y$-Achse ist $x = 0$.', 'Berechne $f(0)$.', `Schreibe den Punkt als $(0\\,|\\,${num(c)})$.`],
         solution: { steps: [{ text: `$f(0) = ${num(c)}$ ⇒ Schnittpunkt $(0\\,|\\,${num(c)})$.` }], finalAnswer: `$(0\\,|\\,${num(c)})$` },
         commonMistakes: [{ description: 'Koordinaten vertauscht', feedback: 'Zuerst die $x$-Koordinate ($0$), dann die $y$-Koordinate.', answers: [ptInput(c, 0)] }],
       }),
