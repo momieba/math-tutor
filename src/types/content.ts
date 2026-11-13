@@ -50,7 +50,12 @@ export interface CurriculumLabel {
   schoolType: string;
   /** Klassenstufe 1–13. */
   grade: number;
+  /** Kursart in der Oberstufe. Fehlt sie, gilt das Label für Grund- und Leistungskurs (und immer in der Sek I). */
+  course?: Course;
 }
+
+/** Grundkurs bzw. Leistungskurs (Oberstufe). */
+export type Course = 'GK' | 'LK';
 
 export interface Curriculum {
   id: string;

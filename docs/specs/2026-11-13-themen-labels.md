@@ -10,7 +10,7 @@ Themen werden unabhängig von einer Klasse definiert, so wie bisher als fachlich
 ## Nicht-Ziele
 - Die App filtert Themen noch nicht nach Klasse. Das ist ein eigener Schritt, siehe „Folgeschritte“.
 - Keine Labels für Bundesländer außer NRW in diesem Schritt. Das Modell kann sie aber aufnehmen.
-- Keine Unterscheidung Grundkurs/Leistungskurs (siehe „Offene Fragen“).
+- GK/LK steckt im Label (`course`). Eine Auswahl der Kursart im Profil gibt es noch nicht.
 
 ## Datenmodell
 
@@ -56,7 +56,7 @@ interface Subtopic {
 | Thema | Thema-Labels | Abweichende Unterthemen |
 |---|---|---|
 | Prozentrechnung | 7 | – |
-| Lineare Funktionen | 8 | – (*Proportionale Funktionen* ggf. 7: bitte entscheiden) |
+| Lineare Funktionen | 7, 8 | *Proportionale Funktionen*: 7, 8 · alle anderen: 8 |
 | Lineare Gleichungssysteme | 8 | – |
 | Satz des Pythagoras | 9 | – |
 | Quadratische Gleichungen | 9 | – |
@@ -88,7 +88,7 @@ Unit-Tests für die Label-Regeln und `gradesFor`. `db:check` für Spalten, Seed 
 - **Klasse aus dem Profil:** `profiles.grade` gibt es schon. Das Filtern nach Klasse ist bewusst nicht Teil dieses Plans.
 
 ## Offene Fragen
-- **GK/LK in der Oberstufe:** als eigene `schoolType`-Werte (`gymnasium-gk`/`-lk`), als zusätzliches optionales Feld `course?: 'GK' | 'LK'` im Label, oder vorerst gar nicht? Mein Vorschlag ist das optionale Feld `course`, sobald Oberstufen-Inhalte kommen.
+- ~~GK/LK in der Oberstufe~~ → **entschieden:** optionales Feld `course?: 'GK' | 'LK'` im Label. Ohne `course` gilt das Label für beide Kursarten.
 
 ## Folgeschritte (nicht Teil dieses Plans)
 - Themenübersicht nach Klasse und Schulform aus dem Profil filtern oder sortieren.

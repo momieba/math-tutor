@@ -1,5 +1,5 @@
 import type { AuthoredSubtopic } from '../../types';
-import { videoPlaceholder } from '../helpers';
+import { nrwGym, videoPlaceholder } from '../helpers';
 import { fromTemplate, linearTerm, num, round, txt } from '../templates';
 import { plane, READABLE_SLOPES, TOPIC_ID } from './shared';
 import { lineDrawing } from '../drawing';
@@ -16,6 +16,7 @@ export const proportional: AuthoredSubtopic = {
   topicId: TOPIC_ID,
   order: 2,
   title: 'Proportionale Funktionen',
+  labels: nrwGym(7, 8), // proportionale Zuordnungen oft schon in Klasse 7
   description: 'Funktionen der Form $f(x) = mx$: Ursprungsgeraden, Quotientengleichheit, Preis pro Stück.',
   objective: 'Du erkennst proportionale Zusammenhänge, bestimmst den Faktor $m$ und rechnest damit.',
   intro:

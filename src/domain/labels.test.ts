@@ -24,6 +24,16 @@ describe('Labels', () => {
     expect(gradeText([by(7)])).toBeNull();
   });
 
+  it('Kursart: Labels ohne Kursart gelten für GK und LK, nur-LK-Inhalte sind gekennzeichnet', () => {
+    const lk = (grade: number): CurriculumLabel => ({ state: 'NW', schoolType: 'gymnasium', grade, course: 'LK' });
+    expect(unionLabels([[lk(12)], nw(12)])).toEqual([...nw(12), lk(12)]); // GK+LK und nur LK sind verschiedene Labels
+    expect(gradeText([lk(12), lk(13)])).toBe('Klasse 12–13 (LK)');
+    expect(gradeText([lk(12), lk(13)], { state: 'NW', schoolType: 'gymnasium', course: 'LK' })).toBe('Klasse 12–13');
+    expect(gradeText([lk(12)], { state: 'NW', schoolType: 'gymnasium', course: 'GK' })).toBeNull();
+    expect(gradeText([...nw(12), lk(13)], { state: 'NW', schoolType: 'gymnasium', course: 'GK' })).toBe('Klasse 12');
+    expect(gradeText([...nw(12), lk(13)])).toBe('Klasse 12–13'); // gemischt: keine Kennzeichnung
+  });
+
   it('zeigt ohne passendes Label nur das Themengebiet', () => {
     expect(topicCaption({ labels: nw(9), area: 'Geometrie' })).toBe('Klasse 9 · Geometrie');
     expect(topicCaption({ labels: [by(7)], area: 'Geometrie' })).toBe('Geometrie');

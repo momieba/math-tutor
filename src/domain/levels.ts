@@ -2,13 +2,15 @@
  * Schweregrad einer Aufgabe für Bundesland und Schulart des Lernenden.
  * Grundwert ist `Exercise.difficulty` (NRW-Gymnasium); `levels` enthält nur Abweichungen.
  */
-import type { Difficulty, Exercise, Topic } from '../types';
+import type { Course, Difficulty, Exercise, Topic } from '../types';
 
 export interface LearnerContext {
   /** Bundesland-Kürzel, z. B. 'NW'. */
   state: string;
   /** z. B. 'gymnasium', 'realschule', 'gesamtschule'. */
   schoolType: string;
+  /** Kursart in der Oberstufe, falls bekannt. */
+  course?: Course;
 }
 
 /** Bis es eine Auswahl in Registrierung/Konto gibt, gelten alle Inhalte für NRW-Gymnasium. */

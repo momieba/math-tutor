@@ -13,6 +13,7 @@ Bisher hatte jedes Thema genau eine Klasse (`Topic.grade`), und die Lehrplan-Zuo
 Themen sind fachliche Einheiten ohne feste Klasse. Wo ein Thema oder Unterthema vorkommt, sagen **Labels** `{ state, schoolType, grade }` (Bundesland × Schulform × Klasse):
 - Jedes Unterthema hat mindestens ein Label. Beim Schreiben sind sie optional, dann gelten die Labels des Themas (`src/content/labels.ts`, `withLabels`).
 - Die Labels eines Themas sind die Vereinigung der Labels seiner Unterthemen. Sie werden berechnet, nicht von Hand gepflegt.
+- Optionales Feld `course: 'GK' | 'LK'` für die Oberstufe. Ein Label ohne Kursart gilt für beide Kursarten. Inhalte nur für den Leistungskurs bekommen `nrwGymCourse('LK', …)` und werden als „Klasse 12–13 (LK)“ angezeigt. Kursarten sind nur ab Klasse 11 erlaubt (geprüft in `content.test.ts`).
 - `schoolType` wird klein geschrieben, wie in `profiles.school_type` und im `LearnerContext`.
 - Die Anzeige „Klasse 8–9 · Geometrie“ kommt aus `domain/labels.ts` (`topicCaption`) für den `LearnerContext`.
 - In der Datenbank liegen die Labels als `jsonb` an `topics` und `subtopics` (Migration `0009`, GIN-Index für spätere Filter). `topics.grade` wird nicht mehr genutzt und später entfernt.

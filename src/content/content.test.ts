@@ -17,7 +17,8 @@ describe('Wissensbasis', () => {
 
   describe('Labels (Bundesland × Schulform × Klasse)', () => {
     const valid = (l: CurriculumLabel) =>
-      /^[A-Z]{2}$/.test(l.state) && /^[a-z-]+$/.test(l.schoolType) && Number.isInteger(l.grade) && l.grade >= 1 && l.grade <= 13;
+      /^[A-Z]{2}$/.test(l.state) && /^[a-z-]+$/.test(l.schoolType) && Number.isInteger(l.grade) && l.grade >= 1 && l.grade <= 13 &&
+      (l.course === undefined || ((l.course === 'GK' || l.course === 'LK') && l.grade >= 11)); // Kursart nur in der Oberstufe
     const keys = (ls: CurriculumLabel[]) => ls.map(labelKey).sort();
 
     for (const t of topics) {
@@ -36,6 +37,12 @@ describe('Wissensbasis', () => {
       expect(kz.labels.map((l) => l.grade)).toEqual([8, 9]);
       expect(kz.subtopics.find((s) => s.id === 'kz-prisma')!.labels!.map((l) => l.grade)).toEqual([8]);
       expect(kz.subtopics.filter((s) => s.id !== 'kz-prisma').every((s) => s.labels!.map((l) => l.grade).join() === '9')).toBe(true);
+    });
+
+    it('Proportionale Funktionen liegt in Klasse 7 und 8, das Thema Lineare Funktionen damit auch', () => {
+      const lf = topics.find((t) => t.id === 'lineare-funktionen')!;
+      expect(lf.subtopics.find((s) => s.id === 'lf-proportional')!.labels!.map((l) => l.grade)).toEqual([7, 8]);
+      expect(lf.labels.map((l) => l.grade)).toEqual([7, 8]);
     });
 
     it('der Lehrplan schreibt die Schulform wie die Labels (klein)', () => {
