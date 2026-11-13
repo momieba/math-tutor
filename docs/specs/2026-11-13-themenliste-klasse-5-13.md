@@ -117,6 +117,6 @@ Unterthemen je Klasse (für die Pakete): 5 → 31 · 6 → 27 · 7 → 28 · 8 �
 
 ## Akzeptanzkriterien für diese Liste
 - [ ] Moritz hat Themen, Unterthemen und Labels geprüft und angepasst.
-- [ ] Die ➕-Vorschläge für *Prozentrechnung* (Klasse 6) sind bestätigt oder gestrichen.
+- [x] Die ➕-Vorschläge für *Prozentrechnung* (Klasse 6) sind bestätigt (Branch `content/prozent-klasse-6`). *Proportionale Funktionen* hat zusätzlich das Label Klasse 7.
 - [ ] Geltende Fassung des KLP Sek II und die Abgrenzung GK/LK sind geklärt.
 - [ ] Reihenfolge der Pakete ist bestätigt.

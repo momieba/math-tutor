@@ -141,8 +141,8 @@ test.describe('DoD 2+3 – Thema über Texteingabe finden und zuordnen', () => {
 
   for (const [query, title, meta] of [
     ['quadratische Gleichungen lösen', 'Quadratische Gleichungen', 'Klasse 9 · Algebra'],
-    ['Ich muss mich auf eine Mathearbeit zu Prozentrechnung vorbereiten.', 'Prozentrechnung', 'Klasse 7 · Zahlen und Größen'],
-    ['Mathearbeit Prozentrechnung', 'Prozentrechnung', 'Klasse 7 · Zahlen und Größen'],
+    ['Ich muss mich auf eine Mathearbeit zu Prozentrechnung vorbereiten.', 'Prozentrechnung', 'Klasse 6–7 · Zahlen und Größen'],
+    ['Mathearbeit Prozentrechnung', 'Prozentrechnung', 'Klasse 6–7 · Zahlen und Größen'],
   ] as const) {
     test(`„${query}“ → ${title}`, async ({ page }) => {
       await register(page);
