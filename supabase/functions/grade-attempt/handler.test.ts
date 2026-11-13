@@ -254,6 +254,44 @@ Deno.test('Gegenprobe fällt aus ⇒ Lesung der Korrektur zählt; mit eingetippt
   assert.equal(reads, 0);
 });
 
+const drawingContext = (): GradingContext => ({
+  exercise: { id: 'pyth-1', type: 'handwriting' },
+  key: { answer: { kind: 'drawing', expected: 'Gerade durch (0|-1) und (1|1)' }, commonMistakes: [] },
+  review: { hints: ['h1', 'h2', 'h3'], solution: { steps: [{ text: 'Gerade zeichnen' }], finalAnswer: 'Gerade' }, commonMistakes: [] },
+});
+
+Deno.test('Zeichenaufgabe: Urteil der KI ist die Bewertung, Beschreibung des Graphen geht an die KI, kein blindes Lesen', async () => {
+  const seen: { drawing?: string }[] = [];
+  let reads = 0;
+  const { handler, calls } = setup({
+    loadContext: async () => drawingContext(),
+    gradeWork: async (req) => (seen.push(req), aiGrading({ workVerdict: 'partial', finalAnswerRead: '', steps: [{ text: 'Gerade', color: 'red', message: 'Steigung falsch', box: [100, 100, 400, 600] }] })),
+    readAnswer: async () => (reads++, { readable: true, finalAnswerRead: 'x', confidence: 0.9 }),
+  });
+  const body = await (await handler(post({ exerciseId: 'pyth-1', answerRaw: '', submission: { kind: 'canvas', dataUrl: PNG } }))).json();
+  assert.equal(body.status, 'saved');
+  assert.equal(body.evaluation.verdict, 'partial');
+  assert.equal(body.evaluation.points, 0.5);
+  assert.deepEqual(body.evaluation.marks[0].region, [100, 100, 400, 600]);
+  assert.equal(seen[0].drawing, 'Gerade durch (0|-1) und (1|1)');
+  assert.equal(reads, 0);
+  assert.equal(calls.recorded[0].answerRaw, '(Zeichnung)');
+  assert.equal(calls.recorded[0].correctionSource, 'ai');
+});
+
+Deno.test('Zeichenaufgabe ohne Bild oder ohne verlässliche KI: Rückfrage, nichts gespeichert', async () => {
+  for (const [over, submission] of [
+    [{ gradeWork: async () => aiGrading() }, undefined],
+    [{ gradeWork: async () => null }, { kind: 'canvas', dataUrl: PNG }],
+    [{ gradeWork: async () => aiGrading({ confidence: 0.2 }) }, { kind: 'canvas', dataUrl: PNG }],
+  ] as [Partial<GradeDeps>, unknown][]) {
+    const { handler, calls } = setup({ loadContext: async () => drawingContext(), ...over });
+    const body = await (await handler(post({ exerciseId: 'pyth-1', answerRaw: '', submission }))).json();
+    assert.equal(body.status, 'unclear');
+    assert.equal(calls.recorded.length, 0);
+  }
+});
+
 Deno.test('Speichern schlägt fehl: Bild wird wieder entfernt, 500 ohne interne Details', async () => {
   const { handler, calls } = setup({
     loadContext: async () => context('handwriting'),

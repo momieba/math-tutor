@@ -1,6 +1,7 @@
 import { ArrowRight, ChevronRight } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router';
+import { MathText } from '../components/MathText';
 import { ProgressRing } from '../components/ProgressRing';
 import { ButtonLink } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
@@ -64,7 +65,7 @@ export default function TopicPage() {
             Klasse {topic.grade} · {topic.area}
           </p>
           <h1 className="text-2xl sm:text-3xl font-bold">{topic.title}</h1>
-          <p className="text-slate-600">{topic.description}</p>
+          <p className="text-slate-600"><MathText text={topic.description} /></p>
         </div>
         {progress && <ProgressRing score={progress.score} mastered={progress.status === 'mastered'} size={56} />}
       </header>
@@ -75,7 +76,7 @@ export default function TopicPage() {
           <h2 id="next-chapter-heading" className="text-xl font-semibold">
             Kapitel {next.order} · {next.title}
           </h2>
-          <p className="text-slate-600">{next.description}</p>
+          <p className="text-slate-600"><MathText text={next.description} /></p>
           <ButtonLink to={`/app/topics/${topic.id}/chapters/${next.id}`} variant="primary" size="lg" icon={<ArrowRight aria-hidden="true" size={20} />}>
             {started ? 'Weiter lernen' : 'Thema starten'}
           </ButtonLink>
@@ -106,7 +107,7 @@ export default function TopicPage() {
                     <span className="w-6 flex-none text-center text-sm font-semibold text-slate-500">{s.order}</span>
                     <span className="flex-1 min-w-0">
                       <span className="block font-medium text-slate-900">{s.title}</span>
-                      <span className="block truncate text-sm text-slate-600">{s.description}</span>
+                      <MathText text={s.description} className="block truncate text-sm text-slate-600" />
                     </span>
                     <ProgressRing score={p?.score ?? 0} mastered={p?.status === 'mastered'} size={40} />
                     <ChevronRight aria-hidden="true" size={18} className="flex-none text-slate-400" />

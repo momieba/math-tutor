@@ -1,0 +1,101 @@
+{
+  "$comment": "devflow-Konfiguration für math-mvp. Leere Befehle werden übersprungen. Hooks: .devflow/hooks/, registriert in .claude/settings.json.",
+  "project": {
+    "name": "math-mvp",
+    "description": "MatheMentor – tablet-first Mathe-Nachhilfe Klasse 7–9 (React/Vite/TS, Supabase, Vercel)"
+  },
+  "commands": {
+    "format_file": "",
+    "lint": "",
+    "typecheck": "npm run typecheck",
+    "test": "npm test",
+    "build": "npm run build",
+    "gate": "npm run typecheck && npm test",
+    "seed": "npm run seed:sql",
+    "db_check": "npm run db:check",
+    "functions_sync": "npm run functions:sync",
+    "functions_test": "npm run test:functions",
+    "e2e": "npm run test:e2e"
+  },
+  "format_extensions": [],
+  "git": {
+    "main_branch": "main",
+    "branch_prefix": {
+      "feature": "feat/",
+      "fix": "fix/",
+      "chore": "chore/",
+      "content": "content/"
+    }
+  },
+  "docs": {
+    "path": "docs",
+    "language": "de",
+    "drive_mode": "none",
+    "drive_sync_path": "",
+    "todo_file": "docs/TODO.md",
+    "architecture_file": "ARCHITECTURE.md"
+  },
+  "quality_gate": {
+    "on_stop": true,
+    "command": "gate",
+    "ignore": ["docs", "marketing", "*.md", ".devflow", "e2e/screenshots", "scripts/ai-test-images"]
+  },
+  "protected_paths": [
+    ".env",
+    ".env.local",
+    ".env.production",
+    ".env.development",
+    "*.local",
+    "*.pem",
+    ".git/",
+    ".vercel/",
+    "supabase/.temp/",
+    "supabase/.branches/",
+    {
+      "pattern": "content-*.sql",
+      "tools": ["Edit", "Write", "MultiEdit"],
+      "message": "Der Inhalts-Seed wird aus src/content erzeugt – ändere src/content und führe 'npm run seed:sql' aus."
+    },
+    {
+      "pattern": "supabase/functions/_shared/",
+      "tools": ["Edit", "Write", "MultiEdit"],
+      "message": "Das ist eine Kopie aus src/domain bzw. src/types – ändere das Original und führe 'npm run functions:sync' aus."
+    }
+  ],
+  "blocked_commands": [
+    {
+      "pattern": "supabase(@[\\d.]+)?\\s+(db\\s+(push|reset)|functions\\s+deploy|secrets\\s+(set|unset)|config\\s+push)",
+      "message": "Supabase-Änderungen an der Cloud laufen ausschließlich über den Workflow 'Supabase deploy' nach Merge auf main (bzw. manuell durch Moritz). Lokal nur prüfen: npm run db:check."
+    },
+    {
+      "pattern": "vercel(\\s+deploy)?\\s+.*--prod|vercel\\s+promote|vercel\\s+env\\s+(add|rm)",
+      "message": "Produktions-Deploys auf Vercel passieren automatisch über main. Keine manuellen Prod-Deploys oder Env-Änderungen durch Claude."
+    },
+    {
+      "pattern": "git\\s+push\\s+(origin\\s+)?main(\\s|$)",
+      "message": "Kein direkter Push auf main – Änderungen kommen per Pull Request (main löst Vercel- und Supabase-Deploy aus)."
+    }
+  ],
+  "release": {
+    "version_files": ["package.json"]
+  },
+  "marketing": {
+    "audience": "Eltern und Schüler:innen der Klassen 7–9 (Gymnasium NRW); sekundär Lehrkräfte",
+    "tone": "freundlich, klar, ermutigend, kein Hype, keine Leistungsversprechen; Sie-Form für Eltern/Lehrkräfte, Du-Form nur in Schüler-Posts",
+    "channels": ["linkedin", "instagram"],
+    "hashtags": ["#Mathe", "#Nachhilfe", "#EdTech", "#Schule", "#NRW"],
+    "cta": "",
+    "notes": "Produktname 'MatheMentor' ist noch ein Platzhalter (src/config/brand.ts) – vor Veröffentlichung prüfen. Solange docs/TODO.md 🔴-Punkte für den Start mit echten Schülern hat: keine Aufforderung zur Registrierung, sondern 'Einblick in die Entwicklung'. KI-Korrektur nur als Prototyp/Testphase bezeichnen.",
+    "brand": {
+      "primary_color": "",
+      "logo_path": "",
+      "tagline": "Mathe verstehen statt auswendig lernen"
+    },
+    "webhook_env": "DEVFLOW_PUBLISH_WEBHOOK"
+  },
+  "video": {
+    "engine": "ffmpeg",
+    "app_url": "http://localhost:5173",
+    "notes": "Aufnahmen NUR im lokalen Modus mit Demo-Konto (npm run dev ohne .env bzw. VITE_DATA_MODE=local) – nie echte Konten/Schülerdaten. iPad-Format wie in playwright.config.ts. Vorhandenes Skript für Landing-Bilder: npm run images:landing."
+  }
+}

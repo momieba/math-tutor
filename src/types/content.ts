@@ -22,7 +22,8 @@ export type Requirement =
   | 'reasoning' // begründen, prüfen, argumentieren
   | 'construction'; // zeichnen, konstruieren, ablesen
 
-export type Checkpoint = 'formula' | 'concept';
+/** Formel-Check im Lernpfad: Formel abfragen, zentraler Begriff bzw. Definition (aus den Regeln erzeugt, content/definitions.ts). */
+export type Checkpoint = 'formula' | 'concept' | 'definition';
 
 export const REQUIREMENTS: Requirement[] = ['knowledge', 'calculation', 'application', 'reasoning', 'construction'];
 
@@ -89,7 +90,8 @@ export type ExpectedAnswer =
   | { kind: 'numeric-set'; values: number[]; tolerance: number } // z. B. Lösungsmenge {3; -5}
   | { kind: 'text'; accepted: string[] } // Vergleich nach Normalisierung
   | { kind: 'point'; x: number; y: number; tolerance: number } // geordnetes Paar, z. B. Schnittpunkt (2|3) oder LGS-Lösung
-  | { kind: 'linear'; m: number; b: number; tolerance: number }; // Funktionsgleichung y = mx + b
+  | { kind: 'linear'; m: number; b: number; tolerance: number } // Funktionsgleichung y = mx + b
+  | { kind: 'drawing'; expected: string }; // Zeichenaufgabe (Graph ins vorgegebene Koordinatensystem), nur per KI prüfbar
 
 export interface CommonMistake {
   description: string;
@@ -154,6 +156,8 @@ export type Figure =
       y: [number, number];
       lines?: { m: number; b: number; label?: string }[];
       points?: { x: number; y: number; label?: string }[];
+      /** Leeres Koordinatensystem auf die Schreibfläche legen (Zeichenaufgabe) statt es in der Aufgabenkarte zu zeigen. */
+      onPaper?: boolean;
       /** Parabeln in Scheitelpunktform y = a(x − d)² + e. */
       parabolas?: { a: number; d: number; e: number; label?: string }[];
     }

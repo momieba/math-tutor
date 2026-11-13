@@ -6,7 +6,10 @@
 import type { Difficulty, Exercise, Requirement, Verdict } from '../types';
 import { hash01 } from './exerciseSelection';
 
-export type TestableExercise = Pick<Exercise, 'id' | 'difficulty' | 'requirement' | 'checkpoint'>;
+export type TestableExercise = Pick<Exercise, 'id' | 'difficulty' | 'requirement' | 'checkpoint'> & { answerFormat?: Pick<Exercise['answerFormat'], 'kind'> };
+
+/** Gehört in einen Test: keine Formel-Check-Frage und keine Zeichenaufgabe (die braucht die KI-Korrektur). */
+const testable = (e: TestableExercise) => !e.checkpoint && e.answerFormat?.kind !== 'drawing';
 
 export const TEST_CONFIG = {
   /** Aufgaben je Test. */
@@ -21,7 +24,7 @@ export const TEST_CONFIG = {
 
 /** Bietet das Kapitel genug Aufgaben für einen Test? Formel-Check-Fragen zählen nicht. */
 export function canOfferTest(exercises: TestableExercise[]): boolean {
-  return exercises.filter((e) => !e.checkpoint).length >= TEST_CONFIG.minPool;
+  return exercises.filter(testable).length >= TEST_CONFIG.minPool;
 }
 
 /**
@@ -30,7 +33,7 @@ export function canOfferTest(exercises: TestableExercise[]): boolean {
  * gehören nicht in den Test. Am Ende aufsteigend nach Schwierigkeit sortiert (leicht anfangen).
  */
 export function pickTestExercises<E extends TestableExercise>(exercises: E[], seed: string, size = TEST_CONFIG.size): E[] {
-  const pool = exercises.filter((e) => !e.checkpoint);
+  const pool = exercises.filter(testable);
   const rank = (e: E) => hash01(`${seed}:${e.id}`);
   const byLevel = new Map<Difficulty, E[]>();
   for (const e of [...pool].sort((a, b) => rank(a) - rank(b))) byLevel.set(e.difficulty, [...(byLevel.get(e.difficulty) ?? []), e]);

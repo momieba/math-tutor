@@ -14,7 +14,7 @@ import { markSeen, syncSeen } from './pathStorage';
 import { pathFor } from './practice';
 
 const STEP_TEXT: Partial<Record<PathStep, string>> = {
-  check: 'Drei kurze Fragen: Sitzt die Formel?',
+  check: 'Zuerst die wichtigsten Begriffe, dann die Formeln: Sitzt das Wissen aus der Erklärung?',
   starter: 'Drei leichte Aufgaben zum Warmwerden.',
   practice: 'Übe weiter – die Aufgaben passen sich deinem Stand an.',
 };
@@ -221,7 +221,7 @@ export default function ChapterPage() {
             )}
           </div>
           <Button variant="primary" size="lg" icon={<ArrowRight aria-hidden="true" size={20} />} onClick={skipToPractice}>
-            Weiter zum Formel-Check
+            Weiter zu Begriffen & Formeln
           </Button>
         </section>
       )}

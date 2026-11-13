@@ -334,6 +334,8 @@ function ownAnswers(e: AuthoredExercise): string[] {
       return [`(${de(a.x)}|${de(a.y)})`, `x = ${de(a.x)}; y = ${de(a.y)}`, `y = ${de(a.y)} und x = ${de(a.x)}`];
     case 'linear':
       return [canonicalAnswer(a), `f(x) = ${de(a.m)}x + ${de(a.b)}`.replace('+ -', '- ')];
+    case 'drawing':
+      return []; // nur per KI prüfbar
   }
 }
 
@@ -350,7 +352,7 @@ describe('Regression neuer Parser: jede Aufgabe akzeptiert ihre eigene Soll-Antw
   });
 
   it('Handschrift-Aufgaben: eigenes Endergebnis ⇒ correct + gelbe Rechenweg-Markierung (nie nur grün)', () => {
-    const hw = all.filter((e) => e.type === 'handwriting');
+    const hw = all.filter((e) => e.type === 'handwriting' && e.answer.kind !== 'drawing');
     expect(hw.length).toBeGreaterThan(0);
     for (const e of hw) {
       const r = evaluateHandwriting(e, ownAnswers(e)[0], true);

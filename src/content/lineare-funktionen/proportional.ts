@@ -2,6 +2,7 @@ import type { AuthoredSubtopic } from '../../types';
 import { videoPlaceholder } from '../helpers';
 import { fromTemplate, linearTerm, num, round, txt } from '../templates';
 import { plane, READABLE_SLOPES, TOPIC_ID } from './shared';
+import { lineDrawing } from '../drawing';
 
 const S = 'lf-proportional';
 const OBJ = ['Proportionale Funktionen erkennen', 'Steigung einer Ursprungsgeraden bestimmen'];
@@ -337,6 +338,18 @@ export const proportional: AuthoredSubtopic = {
           commonMistakes: [{ description: 'Nur gleichmäßiges Wachstum geprüft', feedback: 'Entscheidend ist, ob alle Quotienten $\\frac{y}{x}$ gleich sind.', answers: [prop ? 'b' : 'a'] }],
         };
       },
+    }),
+    // ------------------------------------------------------------ Graph zeichnen (KI-Korrektur)
+    ...fromTemplate({
+      id: 'lf-pr-zeichnen',
+      subtopicId: S,
+      count: 8,
+      type: 'handwriting',
+      requirement: 'construction',
+      difficulty: 1,
+      objectives: ['Graphen proportionaler Funktionen zeichnen'],
+      params: (r) => r.pick([[1, 1], [2, 1], [-1, 1], [-2, 1], [1, 2], [-1, 2], [3, 1], [-3, 1], [1, 3], [2, 3]] as [number, number][]),
+      build: ([rise, run]) => lineDrawing(rise / run, 0, run, rise),
     }),
   ],
 };

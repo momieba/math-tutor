@@ -2,6 +2,7 @@ import type { AuthoredSubtopic } from '../../types';
 import { videoPlaceholder } from '../helpers';
 import { fromTemplate, num, round, txt } from '../templates';
 import { fx, mc, paren, shapeOf, TOPIC_ID } from './shared';
+import { parabolaDrawing } from '../drawing';
 
 const S = 'qf-normalparabel';
 const OBJ = ['Die Normalparabel und gestreckte Parabeln kennen', 'Funktionswerte von f(x) = ax² berechnen'];
@@ -278,6 +279,18 @@ export const normalparabel: AuthoredSubtopic = {
           commonMistakes: [{ description: 'Wurzel vergessen', feedback: '$t^2 = \\ldots$ heißt: Am Ende noch die Wurzel ziehen.', answers: [txt(t * t)] }],
         };
       },
+    }),
+    // ------------------------------------------------------------ Graph zeichnen (KI-Korrektur)
+    ...fromTemplate({
+      id: 'qf-np-zeichnen',
+      subtopicId: S,
+      count: 6,
+      type: 'handwriting',
+      requirement: 'construction',
+      difficulty: 2,
+      objectives: [...OBJ, 'Parabeln zeichnen'],
+      params: (r) => r.pick([1, -1, 2, -2, 0.5, -0.5]),
+      build: (a) => parabolaDrawing(a, 0, 0),
     }),
   ],
 };

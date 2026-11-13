@@ -21,6 +21,9 @@ import {
   type DrawTool,
   type Stroke,
   type View,
+  AXES_UNIT,
+  axesLayout,
+  type PaperAxes,
 } from './canvasModel';
 import { renderStroke, renderStrokes } from './renderStrokes';
 
@@ -37,6 +40,75 @@ const GRID = 40;
 /** Breite und Abstand der Aufgabenkarte auf dem Papier (Papiereinheiten, oben mittig auf der Startseite). */
 const CARD = { width: 820, top: 24 };
 
+/** Unterstreichung nach der Korrektur: Stelle in Papierkoordinaten, Farbe und Nummer (wie in der Liste der Rückmeldung). */
+export interface CanvasAnnotation {
+  color: 'red' | 'yellow';
+  rect: { x: number; y: number; width: number; height: number };
+  label: number;
+}
+
+const ANNOTATION_COLOR = { red: '#dc2626', yellow: '#d97706' } as const;
+
+/** Wellenlinie unter der Stelle und eine nummerierte Marke am Ende (Papierkoordinaten). */
+function renderAnnotation(ctx: CanvasRenderingContext2D, a: CanvasAnnotation) {
+  const c = ANNOTATION_COLOR[a.color];
+  const y = a.rect.y + a.rect.height + 6;
+  ctx.save();
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.strokeStyle = c;
+  ctx.lineWidth = 3;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  const step = 8;
+  for (let x = a.rect.x, i = 0; x <= a.rect.x + a.rect.width; x += step, i++) {
+    const yy = y + (i % 2 === 0 ? 0 : 5);
+    if (i === 0) ctx.moveTo(x, yy);
+    else ctx.lineTo(x, yy);
+  }
+  ctx.stroke();
+  const cx = a.rect.x + a.rect.width + 18;
+  const cy = a.rect.y + a.rect.height / 2;
+  ctx.fillStyle = c;
+  ctx.beginPath();
+  ctx.arc(cx, cy, 13, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 16px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(String(a.label), cx, cy + 1);
+  ctx.restore();
+}
+
+/** Vorgegebenes Koordinatensystem als SVG (skaliert mit dem Papier; im Export zeichnet es renderAxes). */
+function AxesSvg({ axes, scale }: { axes: PaperAxes; scale: number }) {
+  const { originX, originY, rect } = axesLayout(axes);
+  const u = AXES_UNIT;
+  const X = (v: number) => originX + v * u - rect.x;
+  const Y = (v: number) => originY - v * u - rect.y;
+  const xs = Array.from({ length: axes.x[1] - axes.x[0] + 1 }, (_, i) => axes.x[0] + i);
+  const ys = Array.from({ length: axes.y[1] - axes.y[0] + 1 }, (_, i) => axes.y[0] + i);
+  return (
+    <svg
+      aria-hidden="true"
+      className="pointer-events-none absolute"
+      style={{ left: (rect.x - PAPER.minX) * scale, top: (rect.y - PAPER.minY) * scale, width: rect.width * scale, height: rect.height * scale }}
+      viewBox={`0 0 ${rect.width} ${rect.height}`}
+    >
+      {xs.map((v) => <line key={`gx${v}`} x1={X(v)} x2={X(v)} y1={Y(axes.y[0])} y2={Y(axes.y[1])} stroke="#cbd5e1" strokeWidth={1} />)}
+      {ys.map((v) => <line key={`gy${v}`} y1={Y(v)} y2={Y(v)} x1={X(axes.x[0])} x2={X(axes.x[1])} stroke="#cbd5e1" strokeWidth={1} />)}
+      <line x1={X(axes.x[0])} x2={X(axes.x[1]) + 12} y1={Y(0)} y2={Y(0)} stroke="#334155" strokeWidth={2} />
+      <line x1={X(0)} x2={X(0)} y1={Y(axes.y[0])} y2={Y(axes.y[1]) - 12} stroke="#334155" strokeWidth={2} />
+      <path d={`M ${X(axes.x[1]) + 14} ${Y(0)} l -12 -5 v 10 z`} fill="#334155" />
+      <path d={`M ${X(0)} ${Y(axes.y[1]) - 14} l -5 12 h 10 z`} fill="#334155" />
+      {xs.filter((v) => v !== 0).map((v) => <text key={`tx${v}`} x={X(v)} y={Y(0) + 20} textAnchor="middle" fontSize={15} fill="#334155">{v}</text>)}
+      {ys.filter((v) => v !== 0).map((v) => <text key={`ty${v}`} x={X(0) - 7} y={Y(v) + 5} textAnchor="end" fontSize={15} fill="#334155">{v}</text>)}
+      <text x={X(axes.x[1]) + 12} y={Y(0) - 10} fontSize={17} fontStyle="italic" fill="#334155">x</text>
+      <text x={X(0) + 10} y={Y(axes.y[1]) - 2} fontSize={17} fontStyle="italic" fill="#334155">y</text>
+    </svg>
+  );
+}
+
 interface Props {
   history: CanvasHistory;
   onChange: (next: CanvasHistory) => void;
@@ -47,6 +119,10 @@ interface Props {
   overlay?: ReactNode;
   /** Höhe des sichtbaren Ausschnitts (CSS). Standard: Seitenverhältnis einer Seite (3 : 2). */
   height?: string;
+  /** Vorgegebenes Koordinatensystem auf der Startseite (Zeichenaufgabe). */
+  axes?: PaperAxes;
+  /** Unterstreichungen nach der Korrektur (nur Anzeige, nicht Teil des Exports). */
+  annotations?: CanvasAnnotation[];
 }
 
 /**
@@ -59,7 +135,9 @@ interface Props {
  * Zeichenfläche in der Größe des Ausschnitts, die bei jedem Scrollen/Zoomen neu gezeichnet wird (auch auf iPads
  * kein Riesen-Canvas). Die Komponente ist „controlled“: Die Strich-Historie liegt beim Aufrufer.
  */
-export function HandwritingCanvas({ history, onChange, disabled = false, toolbarEnd, overlay, height }: Props) {
+export function HandwritingCanvas({ history, onChange, disabled = false, toolbarEnd, overlay, height, axes, annotations }: Props) {
+  const annotationsRef = useRef(annotations);
+  annotationsRef.current = annotations;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const [tool, setTool] = useState<Tool>('pen');
@@ -112,6 +190,7 @@ export function HandwritingCanvas({ history, onChange, disabled = false, toolbar
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       withContext((c) => {
         renderStrokes(c, visibleStrokes(historyRef.current));
+        for (const a of annotationsRef.current ?? []) renderAnnotation(c, a);
         if (preview) renderStroke(c, preview);
         c.globalCompositeOperation = 'source-over';
       });
@@ -168,7 +247,7 @@ export function HandwritingCanvas({ history, onChange, disabled = false, toolbar
     redraw();
   }, [size, scale, redraw]);
 
-  useEffect(() => redraw(), [history, redraw]);
+  useEffect(() => redraw(), [history, annotations, redraw]);
 
   /** Zoomt so, dass der Punkt (px, py) im Ausschnitt an seiner Stelle bleibt. */
   const zoomTo = useCallback(
@@ -388,6 +467,7 @@ export function HandwritingCanvas({ history, onChange, disabled = false, toolbar
           >
             {/* Seitenränder der Startseite andeuten, damit man weiß, wo „vorne“ ist */}
             <div aria-hidden="true" className="pointer-events-none absolute border-x border-dashed border-slate-300" style={{ left: -PAPER.minX * scale, top: 0, width: WORLD.width * scale, height: PAPER_SIZE.height * scale }} />
+            {axes && <AxesSvg axes={axes} scale={scale} />}
             {overlay && (
               <div
                 className="absolute"

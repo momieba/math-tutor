@@ -1,0 +1,48 @@
+# Automatisches Claude-Review für jeden (nicht-Entwurfs-)Pull-Request. Ergänzt die CI (ci.yml), ersetzt sie nicht.
+# Voraussetzung: Repo-Secret CLAUDE_CODE_OAUTH_TOKEN (lokal `claude setup-token`, dann `gh secret set CLAUDE_CODE_OAUTH_TOKEN`).
+name: Claude PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review]
+
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          # Abo (Pro/Max). Alternativ mit API-Key: anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            Du bist Reviewer im devflow-Prozess für MatheMentor (math-mvp). Lies CLAUDE.md und die relevanten Abschnitte von ARCHITECTURE.md.
+            Prüfe PR #${{ github.event.pull_request.number }} in ${{ github.repository }} (gh pr view / gh pr diff).
+
+            Prüfe besonders:
+            1. Architekturregeln: Seiten nur über services.* und domain/*; domain/ ohne I/O und ohne Import aus services/.
+            2. Lösungsschutz: keine Lösungen, Hinweise oder typischen Fehler im Client; neue Tabellen mit RLS und Test in db:check.
+            3. Generierte/kopierte Dateien: Seed nur via `npm run seed:sql`, `supabase/functions/_shared/` nur via `npm run functions:sync`.
+            4. Migrationen: neu und fortlaufend nummeriert, keine bestehende Migration verändert, umkehrbar bzw. datenverlustfrei.
+            5. Datenschutz (Nutzer sind Minderjährige): keine personenbezogenen Daten in Logs, Tests, Screenshots; kein service_role-Key oder Secret im Code.
+            6. Beide Modi (Supabase + lokal) weiter funktionsgleich; vercel.json-CSP nicht gelockert.
+            7. Tests passend zur Änderung; CHANGELOG [Unreleased] und docs/TODO.md gepflegt.
+
+            Befunde nach Schwere: 🔴 Blocker, 🟠 Wichtig, 🟡 Hinweis – jeweils Datei:Zeile, Problem, konkreter Lösungsvorschlag.
+            Poste das Ergebnis als genau EINEN PR-Kommentar mit `gh pr comment`. Schluss: APPROVE oder CHANGES REQUESTED. Antworte auf Deutsch.
+          claude_args: |
+            --allowedTools "Read,Grep,Glob,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*),Bash(git diff:*),Bash(git log:*)"
