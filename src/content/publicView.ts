@@ -15,5 +15,5 @@ export function toPublicExercise(e: AuthoredExercise): Exercise {
 }
 
 export function toPublicTopic(t: AuthoredTopic): Topic {
-  return { ...t, subtopics: t.subtopics.map((s) => ({ ...s, exercises: s.exercises.map(toPublicExercise) })) };
+  return { ...t, subtopics: t.subtopics.map((s) => ({ ...s, labels: s.labels ?? t.labels, exercises: s.exercises.map(toPublicExercise) })) };
 }

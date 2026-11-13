@@ -54,13 +54,13 @@ for (const c of curricula) {
 }
 topics.forEach((t, ti) => {
   upsert('topics', ['id'], {
-    id: t.id, curriculum_id: t.curriculumId, subject: t.subject, grade: t.grade, area: t.area, title: t.title,
+    id: t.id, curriculum_id: t.curriculumId, subject: t.subject, labels: { json: t.labels }, area: t.area, title: t.title,
     description: t.description, keywords: { arr: t.keywords }, review_status: t.reviewStatus, position: ti,
   });
   for (const s of t.subtopics) {
     upsert('subtopics', ['id'], {
       id: s.id, topic_id: s.topicId, position: s.order, title: s.title, description: s.description, objective: s.objective,
-      intro: s.intro, rules: { json: s.rules }, example: { json: s.example }, summary: { json: s.summary },
+      intro: s.intro, labels: { json: s.labels ?? t.labels }, rules: { json: s.rules }, example: { json: s.example }, summary: { json: s.summary },
     });
     s.materials.forEach((m, mi) =>
       upsert('learning_materials', ['id'], { id: m.id, subtopic_id: s.id, position: mi, kind: m.kind, title: m.title, url: m.url, provider: m.provider, duration_sec: m.durationSec }),

@@ -1,5 +1,5 @@
 import type { AuthoredTopic } from '../../types';
-import { CURRICULUM_ID } from '../helpers';
+import { CURRICULUM_ID, nrwGym } from '../helpers';
 import { applyChecks } from './checks';
 import { gleichungen } from './gleichungen';
 import { grafisch } from './grafisch';
@@ -14,7 +14,7 @@ export const gleichungssysteme: AuthoredTopic = {
   id: TOPIC_ID,
   curriculumId: CURRICULUM_ID,
   subject: 'Mathematik',
-  grade: 8,
+  labels: nrwGym(8),
   area: 'Arithmetik/Algebra',
   title: 'Lineare Gleichungssysteme',
   description: 'Zwei Gleichungen mit zwei Variablen grafisch und rechnerisch lösen – mit Einsetzungs-, Gleichsetzungs- und Additionsverfahren.',

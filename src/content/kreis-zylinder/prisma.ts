@@ -1,5 +1,5 @@
 import type { AuthoredSubtopic } from '../../types';
-import { videoPlaceholder } from '../helpers';
+import { nrwGym, videoPlaceholder } from '../helpers';
 import { fromTemplate, num, round, txt } from '../templates';
 import { TOPIC_ID } from './shared';
 
@@ -11,6 +11,7 @@ export const prisma: AuthoredSubtopic = {
   topicId: TOPIC_ID,
   order: 5,
   title: 'Prismen',
+  labels: nrwGym(8), // NRW G9: Prismen in Klasse 8, die übrigen Kapitel in Klasse 9
   description: 'Netz, Oberfläche und Volumen von Prismen mit dreieckiger, rechteckiger oder trapezförmiger Grundfläche.',
   objective: 'Du berechnest Volumen und Oberfläche von Prismen und bestimmst fehlende Größen.',
   intro:

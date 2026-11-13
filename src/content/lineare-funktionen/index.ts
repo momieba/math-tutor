@@ -1,5 +1,5 @@
 import type { AuthoredTopic } from '../../types';
-import { CURRICULUM_ID } from '../helpers';
+import { CURRICULUM_ID, nrwGym } from '../helpers';
 import { applyChecks } from './checks';
 import { funktionsbegriff } from './funktionsbegriff';
 import { proportional } from './proportional';
@@ -13,7 +13,7 @@ export const lineareFunktionen: AuthoredTopic = {
   id: TOPIC_ID,
   curriculumId: CURRICULUM_ID,
   subject: 'Mathematik',
-  grade: 8,
+  labels: nrwGym(8),
   area: 'Funktionen',
   title: 'Lineare Funktionen',
   description: 'Funktionen verstehen, Steigung und y-Achsenabschnitt deuten, Geraden aufstellen und Sachaufgaben lösen.',

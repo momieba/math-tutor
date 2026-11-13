@@ -14,20 +14,23 @@ import { prozentrechnung } from './prozentrechnung';
 import { quadratischeFunktionen } from './quadratische-funktionen';
 import { quadratischeGleichungen } from './quadratische-gleichungen';
 import { withDefinitions } from './definitions';
+import { withLabels } from './labels';
 
 export const curricula: Curriculum[] = [
   {
     id: CURRICULUM_ID,
     subject: 'Mathematik',
-    state: 'NW', // Kernlehrplan Mathematik Gymnasium Sek. I (G9) NRW, 2019; andere Länder über ExerciseLevel bzw. weitere Lehrpläne
-    schoolType: 'Gymnasium',
+    state: 'NW', // Kernlehrplan Mathematik Gymnasium Sek. I (G9) NRW, 2019; Klassen je Thema/Unterthema über Labels (ADR-0003), andere Länder über Labels und ExerciseLevel
+    schoolType: 'gymnasium',
     gradeFrom: 5,
     gradeTo: 10,
     version: '2026.2',
   },
 ];
 
-export const topics: AuthoredTopic[] = [prozentrechnung, lineareFunktionen, gleichungssysteme, pythagoras, quadratischeGleichungen, quadratischeFunktionen, kreisZylinder].map(withDefinitions);
+export const topics: AuthoredTopic[] = [prozentrechnung, lineareFunktionen, gleichungssysteme, pythagoras, quadratischeGleichungen, quadratischeFunktionen, kreisZylinder]
+  .map(withDefinitions)
+  .map(withLabels);
 
 /** Themen mit Aufgabenpool (≥ 50 Aufgaben je Kapitel, adaptives Üben). Die ersten drei Themen werden später nachgezogen. */
 export const POOL_TOPIC_IDS = ['lineare-funktionen', 'lineare-gleichungssysteme', 'kreis-zylinder', 'prozentrechnung', 'quadratische-gleichungen', 'pythagoras', 'quadratische-funktionen'];

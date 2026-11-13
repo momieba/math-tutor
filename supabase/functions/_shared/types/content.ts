@@ -40,6 +40,24 @@ export interface ExerciseLevel {
 
 export type ReviewStatus = 'draft' | 'internal-review' | 'approved';
 
+/**
+ * Wo ein Thema bzw. Unterthema im Unterricht vorkommt: Bundesland × Schulform × Klasse.
+ * Themen haben keine feste Klasse; ein Thema oder Unterthema kann mehrere Labels haben (ADR-0003).
+ */
+export interface CurriculumLabel {
+  /** Bundesland-Kürzel wie im LearnerContext, z. B. 'NW'. */
+  state: string;
+  /** Klein geschrieben wie im LearnerContext: 'gymnasium', 'realschule', 'gesamtschule', … */
+  schoolType: string;
+  /** Klassenstufe 1–13. */
+  grade: number;
+  /** Kursart in der Oberstufe. Fehlt sie, gilt das Label für Grund- und Leistungskurs (und immer in der Sek I). */
+  course?: Course;
+}
+
+/** Grundkurs bzw. Leistungskurs (Oberstufe). */
+export type Course = 'GK' | 'LK';
+
 export interface Curriculum {
   id: string;
   subject: 'Mathematik';
@@ -221,6 +239,8 @@ export interface Subtopic {
   materials: LearningMaterial[];
   example: WorkedExample;
   summary: string[];
+  /** Wo dieses Unterthema im Unterricht vorkommt (mindestens ein Label). */
+  labels: CurriculumLabel[];
   exercises: Exercise[];
 }
 
@@ -228,7 +248,8 @@ export interface Topic {
   id: string;
   curriculumId: string;
   subject: 'Mathematik';
-  grade: number;
+  /** Vereinigung der Labels aller Unterthemen (wird in src/content/index.ts berechnet). */
+  labels: CurriculumLabel[];
   area: string; // Themengebiet, z. B. Geometrie
   title: string;
   description: string;
@@ -242,5 +263,7 @@ export interface Topic {
 export type TopicSummary = Omit<Topic, 'subtopics'> & { subtopicCount: number; exerciseCount: number };
 
 /** Kapitel bzw. Thema in der Wissensbasis, mit Lösungsschlüsseln. */
-export type AuthoredSubtopic = Omit<Subtopic, 'exercises'> & { exercises: AuthoredExercise[] };
+/** Beim Schreiben sind die Labels eines Unterthemas optional: ohne eigene gelten die Labels des Themas. */
+export type AuthoredSubtopic = Omit<Subtopic, 'exercises' | 'labels'> & { labels?: CurriculumLabel[]; exercises: AuthoredExercise[] };
+/** `labels` des Themas: beim Schreiben die Vorgabe für Unterthemen ohne eigene Labels; nach `withLabels` die Vereinigung. */
 export type AuthoredTopic = Omit<Topic, 'subtopics'> & { subtopics: AuthoredSubtopic[] };

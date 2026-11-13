@@ -5,6 +5,7 @@ import { MathText } from '../components/MathText';
 import { ProgressRing } from '../components/ProgressRing';
 import { ButtonLink } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
+import { topicCaption } from '../domain/labels';
 import { nextChapterId } from '../domain/progressView';
 import { services } from '../services';
 import type { Topic, TopicProgress } from '../types';
@@ -62,7 +63,7 @@ export default function TopicPage() {
       <header className="flex items-start gap-4">
         <div className="flex-1 space-y-1">
           <p className="text-sm text-slate-500">
-            Klasse {topic.grade} · {topic.area}
+            {topicCaption(topic)}
           </p>
           <h1 className="text-2xl sm:text-3xl font-bold">{topic.title}</h1>
           <p className="text-slate-600"><MathText text={topic.description} /></p>

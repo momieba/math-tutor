@@ -1,5 +1,5 @@
 import type { AuthoredTopic } from '../../types';
-import { CURRICULUM_ID, videoPlaceholder } from '../helpers';
+import { CURRICULUM_ID, nrwGym, videoPlaceholder } from '../helpers';
 
 const T = 'prozentrechnung';
 
@@ -7,7 +7,7 @@ export const prozentBasis: AuthoredTopic = {
   id: T,
   curriculumId: CURRICULUM_ID,
   subject: 'Mathematik',
-  grade: 7,
+  labels: nrwGym(7),
   area: 'Zahlen und Größen',
   title: 'Prozentrechnung',
   description: 'Grundwert, Prozentwert und Prozentsatz verstehen und berechnen – mit Rabatten und Alltagsbeispielen.',

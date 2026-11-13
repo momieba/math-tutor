@@ -30,7 +30,7 @@ Vor einem PR muss alles laufen, was die CI (`.github/workflows/ci.yml`) prüft: 
 - Seiten nutzen nur `services.*` und `domain/*`, **nie** Supabase oder localStorage direkt.
 - `src/domain/` ist reine Logik ohne I/O und importiert nichts aus `services/`.
 - Bewertungslogik gibt es genau einmal: `src/domain/evaluate.ts`. `supabase/functions/_shared/` ist eine **Kopie** → nie direkt bearbeiten, sondern `npm run functions:sync`.
-- Lerninhalte sind eine geprüfte, versionierte Wissensbasis in `src/content` und werden **nie von einer KI erzeugt oder ohne fachliche Freigabe geändert**. Neue Inhalte: Muster wie `src/content/lineare-funktionen/` (ein Ordner je Thema, eine Datei je Kapitel). Regeln nur hinten anfügen (IDs hängen an der Reihenfolge).
+- Lerninhalte sind eine geprüfte, versionierte Wissensbasis in `src/content` und kommen **nie ungeprüft zu Schülern**: KI-Entwürfe nur auf `content/…`-Branches, gemergt erst nach fachlicher Freigabe im PR (ADR-0002). Freigegebene Inhalte nur auf ausdrücklichen Auftrag ändern. Neue Inhalte: Muster wie `src/content/lineare-funktionen/` (ein Ordner je Thema, eine Datei je Kapitel). Regeln nur hinten anfügen (IDs hängen an der Reihenfolge).
 - `supabase/seeds/content-<prüfsumme>.sql` ist **generiert** → nie von Hand bearbeiten, sondern `npm run seed:sql`.
 - Der Browser kennt keine Lösungen. Lösungen, Hinweise, typische Fehler nur serverseitig (RLS, protokollierende RPCs, Edge Function `grade-attempt`). Jede neue Tabelle braucht RLS-Policies und einen Test in `db:check`.
 - Beide Modi (Supabase und lokal) bleiben funktionsgleich. Production-Builds ohne Supabase-Konfiguration zeigen einen Konfigurationsfehler, außer `VITE_DATA_MODE=local`.

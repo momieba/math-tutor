@@ -5,6 +5,7 @@ import { ScoreBadge } from '../components/ScoreBadge';
 import { areaVisual } from '../components/topicVisuals';
 import { ButtonLink, EmptyState, SkeletonCard, useToast } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
+import { topicCaption } from '../domain/labels';
 import { recommendNext, timeAgo, VERDICT_LABEL, type Recommendation } from '../domain/progressView';
 import { recommendReviews, REVIEW_REASON_TEXT, type ReviewRecommendation } from '../domain/recommendations';
 import { searchTopics, type MatchCandidate } from '../domain/topicMatcher';
@@ -270,7 +271,7 @@ export default function DashboardPage() {
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-slate-900">{c.title}</p>
                         <p className="text-sm text-slate-600">
-                          {t && `Klasse ${t.grade} · ${t.area}`}
+                          {t && topicCaption(t)}
                           {chapterTitle && ` · Kapitel „${chapterTitle}“`}
                         </p>
                       </div>
@@ -321,7 +322,7 @@ export default function DashboardPage() {
                   </span>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-slate-600">
-                      Klasse {topic.grade} · {topic.area}
+                      {topicCaption(topic)}
                     </p>
                     <h3 className="text-xl font-semibold text-slate-900">{topic.title}</h3>
                   </div>
