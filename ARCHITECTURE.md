@@ -1,7 +1,7 @@
 # Architektur – MatheMentor
 
 ## 1. Überblick
-Tablet-first Single-Page-App (React/Vite/TS) für Mathe Klasse 7–9. Lerninhalte sind eine **geprüfte, versionierte Wissensbasis** in `src/content` und werden nie von einer KI erzeugt.
+Tablet-first Single-Page-App (React/Vite/TS) für Mathe Klasse 7–9. Lerninhalte sind eine **geprüfte, versionierte Wissensbasis** in `src/content` und kommen nie ungeprüft zu Schülern (KI-Entwürfe nur per `content/…`-Branch und fachlicher Freigabe im PR, siehe [ADR-0002](docs/adr/0002-ki-entwuerfe-fuer-inhalte.md)).
 
 ```mermaid
 flowchart LR
