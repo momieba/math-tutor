@@ -12,7 +12,9 @@ export async function readInput() {
 }
 
 export function context(input) {
-  const projectDir = process.env.CLAUDE_PROJECT_DIR || input.cwd || process.cwd();
+  // Windows: VS Code liefert den Pfad oft als „c:\…“. Vite/Vitest lädt Module dann doppelt (c: und C:),
+  // und z. B. `describe` findet seinen Runner nicht. Laufwerksbuchstaben daher immer groß.
+  const projectDir = (process.env.CLAUDE_PROJECT_DIR || input.cwd || process.cwd()).replace(/^([a-z]):/, (_, d) => `${d.toUpperCase()}:`);
   const configPath = path.join(projectDir, '.devflow', 'config.json');
   let config = null;
   try { config = JSON.parse(fs.readFileSync(configPath, 'utf8')); } catch { /* keine Config */ }
