@@ -1,0 +1,35 @@
+# Claude reagiert auf @claude in Issues, Issue-/PR-Kommentaren und Review-Kommentaren.
+# Voraussetzung: Repo-Secret CLAUDE_CODE_OAUTH_TOKEN (lokal `claude setup-token`, dann `gh secret set CLAUDE_CODE_OAUTH_TOKEN`).
+# Claude arbeitet auf einem eigenen Branch und öffnet höchstens einen PR – gemergt wird von Hand.
+name: Claude (@claude)
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+  issues:
+    types: [opened, assigned]
+
+jobs:
+  claude:
+    if: |
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude') && github.event.comment.user.login == github.repository_owner) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude') && github.event.comment.user.login == github.repository_owner) ||
+      (github.event_name == 'issues' && contains(github.event.issue.body, '@claude') && github.event.issue.user.login == github.repository_owner)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          # Abo (Pro/Max). Alternativ mit API-Key: anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}

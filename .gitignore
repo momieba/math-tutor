@@ -32,3 +32,10 @@ test-results/
 playwright-report/
 # Screenshots werden bei jedem E2E-Lauf neu erzeugt (enthalten Zeitstempel)
 e2e/screenshots/
+
+# devflow (Logs der Hooks, lokale Claude-Einstellungen, gerenderte Videos)
+.devflow/logs/
+.claude/settings.local.json
+marketing/video/**/out/
+# Temporäre Hilfsskripte
+*.tmp.mjs

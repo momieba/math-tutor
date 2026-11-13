@@ -1,0 +1,52 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./**/.env)",
+      "Read(./**/.env.*)",
+      "Bash(gh pr merge:*)",
+      "Bash(git push --force:*)",
+      "Bash(git push origin main:*)"
+    ],
+    "allow": [
+      "Bash(npm test)",
+      "Bash(npm run typecheck)",
+      "Bash(npm run build)",
+      "Bash(npm run seed:sql)",
+      "Bash(npm run db:check)",
+      "Bash(npm run functions:sync)",
+      "Bash(npm run test:functions)",
+      "Bash(npm run test:e2e)",
+      "Bash(npx vitest run:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git switch:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(gh issue view:*)",
+      "Bash(gh pr view:*)",
+      "Bash(gh pr diff:*)",
+      "Bash(gh pr checks:*)",
+      "Bash(gh run list:*)",
+      "Bash(gh run view:*)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      { "hooks": [{ "type": "command", "command": "node .devflow/hooks/session-start.mjs", "timeout": 15 }] }
+    ],
+    "PreToolUse": [
+      { "matcher": "Bash", "hooks": [{ "type": "command", "command": "node .devflow/hooks/guard-bash.mjs", "timeout": 10 }] },
+      { "matcher": "Read|Edit|Write|MultiEdit", "hooks": [{ "type": "command", "command": "node .devflow/hooks/protect-files.mjs", "timeout": 10 }] }
+    ],
+    "PostToolUse": [
+      { "matcher": "Edit|Write|MultiEdit", "hooks": [{ "type": "command", "command": "node .devflow/hooks/post-edit.mjs", "timeout": 60 }] },
+      { "matcher": "Bash", "hooks": [{ "type": "command", "command": "node .devflow/hooks/audit-log.mjs", "timeout": 10 }] }
+    ],
+    "Stop": [
+      { "hooks": [{ "type": "command", "command": "node .devflow/hooks/quality-gate.mjs", "timeout": 600 }] }
+    ]
+  }
+}
