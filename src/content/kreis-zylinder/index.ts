@@ -1,5 +1,5 @@
 import type { AuthoredTopic } from '../../types';
-import { CURRICULUM_ID } from '../helpers';
+import { CURRICULUM_ID, nrwGym } from '../helpers';
 import { applyChecks } from './checks';
 import { ausschnitt } from './ausschnitt';
 import { flaeche } from './flaeche';
@@ -14,7 +14,7 @@ export const kreisZylinder: AuthoredTopic = {
   id: TOPIC_ID,
   curriculumId: CURRICULUM_ID,
   subject: 'Mathematik',
-  grade: 9,
+  labels: nrwGym(9),
   area: 'Geometrie',
   title: 'Kreis und Zylinder',
   description: 'Umfang und Fläche von Kreisen, Kreisausschnitte und -ringe, Prismen und Zylinder berechnen.',

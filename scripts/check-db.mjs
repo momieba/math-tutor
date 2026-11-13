@@ -43,6 +43,17 @@ console.log('✓ Seed ausgeführt', counts.rows[0]);
 await db.exec(seed); // Idempotenz
 console.log('✓ Seed idempotent');
 
+// Labels (0009): jedes Thema und Unterthema hat Labels aus dem Seed, Prismen (Kreis und Zylinder) liegt in Klasse 8
+const labels = (await db.query(`select
+  (select count(*) from topics where jsonb_array_length(labels) = 0) + (select count(*) from subtopics where jsonb_array_length(labels) = 0) as ohne,
+  (select labels @> '[{"state":"NW","schoolType":"gymnasium","grade":8}]' from subtopics where id = 'kz-prisma') as prisma8,
+  (select count(*) from topics where labels @> '[{"grade":9}]') as klasse9,
+  (select count(*) from topics where grade is not null) as mit_grade`)).rows[0];
+if (Number(labels.ohne) !== 0 || labels.prisma8 !== true || Number(labels.klasse9) < 1 || Number(labels.mit_grade) !== 0) {
+  throw new Error(`Labels aus dem Seed unvollständig: ${JSON.stringify(labels)}`);
+}
+console.log('✓ Labels an Themen und Unterthemen', labels);
+
 const U1 = '11111111-1111-1111-1111-111111111111';
 const U2 = '22222222-2222-2222-2222-222222222222';
 await db.exec(`insert into auth.users (id, email, raw_user_meta_data) values ('${U1}', 'a@x.de', '{"display_name":"Anna","consent_version":"2026-11"}'), ('${U2}', 'b@x.de', '{}')`);
@@ -81,6 +92,8 @@ const A1 = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 console.log('Schüler U1 – Inhalte und Lösungen:');
 await as(U1);
 await expectOk('Inhalte lesen', `select count(*) c from topics`);
+await expectValue('Labels lesen', `select labels->0->>'grade' from subtopics where id = 'kz-prisma'`, 8);
+await expectDenied('Labels ändern', `update subtopics set labels = '[]' where id = 'kz-prisma'`);
 await expectOk('Aufgaben ohne Lösung lesen', `select id, answer_format from exercises limit 1`);
 await expectDenied('Inhalte schreiben', `insert into topics (id, curriculum_id, grade, area, title) values ('x','de-gym-mathe-7-9-v1',7,'a','b')`);
 await expectDenied('Aufgabe ändern', `update exercises set prompt = 'x'`);

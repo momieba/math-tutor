@@ -1,5 +1,5 @@
 import type { AuthoredTopic } from '../../types';
-import { CURRICULUM_ID, videoPlaceholder } from '../helpers';
+import { CURRICULUM_ID, nrwGym, videoPlaceholder } from '../helpers';
 
 const T = 'quadratische-gleichungen';
 
@@ -7,7 +7,7 @@ export const quadratischBasis: AuthoredTopic = {
   id: T,
   curriculumId: CURRICULUM_ID,
   subject: 'Mathematik',
-  grade: 9,
+  labels: nrwGym(9),
   area: 'Algebra',
   title: 'Quadratische Gleichungen',
   description: 'Gleichungen mit $x^2$ lösen: Wurzelziehen, Satz vom Nullprodukt und pq-Formel.',

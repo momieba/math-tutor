@@ -3,7 +3,7 @@
  * die Quelle der Inhalte; befüllt wird sie aus der geprüften Wissensbasis per `npm run seed:sql`.
  * Lösungsschlüssel (exercise_keys, hints, solutions) sind für Clients nicht lesbar und werden hier nicht abgefragt.
  */
-import type { AnswerFormat, Choice, Curriculum, Exercise, ExerciseLevel, LearningMaterial, ReviewStatus, Rule, Subtopic, Topic, WorkedExample } from '../../types';
+import type { AnswerFormat, Choice, Curriculum, CurriculumLabel, Exercise, ExerciseLevel, LearningMaterial, ReviewStatus, Rule, Subtopic, Topic, WorkedExample } from '../../types';
 import { createCatalogContentRepository } from '../shared/catalogContentRepository';
 import type { ContentRepository } from '../types';
 import { getSupabase } from './client';
@@ -51,13 +51,14 @@ interface SubtopicRow {
   rules: Rule[];
   example: WorkedExample;
   summary: string[];
+  labels: CurriculumLabel[];
   learning_materials: MaterialRow[];
   exercises: ExerciseRow[];
 }
 interface TopicRow {
   id: string;
   curriculum_id: string;
-  grade: number;
+  labels: CurriculumLabel[];
   area: string;
   title: string;
   description: string;
@@ -109,6 +110,7 @@ function mapSubtopic(r: SubtopicRow): Subtopic {
     })),
     example: r.example,
     summary: r.summary,
+    labels: r.labels ?? [],
     exercises: byPosition(r.exercises).map(mapExercise),
   };
 }
@@ -118,7 +120,7 @@ function mapTopic(r: TopicRow): Topic {
     id: r.id,
     curriculumId: r.curriculum_id,
     subject: 'Mathematik',
-    grade: r.grade,
+    labels: r.labels ?? [],
     area: r.area,
     title: r.title,
     description: r.description,

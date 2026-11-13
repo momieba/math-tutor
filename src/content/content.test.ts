@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { POOL_TOPIC_IDS, topics } from './index';
+import { curricula, POOL_TOPIC_IDS, topics } from './index';
+import type { CurriculumLabel } from '../types';
+import { labelKey, unionLabels } from '../domain/labels';
 import { canonicalAnswer, evaluateAnswer } from '../domain/evaluate';
 import { exerciseKey } from './templates';
 import { isDefinition } from '../domain/learningPath';
@@ -11,6 +13,34 @@ describe('Wissensbasis', () => {
   it('hat eindeutige IDs', () => {
     const ids = [...topics.map((t) => t.id), ...topics.flatMap((t) => t.subtopics.map((s) => s.id)), ...allExercises.map((e) => e.id)];
     expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  describe('Labels (Bundesland × Schulform × Klasse)', () => {
+    const valid = (l: CurriculumLabel) =>
+      /^[A-Z]{2}$/.test(l.state) && /^[a-z-]+$/.test(l.schoolType) && Number.isInteger(l.grade) && l.grade >= 1 && l.grade <= 13;
+    const keys = (ls: CurriculumLabel[]) => ls.map(labelKey).sort();
+
+    for (const t of topics) {
+      it(`${t.id}: jedes Unterthema hat gültige Labels ohne Doppelte, das Thema genau deren Vereinigung`, () => {
+        for (const s of t.subtopics) {
+          expect(s.labels?.length, s.id).toBeGreaterThan(0);
+          expect(s.labels!.every(valid), s.id).toBe(true);
+          expect(new Set(keys(s.labels!)).size, s.id).toBe(s.labels!.length);
+        }
+        expect(keys(t.labels)).toEqual(keys(unionLabels(t.subtopics.map((s) => s.labels!))));
+      });
+    }
+
+    it('Unterthemen ohne eigene Labels übernehmen die des Themas, eigene Labels gehen vor', () => {
+      const kz = topics.find((t) => t.id === 'kreis-zylinder')!;
+      expect(kz.labels.map((l) => l.grade)).toEqual([8, 9]);
+      expect(kz.subtopics.find((s) => s.id === 'kz-prisma')!.labels!.map((l) => l.grade)).toEqual([8]);
+      expect(kz.subtopics.filter((s) => s.id !== 'kz-prisma').every((s) => s.labels!.map((l) => l.grade).join() === '9')).toBe(true);
+    });
+
+    it('der Lehrplan schreibt die Schulform wie die Labels (klein)', () => {
+      expect(curricula.every((c) => /^[a-z-]+$/.test(c.schoolType))).toBe(true);
+    });
   });
 
   it('Pythagoras hat alle 8 Kapitel, andere Themen mindestens 2', () => {

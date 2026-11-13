@@ -1,5 +1,5 @@
 import type { AuthoredTopic } from '../../types';
-import { CURRICULUM_ID } from '../helpers';
+import { CURRICULUM_ID, nrwGym } from '../helpers';
 import { allgemeineForm } from './allgemeineForm';
 import { applyChecks } from './checks';
 import { normalparabel } from './normalparabel';
@@ -12,7 +12,7 @@ export const quadratischeFunktionen: AuthoredTopic = {
   id: TOPIC_ID,
   curriculumId: CURRICULUM_ID,
   subject: 'Mathematik',
-  grade: 9,
+  labels: nrwGym(9),
   area: 'Funktionen',
   title: 'Quadratische Funktionen',
   description: 'Parabeln verstehen: Streckung und Verschiebung, Scheitelpunkt, quadratische Ergänzung, Nullstellen und Anwendungen.',

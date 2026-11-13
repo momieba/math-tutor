@@ -37,7 +37,7 @@ interface Subtopic {
 **Regeln (geprüft in `content.test.ts`):**
 1. Jedes Thema und jedes Unterthema hat mindestens ein Label. Es gibt keine doppelten Labels.
 2. Beim Schreiben (`AuthoredSubtopic`) sind die Labels **optional**. Fehlen sie, übernimmt das Unterthema die Labels des Themas. Nach der Aufbereitung (`src/content/index.ts`) hat jedes Unterthema seine Labels ausdrücklich. App, Seed und Datenbank sehen also immer vollständige Labels.
-3. Die Labels des Themas sind genau die **Vereinigung** der Labels seiner Unterthemen. Abweichungen schlagen im Test fehl. So kann ein Thema nicht in einer Klasse auftauchen, für die es kein einziges Kapitel gibt.
+3. Die Labels des Themas sind genau die **Vereinigung** der Labels seiner Unterthemen. So kann ein Thema nicht in einer Klasse auftauchen, für die es kein einziges Kapitel gibt. *Umgesetzt:* Die beim Schreiben angegebenen Labels des Themas sind die Vorgabe für Unterthemen ohne eigene Labels. `withLabels` ersetzt sie danach durch die berechnete Vereinigung, und der Test prüft das Ergebnis.
 4. `schoolType` wird einheitlich klein geschrieben, wie im `LearnerContext`. Den Lehrplan-Eintrag (`'Gymnasium'`) gleiche ich mit an.
 
 **Bestehende Felder:**

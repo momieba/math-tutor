@@ -109,6 +109,8 @@ Kapitel haben 50–100 Aufgaben. Geübt wird mit „Nächste Aufgabe“; `nextEx
 
 **Inhalte** (je Thema ein Ordner: `basis.ts` bzw. Kapiteldateien, `pool.ts`, `checks.ts`): Handgeschriebene Aufgaben (Wissen, Begründen, Sachaufgaben) plus **Aufgabenvorlagen** (`src/content/templates.ts`), die beim Build viele Varianten mit gerechneten Antworten und Lösungsschritten erzeugen. Deterministisch (Seed = Vorlagen-ID), IDs stabil (`lf-st-graph-01`). Eine Vorlage nachträglich inhaltlich zu ändern, ändert alle ihre Aufgaben – dann lieber eine neue Vorlage anlegen. `content.test.ts` prüft je Pool-Kapitel: ≥ 50 Aufgaben, alle Stufen (je ≥ 8), ≥ 3 Anforderungsarten, ≥ 20 % Sachaufgaben, keine doppelten Texte, jede Soll-Antwort wird als richtig gewertet, LaTeX-Backslashes vollständig.
 
+**Labels statt Klasse am Thema** ([ADR-0003](docs/adr/0003-labels-statt-klasse-am-thema.md)): Themen haben keine feste Klasse. Themen und Unterthemen tragen Labels `{ state, schoolType, grade }` (Bundesland × Schulform × Klasse; `topics.labels`/`subtopics.labels`, jsonb). Unterthemen ohne eigene Labels übernehmen beim Aufbereiten (`content/labels.ts`) die des Themas; die Labels des Themas sind die Vereinigung der Unterthemen-Labels (geprüft in `content.test.ts`). Die Anzeige „Klasse 8–9 · Geometrie“ berechnet `domain/labels.ts` für den `LearnerContext`. `topics.grade` ist veraltet (nullable, wird später entfernt).
+
 **Schweregrad je Land/Schulart** (`domain/levels.ts`): `difficulty` gilt für NRW-Gymnasium; `levels` enthält Abweichungen `{ state?, schoolType, difficulty | null }` (`null` = dort nicht anbieten). Das Content-Repository löst den Wert für den Lernenden auf (vorerst fest NRW-Gymnasium; `profiles.state`/`school_type` sind angelegt).
 
 ### Lernpfad (`domain/learningPath.ts`)
