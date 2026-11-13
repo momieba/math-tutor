@@ -2,6 +2,7 @@ import type { AuthoredSubtopic } from '../../types';
 import { videoPlaceholder } from '../helpers';
 import { fromTemplate, num, round, txt } from '../templates';
 import { fx, mc, paren, pt, ptInput, vertexTerm, TOPIC_ID } from './shared';
+import { parabolaDrawing } from '../drawing';
 
 const S = 'qf-scheitelform';
 const OBJ = ['Die Scheitelpunktform deuten', 'Parabeln verschieben'];
@@ -276,6 +277,18 @@ export const scheitelform: AuthoredSubtopic = {
           commonMistakes: [{ description: 'Nur halbe Breite', feedback: 'Die Nullstellen liegen bei $-x$ und $+x$: Die Breite ist doppelt so groß.', answers: [String(w)] }],
         };
       },
+    }),
+    // ------------------------------------------------------------ Graph zeichnen (KI-Korrektur)
+    ...fromTemplate({
+      id: 'qf-sf-zeichnen',
+      subtopicId: S,
+      count: 10,
+      type: 'handwriting',
+      requirement: 'construction',
+      difficulty: 3,
+      objectives: [...OBJ, 'Verschobene Parabeln zeichnen'],
+      params: (r) => ({ a: r.pick([1, -1]), d: r.int(-3, 3), e: r.int(-3, 3) }),
+      build: ({ a, d, e }) => parabolaDrawing(a, d, e),
     }),
   ],
 };

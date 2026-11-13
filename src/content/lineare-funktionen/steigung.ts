@@ -2,6 +2,7 @@ import type { AuthoredSubtopic } from '../../types';
 import { videoPlaceholder } from '../helpers';
 import { fromTemplate, linearTerm, num, round, shuffledChoices, txt } from '../templates';
 import { fx, plane, READABLE_SLOPES, slopeFraction, TOPIC_ID, yx } from './shared';
+import { lineDrawing } from '../drawing';
 
 const S = 'lf-steigung';
 const OBJ = ['Steigung und y-Achsenabschnitt deuten', 'Steigungsdreieck nutzen'];
@@ -349,6 +350,21 @@ export const steigung: AuthoredSubtopic = {
           commonMistakes: [{ description: 'Gegenzahl der Steigung gewählt', feedback: '$m$ und $-m$ sind verschiedene Steigungen – solche Geraden schneiden sich.', answers: choices.filter((ch) => ch.label === `$${yx(-m, b)}$`).map((ch) => ch.id) }],
         };
       },
+    }),
+    // ------------------------------------------------------------ Graph zeichnen (KI-Korrektur)
+    ...fromTemplate({
+      id: 'lf-st-zeichnen',
+      subtopicId: S,
+      count: 10,
+      type: 'handwriting',
+      requirement: 'construction',
+      difficulty: 2,
+      objectives: ['Graphen linearer Funktionen zeichnen'],
+      params: (r) => {
+        const [rise, run] = r.pick([[1, 1], [2, 1], [-1, 1], [-2, 1], [1, 2], [-1, 2], [3, 2], [-3, 2], [2, 3], [-2, 3]] as [number, number][]);
+        return { rise, run, b: r.int(-3, 3) };
+      },
+      build: ({ rise, run, b }) => lineDrawing(rise / run, b, run, rise),
     }),
   ],
 };

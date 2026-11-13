@@ -162,11 +162,43 @@ export function toWorld(clientX: number, clientY: number, rect: { left: number; 
 }
 
 /**
- * Bereich, der exportiert wird: alle sichtbaren Stift- und Linienstriche plus Rand, mindestens 600 × 400 Einheiten,
- * auf das Papier begrenzt. Ohne Striche: die Startseite. So wird nicht das ganze (große, meist leere) Papier verschickt.
+ * Rahmen auf dem exportierten Bild ([ymin, xmin, ymax, xmax] in 0..1000, siehe MarkRegion) → Rechteck in Papierkoordinaten.
+ * `area` ist der exportierte Bereich (strokeBounds mit denselben Strichen und demselben Koordinatensystem wie beim Export).
  */
-export function strokeBounds(strokes: Stroke[], margin = 40): { x: number; y: number; width: number; height: number } {
+export function regionToWorld(region: [number, number, number, number], area: { x: number; y: number; width: number; height: number }) {
+  const [y0, x0, y1, x1] = region;
+  return { x: area.x + (x0 / 1000) * area.width, y: area.y + (y0 / 1000) * area.height, width: ((x1 - x0) / 1000) * area.width, height: ((y1 - y0) / 1000) * area.height };
+}
+
+/** Vorgegebenes Koordinatensystem auf der Startseite (Zeichenaufgaben): sichtbarer Bereich in Einheiten. */
+export interface PaperAxes {
+  x: [number, number];
+  y: [number, number];
+}
+
+/** Eine Einheit = ein Kästchen (40 Papiereinheiten); oben ist Platz für die Aufgabenkarte. */
+export const AXES_UNIT = 40;
+// Oberkante auf einer Rasterlinie (Vielfaches von AXES_UNIT), damit Achsen und Kästchenpapier deckungsgleich sind.
+const AXES_TOP = 280;
+
+/** Lage des Koordinatensystems in Papierkoordinaten: Ursprung und umschließendes Rechteck (mit Platz für Beschriftung). */
+export function axesLayout(a: PaperAxes): { originX: number; originY: number; rect: { x: number; y: number; width: number; height: number } } {
+  const originX = WORLD.width / 2 - ((a.x[0] + a.x[1]) / 2) * AXES_UNIT;
+  const originY = AXES_TOP + a.y[1] * AXES_UNIT;
+  const left = originX + a.x[0] * AXES_UNIT;
+  const top = originY - a.y[1] * AXES_UNIT;
+  const pad = 30;
+  return { originX, originY, rect: { x: left - pad, y: top - pad, width: (a.x[1] - a.x[0]) * AXES_UNIT + 2 * pad, height: (a.y[1] - a.y[0]) * AXES_UNIT + 2 * pad } };
+}
+
+/**
+ * Bereich, der exportiert wird: alle sichtbaren Stift- und Linienstriche plus Rand, mindestens 600 × 400 Einheiten,
+ * auf das Papier begrenzt; `include` (z. B. ein vorgegebenes Koordinatensystem) liegt immer ganz drin.
+ * Ohne Striche und ohne `include`: die Startseite. So wird nicht das ganze (große, meist leere) Papier verschickt.
+ */
+export function strokeBounds(strokes: Stroke[], margin = 40, include?: { x: number; y: number; width: number; height: number }): { x: number; y: number; width: number; height: number } {
   const pts = strokes.filter((s) => s.tool !== 'eraser').flatMap((s) => s.points);
+  if (include) pts.push({ x: include.x + margin, y: include.y + margin, p: 0 }, { x: include.x + include.width - margin, y: include.y + include.height - margin, p: 0 });
   if (pts.length === 0) return { x: 0, y: 0, width: WORLD.width, height: WORLD.height };
   let x0 = Math.min(...pts.map((p) => p.x)) - margin;
   let x1 = Math.max(...pts.map((p) => p.x)) + margin;

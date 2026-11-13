@@ -7,7 +7,7 @@
  * → Bild hochladen + record_graded_attempt (übernimmt die protokollierten Hilfen).
  * Ohne Deno-Abhängigkeiten; die echte Verdrahtung steht in index.ts.
  */
-import { chooseFinalAnswer, isTrustworthy, READ_MESSAGES, withAiWork, type AiGrading, type AiReading } from '../_shared/domain/aiGrading.ts';
+import { chooseFinalAnswer, drawingEvaluation, DRAWING_MESSAGES, isTrustworthy, READ_MESSAGES, withAiWork, type AiGrading, type AiReading } from '../_shared/domain/aiGrading.ts';
 import { evaluateSubmission, type EvaluationResult } from '../_shared/domain/evaluate.ts';
 import { GRADE_LIMITS, type GradeRequest, type GradeResponse } from '../_shared/domain/gradingContract.ts';
 import { HttpError, json, requireUser, serveJson, type ResolveUser } from '../_shared/http.ts';
@@ -43,7 +43,7 @@ export interface GradeDeps {
    * KI-Auswertung des Rechenwegs (Phase 2). Liefert null, wenn sie für diesen Nutzer nicht freigeschaltet ist.
    * Fehler und Zeitüberschreitung führen nie zu einer fehlgeschlagenen Abgabe – dann bleibt der Rechenweg ungeprüft (gelb).
    */
-  gradeWork?(req: { userId: string; exerciseId: string; review: ExerciseReview; commonMistakes: CommonMistake[]; pngBase64: string }): Promise<AiGrading | null>;
+  gradeWork?(req: { userId: string; exerciseId: string; review: ExerciseReview; commonMistakes: CommonMistake[]; pngBase64: string; drawing?: string }): Promise<AiGrading | null>;
   /** Liest nur das Endergebnis, ohne Musterlösung (Gegenprobe). null, wenn nicht freigeschaltet. Fehler ⇒ wie nicht verfügbar. */
   readAnswer?(req: { userId: string; exerciseId: string; pngBase64: string }): Promise<AiReading | null>;
 }
@@ -96,7 +96,8 @@ export function createGradeHandler(deps: GradeDeps): (req: Request) => Promise<R
     const png = input.submission?.dataUrl ? decodePng(input.submission.dataUrl) : null;
     const gradable = { answer: ctx.key.answer, commonMistakes: ctx.key.commonMistakes };
     const usesAi = png && ctx.exercise.type !== 'multiple-choice';
-    const needsReading = usesAi && !input.answerRaw;
+    const drawing = ctx.key.answer.kind === 'drawing' ? ctx.key.answer.expected : undefined;
+    const needsReading = usesAi && !input.answerRaw && !drawing; // Zeichnungen haben kein Endergebnis zum Ablesen
     const pngBase64 = input.submission?.dataUrl?.slice(PNG_PREFIX.length) ?? '';
     const logged = <T,>(label: string) => (e: unknown): T | null => {
       console.error(label, e);
@@ -105,14 +106,18 @@ export function createGradeHandler(deps: GradeDeps): (req: Request) => Promise<R
     // Korrektur und blindes Lesen gleichzeitig: die Gegenprobe kostet keine zusätzliche Wartezeit.
     const [ai, blind] = await Promise.all([
       usesAi && deps.gradeWork
-        ? deps.gradeWork({ userId, exerciseId: input.exerciseId, review: ctx.review, commonMistakes: ctx.key.commonMistakes, pngBase64 }).catch(logged<AiGrading>('KI-Auswertung fehlgeschlagen'))
+        ? deps.gradeWork({ userId, exerciseId: input.exerciseId, review: ctx.review, commonMistakes: ctx.key.commonMistakes, pngBase64, drawing }).catch(logged<AiGrading>('KI-Auswertung fehlgeschlagen'))
         : null,
       needsReading && deps.readAnswer ? deps.readAnswer({ userId, exerciseId: input.exerciseId, pngBase64 }).catch(logged<AiReading>('KI-Lesung fehlgeschlagen')) : null,
     ]);
     const trusted = isTrustworthy(ai) ? ai : null;
 
+    const unclear = (text: string) => json({ status: 'unclear', evaluation: { verdict: 'unclear', points: 0, feedback: text, marks: [{ color: 'yellow', message: text }] } } satisfies GradeResponse);
+    // Zeichenaufgabe: Das Urteil der KI über die Zeichnung ist die Bewertung; ohne verlässliche KI nur Rückfrage.
+    if (drawing && (!png || !trusted)) return unclear(!png ? DRAWING_MESSAGES.noWork : !ai ? READ_MESSAGES.unavailable : DRAWING_MESSAGES.unsure);
+
     // Kein Ergebnis eingetippt (Aufgaben mit Schreibfläche): Endergebnis aus der Handschrift lesen.
-    let answerRaw = input.answerRaw;
+    let answerRaw = drawing ? '(Zeichnung)' : input.answerRaw;
     if (!answerRaw && ctx.exercise.type !== 'multiple-choice') {
       const read = png ? chooseFinalAnswer(trusted, blind, (a) => evaluateSubmission(gradable, ctx.exercise.type, a, true).verdict) : null;
       const message = !png ? READ_MESSAGES.noWork : !ai && !blind ? READ_MESSAGES.unavailable : !read ? READ_MESSAGES.unreadable : null;
@@ -123,9 +128,9 @@ export function createGradeHandler(deps: GradeDeps): (req: Request) => Promise<R
       answerRaw = read.slice(0, GRADE_LIMITS.answerChars);
     }
 
-    let evaluation = evaluateSubmission(gradable, ctx.exercise.type, answerRaw, input.submission !== undefined);
+    let evaluation = drawing && trusted ? drawingEvaluation(trusted) : evaluateSubmission(gradable, ctx.exercise.type, answerRaw, input.submission !== undefined);
     if (evaluation.verdict === 'unclear') return json({ status: 'unclear', evaluation } satisfies GradeResponse);
-    if (trusted) evaluation = withAiWork(evaluation, trusted);
+    if (trusted && !drawing) evaluation = withAiWork(evaluation, trusted);
 
     const attemptId = deps.newId();
     const storagePath = png ? `${userId}/${attemptId}.png` : null;

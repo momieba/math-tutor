@@ -51,11 +51,11 @@ Deno.serve(
       if (error) throw new Error(error.message);
     },
     newId: () => crypto.randomUUID(),
-    async gradeWork({ userId, exerciseId, review, commonMistakes, pngBase64 }) {
+    async gradeWork({ userId, exerciseId, review, commonMistakes, pngBase64, drawing }) {
       if (!GEMINI_API_KEY || !AI_GRADING_USERS.has(userId)) return null;
       const { data, error } = await admin.from('exercises').select('prompt, requirement').eq('id', exerciseId).single();
       if (error) throw new Error(error.message);
-      const exercise = { prompt: data.prompt, requirement: data.requirement, solution: review.solution, commonMistakes };
+      const exercise = { prompt: data.prompt, requirement: data.requirement, solution: review.solution, commonMistakes, drawing };
       const result = await gradeWorkWithGemini(exercise, { mimeType: 'image/png', base64: pngBase64 }, {
         apiKey: GEMINI_API_KEY,
         model: Deno.env.get('GEMINI_MODEL') || undefined,

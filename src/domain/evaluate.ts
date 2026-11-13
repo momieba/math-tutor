@@ -406,12 +406,19 @@ export function canonicalAnswer(a: ExpectedAnswer): string {
       const b = a.b === 0 ? '' : a.b > 0 ? ` + ${f(a.b)}` : ` - ${f(-a.b)}`;
       return `y = ${f(a.m)}x${b}`;
     }
+    case 'drawing':
+      return a.expected;
   }
 }
+
+/** Zeichenaufgaben bewertet nur die KI (grade-attempt). Ohne sie gibt es eine Rückfrage statt einer Bewertung. */
+export const DRAWING_NEEDS_AI =
+  'Zeichnungen kann ich gerade nicht automatisch prüfen. Vergleiche deinen Graphen mit dem Hinweis bzw. der Musterlösung und versuche es später noch einmal.';
 
 export function evaluateAnswer(ex: GradableExercise, raw: string): EvaluationResult {
   const a = ex.answer;
   const unclear = (msg: string): EvaluationResult => ({ verdict: 'unclear', points: 0, feedback: msg, marks: [{ color: 'yellow', message: msg }] });
+  if (a.kind === 'drawing') return unclear(DRAWING_NEEDS_AI);
   if (!raw.trim()) return unclear('Keine Antwort erkannt.');
   if (a.kind !== 'choice' && a.kind !== 'text') {
     const derived = afterLastArrow(raw);
@@ -506,6 +513,7 @@ export function evaluateHandwriting(ex: GradableExercise, finalAnswer: string, h
  * (Schreibfläche oder Foto) freiwillig: Liegt einer bei, wird er wie bei Handschrift-Aufgaben gelb als ungeprüft markiert.
  */
 export function evaluateSubmission(ex: GradableExercise, type: ExerciseType, answer: string, hasWork: boolean): EvaluationResult {
+  if (ex.answer.kind === 'drawing') return evaluateAnswer(ex, answer);
   if (type === 'handwriting') return evaluateHandwriting(ex, answer, hasWork);
   const base = evaluateAnswer(ex, answer);
   if (!hasWork || base.verdict === 'unclear') return base;

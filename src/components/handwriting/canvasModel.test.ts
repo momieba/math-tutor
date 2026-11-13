@@ -155,3 +155,21 @@ describe('Canvas-Hilfsfunktionen', () => {
     expect(strokeBounds([{ ...far, tool: 'eraser' }])).toEqual(strokeBounds([])); // Radierer allein zÃ¤hlt nicht
   });
 });
+
+describe('Unterstreichungen und Koordinatensystem', () => {
+  it('regionToWorld rechnet die Bildstelle (0..1000) in Papierkoordinaten des exportierten Bereichs um', async () => {
+    const { regionToWorld } = await import('./canvasModel');
+    expect(regionToWorld([500, 250, 750, 500], { x: 100, y: 200, width: 800, height: 400 })).toEqual({ x: 300, y: 400, width: 200, height: 100 });
+  });
+
+  it('das Koordinatensystem liegt immer ganz im Export und mittig auf der Startseite', async () => {
+    const { axesLayout } = await import('./canvasModel');
+    const axes = { x: [-6, 6] as [number, number], y: [-5, 5] as [number, number] };
+    const { originX, rect } = axesLayout(axes);
+    expect(originX).toBe(WORLD.width / 2);
+    const area = strokeBounds([], 40, rect);
+    expect(area.x).toBeLessThanOrEqual(rect.x);
+    expect(area.x + area.width).toBeGreaterThanOrEqual(rect.x + rect.width);
+    expect(rect.y + rect.height).toBeLessThanOrEqual(WORLD.height);
+  });
+});

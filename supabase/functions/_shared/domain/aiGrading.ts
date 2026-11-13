@@ -6,10 +6,13 @@
  * Das Endergebnis wird zusätzlich in einem eigenen Aufruf ohne Musterlösung gelesen (AiReading, chooseFinalAnswer).
  * Aufrufer: Edge Function `grade-attempt` (nur für freigegebene Testnutzer) und scripts/ai-grade-test.ts.
  */
-import type { AuthoredExercise, CorrectionMark, MarkColor, Verdict } from '../types/index.ts';
+import type { AuthoredExercise, CorrectionMark, MarkColor, MarkRegion, Verdict } from '../types/index.ts';
 import { UNCHECKED_WORK_MESSAGE, type EvaluationResult } from './evaluate.ts';
 
-export type AiGradableExercise = Pick<AuthoredExercise, 'prompt' | 'requirement' | 'solution' | 'commonMistakes'>;
+export type AiGradableExercise = Pick<AuthoredExercise, 'prompt' | 'requirement' | 'solution' | 'commonMistakes'> & {
+  /** Zeichenaufgabe: Beschreibung des erwarteten Graphen (aus ExpectedAnswer `drawing`). */
+  drawing?: string;
+};
 
 export interface AiStep {
   /** Abschrift des Schritts, Mathematik in $...$ (LaTeX). */
@@ -17,12 +20,15 @@ export interface AiStep {
   color: MarkColor;
   /** Kurze Rückmeldung an den Schüler (leer bei grünen Schritten erlaubt). */
   message: string;
+  /** Stelle auf dem Bild (für die Unterstreichung), bei gelben und roten Schritten. */
+  box?: MarkRegion;
 }
 
 /** Was keinem einzelnen Schritt gehört: rot = etwas Verlangtes fehlt (z. B. Einheit), gelb = unsauber gearbeitet. */
 export interface AiIssue {
   color: Exclude<MarkColor, 'green'>;
   message: string;
+  box?: MarkRegion;
 }
 
 export interface AiGrading {
@@ -71,9 +77,10 @@ export const AI_GRADING_SCHEMA = {
           text: { type: 'STRING' },
           color: { type: 'STRING', enum: COLORS },
           message: { type: 'STRING' },
+          box: { type: 'ARRAY', items: { type: 'INTEGER' }, description: '[ymin, xmin, ymax, xmax], 0 bis 1000' },
         },
         required: ['text', 'color', 'message'],
-        propertyOrdering: ['text', 'color', 'message'],
+        propertyOrdering: ['text', 'color', 'message', 'box'],
       },
     },
     issues: {
@@ -84,9 +91,10 @@ export const AI_GRADING_SCHEMA = {
         properties: {
           color: { type: 'STRING', enum: ISSUE_COLORS },
           message: { type: 'STRING' },
+          box: { type: 'ARRAY', items: { type: 'INTEGER' }, description: '[ymin, xmin, ymax, xmax], 0 bis 1000' },
         },
         required: ['color', 'message'],
-        propertyOrdering: ['color', 'message'],
+        propertyOrdering: ['color', 'message', 'box'],
       },
     },
     finalAnswerRead: { type: 'STRING' },
@@ -100,15 +108,32 @@ export const AI_GRADING_SCHEMA = {
 
 const steps = (list: { text: string; math?: string }[]) => list.map((s, i) => `${i + 1}. ${s.text}${s.math ? ` $${s.math}$` : ''}`).join('\n');
 
+/** Hinweis an das Modell, wenn eine Sachaufgabe einen Antwortsatz verlangt. */
+export const ANSWER_SENTENCE_RULE =
+  'Dies ist eine Sachaufgabe: Ein Antwortsatz ist verlangt (z. B. „Die Leiter berührt die Wand in 6 m Höhe.“). Fehlt er, nenne das immer als eigenes issue (yellow) mit dem Text „Es fehlt ein Antwortsatz.“ und einem Beispiel, wie er lauten könnte (ohne das Ergebnis zu verraten, wenn es falsch ist).';
+
 /** Anweisung an das Modell. Das Bild wird separat mitgeschickt. */
 export function buildAiGradingPrompt(ex: AiGradableExercise): string {
   const alternative = ex.solution.alternative ? `\nAlternativer Lösungsweg:\n${steps(ex.solution.alternative)}` : '';
   const mistakes = ex.commonMistakes.length ? ex.commonMistakes.map((m) => `- ${m.description}: ${m.feedback}`).join('\n') : '- (keine hinterlegt)';
+  const sentence = ex.requirement === 'application' ? `\n${ANSWER_SENTENCE_RULE}\n` : '';
+  const drawing = ex.drawing
+    ? `
+Dies ist eine ZEICHENAUFGABE. Auf dem Bild ist ein Koordinatensystem vorgegeben (ein Kästchen = eine Einheit, Achsen beschriftet).
+Erwartet wird: ${ex.drawing}
+Prüfe, ob der gezeichnete Graph dazu passt: wichtige Punkte (z. B. Achsenschnittpunkte, Scheitelpunkt), Steigung bzw. Form,
+sauber durchgezogen über den Bereich des Koordinatensystems. Ungenauigkeiten bis etwa eine halbe Einheit sind in Ordnung.
+Schritte sind hier die erkennbaren Teile der Zeichnung (eingezeichnete Punkte, Steigungsdreieck, Wertetabelle, der Graph selbst).
+finalAnswerRead bleibt leer. workVerdict: correct, wenn der Graph passt; partial, wenn er nur teilweise passt (z. B. richtiger
+Achsenabschnitt, falsche Steigung); incorrect, wenn er nicht passt; unclear, wenn kein Graph erkennbar ist.
+`
+    : '';
   return `Du korrigierst den handschriftlichen Rechenweg eines Schülers (Klasse 7–9, Gymnasium) zu einer Matheaufgabe.
 Das Bild ist entweder auf einem Tablet geschrieben oder ein Foto aus dem Heft (dann ggf. schief, mit Linien oder Karos).
 
 Aufgabe (Anforderung: ${ex.requirement}):
 ${ex.prompt}
+${sentence}${drawing}
 
 Musterlösung:
 ${steps(ex.solution.steps)}
@@ -134,6 +159,10 @@ So gehst du vor:
    - yellow für unsaubere Darstellung insgesamt, z. B. fehlender Antwortsatz bei einer Sachaufgabe, unübersichtliche Anordnung,
      Rechenweg nur bruchstückhaft.
    Leer lassen, wenn alles vollständig und sauber ist. Nichts doppelt nennen, was schon bei einem Schritt steht.
+4b. box: Wo auf dem Bild die Stelle ist, als [ymin, xmin, ymax, xmax] mit ganzen Zahlen von 0 bis 1000 (relativ zu Bildhöhe und -breite).
+   Bei jedem yellow- und red-Schritt angeben: Der Rahmen umschließt genau den falschen, unsauberen oder unlesbaren Teil (nicht die ganze Zeile,
+   wenn nur ein Teil betroffen ist). Bei issues die Stelle, an der etwas fehlt (z. B. das Endergebnis ohne Einheit, die letzte Zeile beim
+   fehlenden Antwortsatz). Bei green-Schritten weglassen.
 5. finalAnswerRead: das Endergebnis genau so, wie der Schüler es aufgeschrieben hat – auch wenn es falsch ist. Setze nie die Musterlösung ein.
    Als einfacher Text OHNE LaTeX und ohne $, z. B. „c = 17 cm“, „x = 3; x = -5“, „(2|3)“, „y = 2x - 3“, „√46“.
    Meist steht es in der letzten Zeile oder ist unterstrichen. Leer lassen, wenn kein Endergebnis erkennbar ist.
@@ -157,14 +186,18 @@ export function parseAiGrading(raw: unknown): AiGrading | null {
   for (const s of o.steps.slice(0, AI_GRADING_CONFIG.maxSteps)) {
     const step = s as Record<string, unknown> | null;
     if (!step || !COLORS.includes(step.color as MarkColor)) return null;
-    parsedSteps.push({ text: str(step.text), color: step.color as MarkColor, message: str(step.message) });
+    const b = parseBox(step.box);
+    parsedSteps.push({ text: str(step.text), color: step.color as MarkColor, message: str(step.message), ...(b && step.color !== 'green' ? { box: b } : {}) });
   }
   // issues tolerant lesen: fehlt das Feld oder ist ein Eintrag kaputt, wird er weggelassen statt die ganze Auswertung zu verwerfen.
   const issues: AiIssue[] = (Array.isArray(o.issues) ? o.issues : [])
     .map((i) => i as Record<string, unknown> | null)
     .filter((i): i is Record<string, unknown> => !!i && ISSUE_COLORS.includes(i.color as AiIssue['color']) && !!str(i.message))
     .slice(0, AI_GRADING_CONFIG.maxIssues)
-    .map((i) => ({ color: i.color as AiIssue['color'], message: str(i.message) }));
+    .map((i) => {
+      const b = parseBox(i.box);
+      return { color: i.color as AiIssue['color'], message: str(i.message), ...(b ? { box: b } : {}) };
+    });
   const confidence = typeof o.confidence === 'number' && Number.isFinite(o.confidence) ? Math.min(1, Math.max(0, o.confidence)) : 0;
   return {
     readable: o.readable,
@@ -197,6 +230,14 @@ export function plainAnswer(s: string): string {
     .replace(/[{}]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+/** Rahmen [ymin, xmin, ymax, xmax] in 0..1000 prüfen; ungültige Angaben werden ignoriert (dann ohne Unterstreichung). */
+export function parseBox(v: unknown): MarkRegion | undefined {
+  if (!Array.isArray(v) || v.length !== 4 || !v.every((n) => typeof n === 'number' && Number.isFinite(n))) return undefined;
+  const [y0, x0, y1, x1] = v.map((n) => Math.min(1000, Math.max(0, Math.round(n))));
+  if (y1 <= y0 || x1 <= x0) return undefined;
+  return [y0, x0, y1, x1];
 }
 
 function safeJson(text: string): unknown {
@@ -283,11 +324,23 @@ export function isTrustworthy(g: AiGrading | null): g is AiGrading {
 export function aiGradingMarks(g: AiGrading): CorrectionMark[] {
   const stepMarks = g.steps.map((s, stepIndex) => {
     const message = s.text && s.message ? `${s.text} – ${s.message}` : s.text || s.message || (s.color === 'yellow' ? 'Nicht eindeutig lesbar.' : '–');
-    return { color: s.color, message, stepIndex };
+    return { color: s.color, message, stepIndex, ...(s.box ? { region: s.box } : {}) };
   });
-  const issueMarks = [...g.issues].sort((a, b) => (a.color === b.color ? 0 : a.color === 'red' ? -1 : 1)).map((i) => ({ color: i.color, message: i.message }));
+  const issueMarks = [...g.issues].sort((a, b) => (a.color === b.color ? 0 : a.color === 'red' ? -1 : 1)).map((i) => ({ color: i.color, message: i.message, ...(i.box ? { region: i.box } : {}) }));
   return [...stepMarks, ...issueMarks];
 }
+
+/** Zeichenaufgaben: Das Urteil der KI über die Zeichnung ist die Bewertung (richtig 100 %, teilweise 50 %, falsch 0 %). */
+export function drawingEvaluation(g: AiGrading): EvaluationResult {
+  const points = g.workVerdict === 'correct' ? 1 : g.workVerdict === 'partial' ? 0.5 : 0;
+  return { verdict: g.workVerdict, points, feedback: g.feedback, marks: aiGradingMarks(g) };
+}
+
+/** Rückfragen bei Zeichenaufgaben (kein eingetipptes Ergebnis, das Urteil kommt allein von der KI). */
+export const DRAWING_MESSAGES = {
+  noWork: 'Zeichne den Graphen in das Koordinatensystem auf der Schreibfläche oder lade ein Foto hoch.',
+  unsure: 'Ich kann deine Zeichnung nicht sicher beurteilen. Zeichne den Graphen bitte noch einmal deutlich und über das ganze Koordinatensystem.',
+};
 
 /**
  * Ergänzt die Bewertung des Endergebnisses um die KI-Auswertung des Rechenwegs: Die gelbe Markierung

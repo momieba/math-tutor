@@ -251,13 +251,13 @@ test('DoD 5 – Kapitel als Lernpfad: Einstieg → Erklärung (KaTeX, Beispiel s
   expect(await page.locator('.katex-error').count()).toBe(0);
   while (await page.getByRole('button', { name: 'Nächster Schritt' }).isVisible()) await page.getByRole('button', { name: 'Nächster Schritt' }).click();
 
-  await page.getByRole('button', { name: 'Weiter zum Formel-Check' }).click();
-  await expect(page).toHaveURL(/\/app\/exercises\/pyth-hy-fc-1$/); // Formel-Check zuerst
+  await page.getByRole('button', { name: 'Weiter zu Begriffen & Formeln' }).click();
+  await expect(page).toHaveURL(/\/app\/exercises\/pyth-hypotenuse-def-1$/); // Definitionen zuerst, dann der Formel-Check
 
   // Zurück im Kapitel: Einstieg/Erklärung sind gemerkt, es geht mit dem Üben weiter
   await page.goto('/app/topics/pythagoras/chapters/pyth-hypotenuse');
   await expect(page.getByRole('heading', { level: 2, name: 'Einstieg' })).toHaveCount(0);
-  await expect(page.getByRole('heading', { level: 2, name: 'Formel-Check' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 2, name: 'Begriffe & Formeln' })).toBeVisible();
   await expect(page.getByText('Mehr zu diesem Kapitel')).toHaveCount(0); // keine Zusatzinfos mehr
 });
 
@@ -265,7 +265,7 @@ test('Lernpfad: Einstieg überspringen führt direkt zur ersten Aufgabe', async 
   await register(page);
   await page.goto('/app/topics/lineare-funktionen/chapters/lf-steigung');
   await page.getByRole('button', { name: 'Kenne ich schon – überspringen' }).click();
-  await expect(page).toHaveURL(/\/app\/exercises\/lf-st-/);
+  await expect(page).toHaveURL(/\/app\/exercises\/lf-steigung-def-1$/); // erste Aufgabe: Definition („Was bedeutet …?“)
   // Aufgabenseite zeigt statt der Schrittleiste das Verständnis im Kapitel
   await expect(page.getByRole('progressbar', { name: /Verständnis im Kapitel/ })).toBeVisible();
 });

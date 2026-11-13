@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { POOL_TOPIC_IDS, topics } from './index';
 import { canonicalAnswer, evaluateAnswer } from '../domain/evaluate';
 import { exerciseKey } from './templates';
+import { isDefinition } from '../domain/learningPath';
 
 /** Struktur-Prüfung der Wissensbasis: verhindert unvollständige oder inkonsistente Inhalte. */
 describe('Wissensbasis', () => {
@@ -71,7 +72,9 @@ describe('Aufgabenpools', () => {
         expect(new Set(ex.map((e) => e.difficulty))).toEqual(new Set([1, 2, 3]));
         for (const d of [1, 2, 3]) expect(ex.filter((e) => e.difficulty === d).length, `Stufe ${d}`).toBeGreaterThanOrEqual(8);
         expect(new Set(ex.map((e) => e.requirement)).size).toBeGreaterThanOrEqual(3);
-        expect(ex.filter((e) => e.requirement === 'application').length / ex.length).toBeGreaterThanOrEqual(0.2);
+        // Sachaufgaben-Anteil ohne die automatisch erzeugten Definitionsfragen (content/definitions.ts)
+        const pool = ex.filter((e) => !isDefinition(e));
+        expect(pool.filter((e) => e.requirement === 'application').length / pool.length).toBeGreaterThanOrEqual(0.2);
         expect(new Set(ex.map(exerciseKey)).size, 'doppelte Aufgaben').toBe(ex.length);
       });
     }
@@ -121,7 +124,7 @@ describe('Aufgabenpools', () => {
 
   it('jede Aufgabe wird mit ihrer eigenen Soll-Antwort als richtig gewertet', () => {
     for (const e of poolTopics.flatMap((t) => t.subtopics.flatMap((s) => s.exercises))) {
-      expect(evaluateAnswer(e, canonicalAnswer(e.answer)).verdict, `${e.id}: ${canonicalAnswer(e.answer)}`).toBe('correct');
+      if (e.answer.kind !== 'drawing') expect(evaluateAnswer(e, canonicalAnswer(e.answer)).verdict, `${e.id}: ${canonicalAnswer(e.answer)}`).toBe('correct');
       if (e.choices) expect(new Set(e.choices.map((c) => c.label)).size, `${e.id}: doppelte Optionen`).toBe(e.choices.length);
       if (e.figure?.kind === 'coordinate-plane') {
         expect(e.figure.x[0]).toBeLessThan(e.figure.x[1]);

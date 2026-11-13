@@ -1,4 +1,23 @@
-import { answerInput, expect, openExercise, register, submitButton, test } from './helpers';
+import { answerInput, drawWithMouse, expect, feedbackPanel, openExercise, register, submitButton, test } from './helpers';
+
+test('Zeichenaufgabe: Koordinatensystem auf dem Papier, kein Ergebnisfeld, ohne KI eine Rückfrage statt Bewertung', async ({ page }) => {
+  await register(page, 'Zoe');
+  await page.goto('/app/exercises/lf-st-zeichnen-01');
+  await expect(page.getByRole('heading', { level: 1, name: /Zeichne den Graphen/ })).toBeVisible();
+  await expect(page.getByText('Zeichne in das Koordinatensystem unten auf dem Papier.')).toBeVisible();
+  await expect(answerInput(page)).toHaveCount(0); // kein Ergebnisfeld, auch im lokalen Modus nicht
+  await expect(page.locator('svg text', { hasText: /^x$/ }).first()).toBeAttached(); // Achsenbeschriftung
+  await page.locator('canvas').scrollIntoViewIfNeeded();
+  await drawWithMouse(page, page.locator('canvas'), [0.3, 0.6], [0.6, 0.4]);
+  await submitButton(page).click();
+  await expect(feedbackPanel(page)).toContainText('Zeichnungen kann ich gerade nicht automatisch prüfen');
+});
+
+test('Sachaufgabe: Hinweis auf den Antwortsatz in der Aufgabenkarte', async ({ page }) => {
+  await register(page, 'Pia');
+  await openExercise(page, 'pyth-anwendung-1');
+  await expect(page.getByText('Sachaufgabe: Schreib am Ende einen Antwortsatz.')).toBeVisible();
+});
 
 test('Ausführliche Lösung mit Denkschritten und Skizze unter der Musterlösung', async ({ page }) => {
   await register(page, 'Ole');

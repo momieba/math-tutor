@@ -175,3 +175,53 @@ describe('Endergebnis blind lesen (ohne Musterlösung)', () => {
     expect(chooseFinalAnswer(null, null, verdictOf)).toBeNull();
   });
 });
+
+describe('Stellen auf dem Bild (Unterstreichung) und Zeichenaufgaben', () => {
+  it('parseBox übernimmt gültige Rahmen, begrenzt auf 0..1000 und verwirft kaputte', async () => {
+    const { parseBox } = await import('./aiGrading');
+    expect(parseBox([100, 200, 150, 600])).toEqual([100, 200, 150, 600]);
+    expect(parseBox([-5, 0, 1200, 400.4])).toEqual([0, 0, 1000, 400]);
+    expect(parseBox([150, 200, 100, 600])).toBeUndefined(); // ymax < ymin
+    expect(parseBox([1, 2, 3])).toBeUndefined();
+    expect(parseBox('oben')).toBeUndefined();
+  });
+
+  it('gelbe und rote Schritte bzw. Hinweise tragen ihre Stelle als region in die Markierungen, grüne nie', () => {
+    const g = parseAiGrading({
+      ...valid,
+      steps: [
+        { text: 'c^2 = 3^2 + 4^2', color: 'green', message: '', box: [10, 10, 60, 500] },
+        { text: 'c = 25', color: 'red', message: 'Wurzel vergessen.', box: [100, 20, 160, 300] },
+      ],
+      issues: [{ color: 'yellow', message: 'Es fehlt ein Antwortsatz.', box: [180, 20, 230, 400] }],
+    })!;
+    const marks = aiGradingMarks(g);
+    expect(marks[0].region).toBeUndefined();
+    expect(marks[1].region).toEqual([100, 20, 160, 300]);
+    expect(marks[2]).toMatchObject({ color: 'yellow', region: [180, 20, 230, 400] });
+  });
+
+  it('Sachaufgaben verlangen im Prompt einen Antwortsatz, Rechenaufgaben nicht', async () => {
+    const { ANSWER_SENTENCE_RULE } = await import('./aiGrading');
+    const ex = pythagoras.subtopics.flatMap((s) => s.exercises);
+    const app = ex.find((e) => e.requirement === 'application')!;
+    const calc = ex.find((e) => e.requirement === 'calculation')!;
+    expect(buildAiGradingPrompt(app)).toContain(ANSWER_SENTENCE_RULE);
+    expect(buildAiGradingPrompt(calc)).not.toContain(ANSWER_SENTENCE_RULE);
+  });
+
+  it('Zeichenaufgabe: Prompt beschreibt den erwarteten Graphen, Urteil der KI wird zur Bewertung', async () => {
+    const { drawingEvaluation } = await import('./aiGrading');
+    const prompt = buildAiGradingPrompt({ prompt: 'Zeichne f(x) = 2x - 1.', requirement: 'construction', solution: { steps: [{ text: 'x' }], finalAnswer: 'Gerade' }, commonMistakes: [], drawing: 'Gerade durch (0|-1) und (1|1)' });
+    expect(prompt).toContain('ZEICHENAUFGABE');
+    expect(prompt).toContain('Gerade durch (0|-1) und (1|1)');
+    expect(drawingEvaluation({ ...parseAiGrading(valid)!, workVerdict: 'correct' })).toMatchObject({ verdict: 'correct', points: 1 });
+    expect(drawingEvaluation({ ...parseAiGrading(valid)!, workVerdict: 'partial' }).points).toBe(0.5);
+    expect(drawingEvaluation({ ...parseAiGrading(valid)!, workVerdict: 'incorrect' }).points).toBe(0);
+  });
+
+  it('ohne KI: Zeichenaufgaben ergeben eine Rückfrage statt einer Bewertung', () => {
+    const r = evaluateSubmission({ answer: { kind: 'drawing', expected: 'Gerade' }, commonMistakes: [] }, 'handwriting', '', true);
+    expect(r.verdict).toBe('unclear');
+  });
+});

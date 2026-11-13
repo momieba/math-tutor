@@ -2,9 +2,11 @@ import { ArrowLeft, ArrowRight, BookOpen, Camera, Eye, Lightbulb, Maximize2, Min
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { ChoiceInput, MathInput, NumericInput } from '../components/AnswerInputs';
-import { FeedbackPanel } from '../components/FeedbackPanel';
+import { FeedbackPanel, markNumbers } from '../components/FeedbackPanel';
 import { ExerciseFigure } from '../components/figures/ExerciseFigure';
-import { compactStrokes, emptyHistory, historyFromStrokes, isBlank, isStrokeList, visibleStrokes, type CanvasHistory } from '../components/handwriting/canvasModel';
+import { axesLayout, compactStrokes, emptyHistory, historyFromStrokes, isBlank, isStrokeList, regionToWorld, strokeBounds, visibleStrokes, type CanvasHistory, type PaperAxes } from '../components/handwriting/canvasModel';
+import { type CanvasAnnotation } from '../components/handwriting/HandwritingCanvas';
+import { PhotoWithMarks } from '../components/handwriting/PhotoWithMarks';
 import { HandwritingCanvas } from '../components/handwriting/HandwritingCanvas';
 import { preparePhoto } from '../components/handwriting/photo';
 import { exportStrokesAsPng } from '../components/handwriting/renderStrokes';
@@ -187,7 +189,12 @@ export default function ExercisePage() {
   /** Schreibfläche (oder Foto) gibt es bei allen Aufgaben außer Multiple Choice. */
   const offersWork = exercise.type !== 'multiple-choice';
   /** Ergebnis eintippen: bei Multiple Choice und im lokalen Modus (dort liest keine KI die Handschrift). */
-  const typesAnswer = !offersWork || services.mode === 'local';
+  /** Zeichenaufgabe: Graph ins vorgegebene Koordinatensystem, bewertet nur von der KI – kein Ergebnisfeld, auch lokal nicht. */
+  const isDrawing = exercise.answerFormat.kind === 'drawing';
+  const typesAnswer = !offersWork || (services.mode === 'local' && !isDrawing);
+  const fig = exercise.figure;
+  const paperAxes: PaperAxes | undefined = fig?.kind === 'coordinate-plane' && fig.onPaper ? { x: fig.x, y: fig.y } : undefined;
+  const figureInCard = fig && !paperAxes ? fig : undefined;
   const unit = exercise.answerFormat.kind === 'numeric' ? exercise.answerFormat.unit : undefined;
   const saved = phase.kind === 'saved';
   const hintsUsed = hints.length;
@@ -263,7 +270,7 @@ export default function ExercisePage() {
       const strokes = compactStrokes(visibleStrokes(drawing));
       let dataUrl: string | undefined;
       try {
-        dataUrl = exportStrokesAsPng(strokes);
+        dataUrl = exportStrokesAsPng(strokes, undefined, paperAxes);
       } catch {
         dataUrl = undefined; // Striche bleiben trotzdem gespeichert und können später neu gerendert werden
       }
@@ -323,6 +330,17 @@ export default function ExercisePage() {
     }
   }
   const shownEvaluation = phase.kind === 'saved' ? phase.evaluation : null;
+  /** Gelbe/rote Markierungen mit Stelle: als Unterstreichung auf Schreibfläche bzw. Foto, nummeriert wie in der Rückmeldung. */
+  const markedRegions = (() => {
+    const marks = shownEvaluation?.marks ?? [];
+    const numbers = markNumbers(marks);
+    return marks.flatMap((m, i) => (m.region && numbers[i] !== undefined && m.color !== 'green' ? [{ color: m.color, region: m.region, label: numbers[i]! }] : []));
+  })();
+  const annotations: CanvasAnnotation[] = (() => {
+    if (!markedRegions.length || photo) return [];
+    const area = strokeBounds(visibleStrokes(drawing), 40, paperAxes ? axesLayout(paperAxes).rect : undefined);
+    return markedRegions.map((r) => ({ color: r.color, label: r.label, rect: regionToWorld(r.region, area) }));
+  })();
   const shownSolution = phase.kind === 'saved' ? phase.review.solution : solution;
   // Für den Score zählt, was der Bewertungsdienst protokolliert hat (record), nicht der Stand der Seite.
   const solutionShare = Math.round(SCORE_CONFIG.solutionViewedFactor * 100);
@@ -388,7 +406,11 @@ export default function ExercisePage() {
       <h1 className="text-[1.1em] leading-snug font-semibold text-slate-900">
         <MathText text={exercise.prompt} />
       </h1>
-      {exercise.figure && <ExerciseFigure figure={exercise.figure} />}
+      {figureInCard && <ExerciseFigure figure={figureInCard} />}
+      {exercise.requirement === 'application' && (
+        <p className="text-[0.85em] text-slate-600">Sachaufgabe: Schreib am Ende einen Antwortsatz.</p>
+      )}
+      {isDrawing && <p className="text-[0.85em] text-slate-600">Zeichne in das Koordinatensystem unten auf dem Papier.</p>}
       {hintBlock && <div className="text-[0.85em]">{hintBlock}</div>}
     </div>
   );
@@ -463,7 +485,7 @@ export default function ExercisePage() {
                 <h1 className="text-2xl leading-relaxed font-semibold text-slate-900">
                   <MathText text={exercise.prompt} />
                 </h1>
-                {exercise.figure && <ExerciseFigure figure={exercise.figure} />}
+                {figureInCard && <ExerciseFigure figure={figureInCard} />}
               </div>
               <div className="ml-auto flex items-center gap-2">{helpButton}</div>
             </header>
@@ -489,7 +511,7 @@ export default function ExercisePage() {
                       </Button>
                     )}
                   </div>
-                  <img src={photo} alt="Dein Foto vom Rechenweg" className="max-h-[40rem] w-full rounded-b-2xl bg-white object-contain" />
+                  <PhotoWithMarks src={photo} marks={markedRegions} />
                 </div>
               ) : (
                 <HandwritingCanvas
@@ -497,6 +519,8 @@ export default function ExercisePage() {
                   onChange={setDrawing}
                   disabled={locked}
                   overlay={promptCard}
+                  axes={paperAxes}
+                  annotations={annotations}
                   height={fullscreen ? 'calc(100dvh - 12rem)' : undefined}
                   toolbarEnd={
                     <>

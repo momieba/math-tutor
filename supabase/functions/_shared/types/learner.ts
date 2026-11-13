@@ -66,7 +66,12 @@ export interface CorrectionMark {
   color: MarkColor;
   message: string;
   stepIndex?: number;
+  /** Stelle auf dem abgegebenen Bild (KI), für die Unterstreichung auf Schreibfläche bzw. Foto. */
+  region?: MarkRegion;
 }
+
+/** Rahmen auf einem Bild als [ymin, xmin, ymax, xmax], jeweils 0..1000 relativ zu Bildhöhe und -breite (Gemini-Format). */
+export type MarkRegion = [number, number, number, number];
 
 export type Verdict = 'correct' | 'partial' | 'incorrect' | 'unclear';
 
